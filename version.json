@@ -1,0 +1,33 @@
+{
+  "app": "The Handyman Accountancy",
+  "version": "226",
+  "buildId": "THA-226-ISOLATED-TEST-20261102",
+  "releaseDate": "2026-11-02",
+  "releaseStatus": "isolated-experimental",
+  "databaseSchema": 1,
+  "minimumAppVersion": "206",
+  "storageNamespace": "tha_test226_",
+  "legacyDataImport": "manual-only",
+  "files": {
+    "index.html": {
+      "sha256": "fcc6ec536626d0f325df4f30017408f5b19119987e7c2cbb1e4466f97552fd61"
+    },
+    "version-manager.js": {
+      "sha256": "45e4ad8223cf3af728cdde2bfaa12173c7d7753a8e662ba7bfef07e387b02247"
+    },
+    "service-worker.js": {
+      "sha256": "8940db423c61b0a3b5a537acbe4338f76a1a7b72024c398db850af8f991edebe"
+    },
+    "storage-foundation.js": {
+      "sha256": "c1be29200c92f405619af895673af9f8bf80b756deb1fc31e9bf6c08d6d74b86"
+    }
+  },
+  "releaseNotes": [
+    "Isolated experimental copy of v226 for the separate accountancy-test repository.",
+    "Accounting, project, contract, factory-reset recovery, and language localStorage keys use the tha_test226_ namespace.",
+    "IndexedDB database and Service Worker CacheStorage names use separate test-only namespaces.",
+    "Update channel and release downloads point only to this test repository.",
+    "Production repository, production data keys, and Final_backup.json were not modified."
+  ],
+  "releaseBranch": "main"
+}
