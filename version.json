@@ -10,7 +10,7 @@
   "legacyDataImport": "manual-only",
   "files": {
     "index.html": {
-      "sha256": "67394cfdd243df3ac1ce25c1f3b449bf0f7e16bb5bd5541af024efd6be3ee21c"
+      "sha256": "d15482e63166ac871da38b36d3fb30bdebca3c209b3399df9bcf922263d204ab"
     },
     "version-manager.js": {
       "sha256": "45e4ad8223cf3af728cdde2bfaa12173c7d7753a8e662ba7bfef07e387b02247"
@@ -28,7 +28,8 @@
     "IndexedDB database and Service Worker CacheStorage names use separate test-only namespaces.",
     "Update channel and release downloads point only to this test repository.",
     "Production repository, production data keys, and Final_backup.json were not modified.",
-    "All remaining invoice sequence, diagnostics, report archive, help-draft, and language preference keys were moved into the tha_test226_ namespace."
+    "All remaining invoice sequence, diagnostics, report archive, help-draft, and language preference keys were moved into the tha_test226_ namespace.",
+    "Removed the hard-coded minimum invoice number; numbering now starts at 1 when no prior invoice/income number or reserved sequence exists, and otherwise continues from the highest saved or reserved number plus one."
   ],
   "releaseBranch": "main"
 }
