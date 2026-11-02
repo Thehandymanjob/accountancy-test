@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "226",
-  "buildId": "THA-226-ISOLATED-NUMBERING-20261102",
-  "manifestSha256": "b6c0e614ca3b971d20fbcaabba7e5260765662d7103eac8de8927b1f92173b7f",
-  "updatedAt": "2026-11-02T22:40:00Z",
-  "note": "Isolated experimental v226 numbering build. Starts at 1 when empty; continues from highest existing or reserved number.",
-  "sourceCommit": "b9325d0320d19f21f346d2b532507a3f17798926"
+  "version": "227",
+  "buildId": "THA-227-COMMITTED-INVOICE-SEQUENCE-20261102",
+  "manifestSha256": "6c96b9aac75062e2acd63309d506e18f9aee90b76ebbf23b6128af6d82669bd2",
+  "updatedAt": "2026-11-02T23:20:00Z",
+  "note": "Test v227: invoice numbers are preview-only until successful save; stale uncommitted increments are cleaned once; factory reset clears sequence.",
+  "sourceCommit": "3c4ac4ccb42c2fa9df6ed2c62509acbd0ae7cb15"
 }
