@@ -3,9 +3,9 @@
   "channel": "test",
   "sourceBranch": "main",
   "version": "226",
-  "buildId": "THA-226-ISOLATED-TEST-20261102",
-  "manifestSha256": "4fea92c17866dadf8cfc74b2fb2caf0fd50fae9a8b1a48afe2d9f03084aa8363",
-  "updatedAt": "2026-11-02T22:35:00Z",
-  "note": "Isolated v226 test. Storage namespaces isolated; numbering starts at 1 on an empty dataset and continues from highest saved or reserved number.",
+  "buildId": "THA-226-ISOLATED-NUMBERING-20261102",
+  "manifestSha256": "b6c0e614ca3b971d20fbcaabba7e5260765662d7103eac8de8927b1f92173b7f",
+  "updatedAt": "2026-11-02T22:40:00Z",
+  "note": "Isolated experimental v226 numbering build. Starts at 1 when empty; continues from highest existing or reserved number.",
   "sourceCommit": "b9325d0320d19f21f346d2b532507a3f17798926"
 }
