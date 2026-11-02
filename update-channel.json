@@ -1,0 +1,11 @@
+{
+  "app": "The Handyman Accountancy",
+  "channel": "test",
+  "sourceBranch": "main",
+  "version": "226",
+  "buildId": "THA-226-ISOLATED-TEST-20261102",
+  "manifestSha256": "afe8e600f40f41027a63b7054bf75b6af6aa23a7a7e43ceeea18850d781b3d29",
+  "updatedAt": "2026-11-02T21:45:00Z",
+  "note": "Isolated experimental v226 copy. Test-only storage and cache namespaces; production untouched.",
+  "sourceCommit": "b9325d0320d19f21f346d2b532507a3f17798926"
+}
