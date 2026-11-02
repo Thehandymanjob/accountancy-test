@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "227",
-  "buildId": "THA-227-COMMITTED-INVOICE-SEQUENCE-20261102",
-  "manifestSha256": "6c96b9aac75062e2acd63309d506e18f9aee90b76ebbf23b6128af6d82669bd2",
-  "updatedAt": "2026-11-02T23:20:00Z",
-  "note": "Test v227: invoice numbers are preview-only until successful save; stale uncommitted increments are cleaned once; factory reset clears sequence.",
-  "sourceCommit": "3c4ac4ccb42c2fa9df6ed2c62509acbd0ae7cb15"
+  "version": "228",
+  "buildId": "THA-228-REMOVE-ISOLATION-TEST-RECORD-20261102",
+  "manifestSha256": "cbfe8b05f46227fb5b205f238f2dc3958965fc2e5470ab085a484d3a237ba738",
+  "updatedAt": "2026-11-02T23:59:00Z",
+  "note": "Test v228: removes only the exact test record (£1, income, no. 143, reference ISOLATION TEST); numbering derives from remaining saved records.",
+  "sourceCommit": "4dde8d49cd56454477fde4d176963ac905f64420"
 }
