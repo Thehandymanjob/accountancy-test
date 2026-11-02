@@ -4,8 +4,8 @@
   "sourceBranch": "main",
   "version": "226",
   "buildId": "THA-226-ISOLATED-TEST-20261102",
-  "manifestSha256": "afe8e600f40f41027a63b7054bf75b6af6aa23a7a7e43ceeea18850d781b3d29",
-  "updatedAt": "2026-11-02T21:45:00Z",
-  "note": "Isolated experimental v226 copy. Test-only storage and cache namespaces; production untouched.",
+  "manifestSha256": "b989eaf9873b05abcc53c6d21baf897be287cc54f0c01b95783f292783daf623",
+  "updatedAt": "2026-11-02T22:15:00Z",
+  "note": "Isolated experimental v226 copy. All app LocalStorage keys, IndexedDB and CacheStorage use test-only namespaces; production untouched.",
   "sourceCommit": "b9325d0320d19f21f346d2b532507a3f17798926"
 }
