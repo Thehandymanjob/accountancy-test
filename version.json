@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "Pinned v239 update manifest and release assets to the dedicated release/v239 reference so the v238 updater reads a consistent, fixed release instead of the moving main branch.",
     "Corrected v239 release package SHA-256 values for all four required app files so the updater can verify and stage the release.",
     "Invoice status diagnostic: invoice list displays a normalized status and the exact saved status value so Draft-versus-Issued discrepancies can be identified without changing existing invoice records.",
     "Isolated experimental copy of v226 for the separate accountancy-test repository.",
@@ -53,5 +54,5 @@
     "Version 237 fixes the IndexedDB self-test button by exposing its handler explicitly on window, showing immediate test feedback, and restoring the button after completion.",
     "Version 238 fixes a literal escaped newline after the IndexedDB self-test handler that caused a JavaScript parse error and prevented the Monitor diagnostics script block from executing. Existing LocalStorage records and IndexedDB migration state are unchanged."
   ],
-  "releaseBranch": "main"
+  "releaseBranch": "release/v239"
 }
