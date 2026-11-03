@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "231",
-  "buildId": "THA-231-MANUAL-SERVICE-WORKER-ACTIVATION-20261103",
+  "version": "232",
+  "buildId": "THA-232-CACHE-POINTER-KEY-ALIGNMENT-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 1,
@@ -9,10 +9,10 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "59bc2ad9f8f225d41bc69442bc171d7b2f0d3c91dca6321e322a4a6e6dcc4e95"
+      "sha256": "058649e5c2b0e69ad4a812e3b93cb33b6d1510fd5187a762224df5461df09227"
     },
     "version-manager.js": {
-      "sha256": "71ff1e301001aee46e3465cf9ac503334df51422863576c3dc69e910d2d617a6"
+      "sha256": "d25ec9e5c4923c3f6276e28b12b99bf4af7d8449c8a0c6ff7a8d95735f22cb08"
     },
     "service-worker.js": {
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
@@ -42,7 +42,8 @@
     "The shared invoice/income numbering logic from v229 is retained.",
     "Version 231: a newly installed Service Worker no longer activates automatically during app startup.",
     "A waiting Service Worker is activated only after the user presses Update Now.",
-    "Earlier release notes from v228, v229 and v230 are retained in the update information."
+    "Earlier release notes from v228, v229 and v230 are retained in the update information.",
+    "Version 232 fixes the update failure: version-manager.js now uses the same namespaced active-cache and pending-activation keys as service-worker.js."
   ],
   "releaseBranch": "main"
 }
