@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "239",
-  "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
-  "manifestSha256": "5fc5638a01641cdc440b383117dd75bf9d5404b0bd72d6a1a4404d349547613b",
-  "updatedAt": "2026-11-03T20:30:00Z",
-  "note": "Test v239: release manifest and assets pinned to slash-free release239 reference.",
-  "sourceCommit": "19b9b103cb6e4d45218b280a453598da23953461"
+  "version": "240",
+  "buildId": "THA-240-INVOICE-STATUS-READONLY-DIAGNOSTIC-20261103",
+  "manifestSha256": "d8e1f894e3501d46a423580016fd60ff00798cbb4eab3789f4c2167a23fdc89d",
+  "updatedAt": "2026-11-03T20:45:00Z",
+  "note": "Test v240: read-only invoice status diagnostic compares in-memory and LocalStorage records by invoice ID; no invoice data is changed.",
+  "sourceCommit": "6cd66742f5f783d199370c3da86cab13676e299c"
 }
