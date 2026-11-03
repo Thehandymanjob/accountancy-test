@@ -12,10 +12,10 @@
       "sha256": "59bc2ad9f8f225d41bc69442bc171d7b2f0d3c91dca6321e322a4a6e6dcc4e95"
     },
     "version-manager.js": {
-      "sha256": "02859f4c605f243066c1d2b03fe0619896449f867cf32d21fdb8671b817930de"
+      "sha256": "71ff1e301001aee46e3465cf9ac503334df51422863576c3dc69e910d2d617a6"
     },
     "service-worker.js": {
-      "sha256": "c63ab06e69ed324bb21b76aa8d19cff3fbe6912bdfe88c84f8ae175cf2526291"
+      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
     },
     "storage-foundation.js": {
       "sha256": "c1be29200c92f405619af895673af9f8bf80b756deb1fc31e9bf6c08d6d74b86"
