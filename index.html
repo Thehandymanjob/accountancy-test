@@ -1451,7 +1451,7 @@ function viewRecordInvoice(id){
  const i=db.invoices.find(x=>String(x.id)===String(id));if(!i)return;
  show('invoices');
  $('invoiceListArea').hidden=true;$('invoiceEditor').hidden=true;
- $('invoicePreview').innerHTML=invoiceHTML(i)+'<div class="actions no-print"><button class="gold" onclick="show('records')">Back to Records</button></div>';
+ $('invoicePreview').innerHTML=invoiceHTML(i)+'<div class="actions no-print"><button class="gold" onclick="show(&quot;records&quot;)">Back to Records</button></div>';
  $('invoicePreview').hidden=false;
  document.body.classList.remove('invoice-printing');
  window.scrollTo({top:0,behavior:'smooth'});
