@@ -1,8 +1,8 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "228",
-  "buildId": "THA-228-REMOVE-ISOLATION-TEST-RECORD-20261102",
-  "releaseDate": "2026-11-02",
+  "version": "229",
+  "buildId": "THA-229-RESET-EMPTY-TEST-SEQUENCE-20261103",
+  "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 1,
   "minimumAppVersion": "206",
@@ -10,7 +10,7 @@
   "legacyDataImport": "manual-only",
   "files": {
     "index.html": {
-      "sha256": "5b339f772d6da5b72bc08029da8fbc0020fcaad0b71204f6d2861b39414ac330"
+      "sha256": "94b6967ea4671ff24f58fbe9edbfaad609a09d7da8fb94919c31a25179480f88"
     },
     "version-manager.js": {
       "sha256": "45e4ad8223cf3af728cdde2bfaa12173c7d7753a8e662ba7bfef07e387b02247"
@@ -34,7 +34,8 @@
     "Invoice number previews no longer reserve or consume a number when the New Invoice form is opened or cancelled; a number is reserved only after a successful save.",
     "One-time migration removes uncommitted sequence increments from earlier test builds, using the highest persisted invoice or income number as the baseline.",
     "Factory Reset now clears the invoice sequence so a genuinely fresh local installation starts at invoice number 1.",
-    "One-time test-only cleanup removes only the exact £1 income record numbered 143 with reference ISOLATION TEST; other records are not matched or deleted."
+    "One-time test-only cleanup removes only the exact £1 income record numbered 143 with reference ISOLATION TEST; other records are not matched or deleted.",
+    "v229 adds a one-time test-only migration: if there are no saved invoices or income records, reset stale preview/reservation sequence values to zero so the next invoice starts at 1; if saved records exist, preserve the higher reserved sequence and all records."
   ],
   "releaseBranch": "main"
 }
