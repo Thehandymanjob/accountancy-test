@@ -3,7 +3,7 @@
 'use strict';
 const meta=n=>document.querySelector('meta[name="'+n+'"]')?.content||'';
 const LOCAL_VERSION=meta('app-version'),LOCAL_BUILD=meta('app-build-id');
-const base=new URL('.',document.baseURI),POINTER='tha-test226-active-pointer-v1',pointerUrl=new URL('__tha_active_cache__',base).toString(),rollbackUrl=new URL('__tha_pending_activation__',base).toString();
+const base=new URL('.',document.baseURI),POINTER='tha-test226-active-pointer-v1',pointerUrl=new URL('__tha_test226_active_cache__',base).toString(),rollbackUrl=new URL('__tha_test226_pending_activation__',base).toString();
 const CHANNEL_URL='https://raw.githubusercontent.com/Thehandymanjob/accountancy-test/main/update-channel.json';
 const RAW_ROOT='https://raw.githubusercontent.com/Thehandymanjob/accountancy-test/';
 let latest=null,staged=null,busy=false;
