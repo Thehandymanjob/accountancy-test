@@ -1433,7 +1433,7 @@ function updateInvoicePaymentFields(){
 }
 function onInvoiceStatusChange(){
  const status=$('invStatus')?.value;
- if(status==='issued'){const payment=$('invPaymentStatus');if(payment&&!payment.value)payment.value='unpaid';const date=$('invPaymentDate');if(date&&!date.value)date.value=today();const method=$('invPaymentMethod');if(method&&!method.value)method.value='bank';}
+ if(status==='issued'){const payment=$('invPaymentStatus');if(payment)payment.value='paid';const date=$('invPaymentDate');if(date&&!date.value)date.value=today();const method=$('invPaymentMethod');if(method&&!method.value)method.value='bank';}
  else if(status==='draft'){const payment=$('invPaymentStatus');if(payment)payment.value='unpaid';}
  setInvoiceDraftMode(false);updateInvoicePaymentFields();
 }
