@@ -7,7 +7,7 @@ const ROLLBACK_URL=new URL('__tha_test226_pending_activation__',SCOPE).toString(
 self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
 self.addEventListener('message',e=>{
  const d=e.data||{};
- if(d.type==='SKIP_WAITING'){e.waitUntil(self.skipWaiting());return;}
+ if(d.type==='USER_APPROVED_UPDATE'){e.waitUntil(self.skipWaiting());return;}
  if(d.type==='ACTIVATE_CACHE'&&typeof d.cacheName==='string'&&/^tha-test226-app-v[\w.-]+$/.test(d.cacheName)){
   e.waitUntil((async()=>{const c=await caches.open(POINTER_CACHE);await c.put(POINTER_URL,new Response(JSON.stringify({cacheName:d.cacheName})));await self.clients.claim();if(e.ports&&e.ports[0])e.ports[0].postMessage({ok:true});})());
  }
