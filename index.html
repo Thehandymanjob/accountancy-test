@@ -1419,7 +1419,7 @@ function updateInvoiceStatusDiagnostic(invoiceId){
   'Form field status: '+($('invStatus')?.value??'(field not found)')
  ];
  if(storageError)lines.push('LocalStorage read: '+storageError);
- panel.textContent=lines.join('\\n');
+ panel.textContent=lines.join(String.fromCharCode(10));
  panel.hidden=false;
 }
 function openInvoiceEditor(){const list=$('invoiceListArea');if(list)list.hidden=true;$('invoiceEditor').hidden=false;$('invoicePreview').hidden=true;window.scrollTo({top:0,behavior:'smooth'})}function newInvoice(){show('invoices');openInvoiceEditor();$('invoiceEditorTitle').textContent='New Invoice';$('invoiceId').value='';$('invNumber').value=nextInvoiceNumber();$('invDate').value=today();populateInvoiceCustomers();$('invCustomer').value='';['invBillName','invPhone','invBillAddress','invWorkAddress','invDescription','invNotes'].forEach(id=>$(id).value='');$('invQty').value='1';$('invUnitPrice').value='0';$('invVat').value='none';$('invStatus').value='issued';renderInvoiceLineItems([]);setInvoiceDraftMode(false);updateInvoiceTotal();window.scrollTo({top:0,behavior:'smooth'})}
