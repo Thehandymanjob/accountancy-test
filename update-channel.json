@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "236",
-  "buildId": "THA-236-SAFARI-UPDATE-RELOAD-20261103",
-  "manifestSha256": "f46cd1b9a3b96c74c1ad057e9a2bb92756a595500379bd7e6220777e7aa4eb47",
-  "updatedAt": "2026-11-03T22:10:00Z",
-  "note": "Test v236: fix Safari updater stall by not awaiting optional Service Worker registration/message after verified cache activation.",
-  "sourceCommit": "2869fe2085fa2e8a95fa770d8e78f46be6ea1110"
+  "version": "237",
+  "buildId": "THA-237-INDEXEDDB-BUTTON-FIX-20261103",
+  "manifestSha256": "5ae41ea08ee8da1e1f454d9aa5646921f0f707e274b0e04d4eaa4e10ec3142d4",
+  "updatedAt": "2026-11-03T18:50:00Z",
+  "note": "Test v237: explicitly expose the IndexedDB self-test handler to the page button and show immediate feedback.",
+  "sourceCommit": "8e2bc0a1234a2d26bdfeb3856317834403e8e7d3"
 }
