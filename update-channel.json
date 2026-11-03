@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "228",
-  "buildId": "THA-228-REMOVE-ISOLATION-TEST-RECORD-20261102",
-  "manifestSha256": "cbfe8b05f46227fb5b205f238f2dc3958965fc2e5470ab085a484d3a237ba738",
-  "updatedAt": "2026-11-02T23:59:00Z",
-  "note": "Test v228: removes only the exact test record (£1, income, no. 143, reference ISOLATION TEST); numbering derives from remaining saved records.",
-  "sourceCommit": "4dde8d49cd56454477fde4d176963ac905f64420"
+  "version": "229",
+  "buildId": "THA-229-RESET-EMPTY-TEST-SEQUENCE-20261103",
+  "manifestSha256": "c1272bd8e3d5abae3c17f4171eddef1873717a3c3971becdc3cab43155cf41a9",
+  "updatedAt": "2026-11-03T21:00:00Z",
+  "note": "Test v229: if no saved invoices or income records exist, a one-time migration resets stale test-only sequence values to zero; saved records and genuine reserved numbers are preserved when records exist.",
+  "sourceCommit": "d7fbd06985a2dc675202d765d6f04f851ea03e75"
 }
