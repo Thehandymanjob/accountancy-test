@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "241",
-  "buildId": "THA-241-INVOICE-EDIT-STATUS-FIX-20261103",
-  "manifestSha256": "4feec4209760d9c57bbd6a66c36af5e7bf1284350590db930b0c7352eacbac13",
-  "updatedAt": "2026-11-03T21:05:00Z",
-  "note": "Test v241: fixes invoice edit status being overwritten by the draft-mode helper; diagnostic remains read-only.",
-  "sourceCommit": "e33d0460f5713192c3770066f26a384c891cbac1"
+  "version": "242",
+  "buildId": "THA-242-INVOICE-STATUS-FINAL-ASSIGNMENT-20261103",
+  "manifestSha256": "b9a4fc5d37383618641313fe03b82275a0ef0ef031dd51635bdaf063702bffa1",
+  "updatedAt": "2026-11-03T21:20:00Z",
+  "note": "Test v242: sets saved invoice status after editor population and reports the actual form field value.",
+  "sourceCommit": "d9b9c7d09678194e080a7fdcf09009b4814c2841"
 }
