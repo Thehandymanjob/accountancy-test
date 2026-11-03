@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "242",
-  "buildId": "THA-242-INVOICE-STATUS-FINAL-ASSIGNMENT-20261103",
+  "version": "243",
+  "buildId": "THA-243-INVOICE-PAYMENT-FORM-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "cb38918bc3531b0cd58c010f25e8d364805db933622bf65e3b7625ba59bdebba"
+      "sha256": "27ec09dbe779a955cb09e68a589a91f01be202256ddd2a013103cf2ebdaabf58"
     },
     "version-manager.js": {
       "sha256": "3150a7c20691bc784abecb7ceca1551a3dc7ae38699dd0a2fb10a1a29d890b30"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "v243 separates invoice status from payment status in the invoice editor. New invoices default to Draft; selecting Issued defaults payment to Paid, with editable payment date (today by default) and Bank Transfer (Cash selectable). Paid saves create or update the linked Accounting income record; Unpaid saves remove the linked invoice income record. No existing invoices are changed until edited and saved.",
     "v242 assigns the saved invoice status after all invoice editor fields and calculations are populated, and adds the actual form field value to the read-only diagnostic. It also fixes diagnostic line breaks. No existing invoice records are changed.",
     "v241 fixes the invoice edit status contradiction: setInvoiceDraftMode now only controls invoice-number visibility and no longer overwrites the Status field loaded from the saved invoice. The read-only v240 diagnostics remain available. No existing invoice records are changed.",
     "v240 adds a read-only invoice edit diagnostic comparing the selected invoice ID and status in memory with the same record in LocalStorage, including duplicate-ID counts. It does not change or save invoice records.",
