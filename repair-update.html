@@ -39,7 +39,7 @@ try{
  if(ch.app!=='The Handyman Accountancy'||ch.channel!=='test'||ch.sourceBranch!=='main')throw Error('The test update channel is invalid.');
  manifest=await getJSON(RAW+ch.sourceBranch+'/version.json?repair='+Date.now());
  if(String(manifest.version)!==String(ch.version)||manifest.buildId!==ch.buildId)throw Error('The published manifest does not match the update channel.');
- targetName='tha-test226-app-v'+String(manifest.version).replace(/[^\\w.-]/g,'_')+'-'+String(manifest.buildId).replace(/[^\\w.-]/g,'_');
+ targetName='tha-test226-app-v'+String(manifest.version).replace(/[^\w.-]/g,'_')+'-'+String(manifest.buildId).replace(/[^\w.-]/g,'_');
  const pc=await caches.open(POINTER),pr=await pc.match(POINTER_URL);
  if(!pr)throw Error('No active app-cache pointer was found. Recovery stopped safely.');
  previousName=(await pr.json()).cacheName;
