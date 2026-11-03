@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "233",
-  "buildId": "THA-233-INDEXEDDB-FOUNDATION-20261103",
-  "manifestSha256": "e3c91d2f34b87597c7854d52e77f5ef1bc04343954b3e53ce201350c3f0e94aa",
-  "updatedAt": "2026-11-03T21:30:00Z",
-  "note": "Test v233: add isolated, verified, non-destructive IndexedDB key-value storage foundation; application storage remains on LocalStorage pending staged integration.",
+  "version": "234",
+  "buildId": "THA-234-INDEXEDDB-SELFTEST-20261103",
+  "manifestSha256": "9e4c462a69cd485b7e4e40a7fd977bc081f138f63e4955251b78814b450e18c5",
+  "updatedAt": "2026-11-03T21:45:00Z",
+  "note": "Test v234: add isolated IndexedDB read/write/list/delete self-test; no legacy records are modified.",
   "sourceCommit": "5c030697f926f14aadcfdbdf9e26127dc465c11e"
 }
