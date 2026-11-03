@@ -4,8 +4,8 @@
   "sourceBranch": "main",
   "version": "238",
   "buildId": "THA-238-INDEXEDDB-SCRIPT-PARSE-FIX-20261103",
-  "manifestSha256": "764d4e5133e0a29c71ef4080ab8fc42b8a743dfcb382ae4aac25ad9624bb258d",
-  "updatedAt": "2026-11-03T19:15:15.262Z",
-  "note": "Test v238: channel now points to the v238 manifest and its exact SHA-256. v238 includes the IndexedDB diagnostics script parse fix.",
-  "sourceCommit": "dbe6e23be9a134d15adfcd15a99a01a367daf866"
+  "manifestSha256": "3382c32fe51f66cd4d6d5e59db77c63129518619441e900c6d289e9bb0cb0e7a",
+  "updatedAt": "2026-11-03T19:16:21.974Z",
+  "note": "Test v238: channel points to the v238 app shell and manifest with matching SHA-256 integrity values.",
+  "sourceCommit": "707e4cc460cd091b1e2fbe02645fffe4da73dd1c"
 }
