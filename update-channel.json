@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "235",
-  "buildId": "THA-235-INDEXEDDB-TEST-UI-20261103",
-  "manifestSha256": "e79734fabdaf4f83e9ddc5f603bf6212fb643e4ab4f494c92645587e180ff304",
-  "updatedAt": "2026-11-03T21:55:00Z",
-  "note": "Test v235: add a Monitor button for the non-destructive IndexedDB self-test; no app data migration or deletion.",
-  "sourceCommit": "079e8b665b5004fe6cf689dca5d5ce1254f2bb64"
+  "version": "236",
+  "buildId": "THA-236-SAFARI-UPDATE-RELOAD-20261103",
+  "manifestSha256": "f46cd1b9a3b96c74c1ad057e9a2bb92756a595500379bd7e6220777e7aa4eb47",
+  "updatedAt": "2026-11-03T22:10:00Z",
+  "note": "Test v236: fix Safari updater stall by not awaiting optional Service Worker registration/message after verified cache activation.",
+  "sourceCommit": "2869fe2085fa2e8a95fa770d8e78f46be6ea1110"
 }
