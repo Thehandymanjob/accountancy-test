@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "237",
-  "buildId": "THA-237-INDEXEDDB-BUTTON-FIX-20261103",
-  "manifestSha256": "5ae41ea08ee8da1e1f454d9aa5646921f0f707e274b0e04d4eaa4e10ec3142d4",
-  "updatedAt": "2026-11-03T18:50:00Z",
-  "note": "Test v237: explicitly expose the IndexedDB self-test handler to the page button and show immediate feedback.",
-  "sourceCommit": "8e2bc0a1234a2d26bdfeb3856317834403e8e7d3"
+  "version": "238",
+  "buildId": "THA-238-INDEXEDDB-SCRIPT-PARSE-FIX-20261103",
+  "manifestSha256": "764d4e5133e0a29c71ef4080ab8fc42b8a743dfcb382ae4aac25ad9624bb258d",
+  "updatedAt": "2026-11-03T19:15:15.262Z",
+  "note": "Test v238: channel now points to the v238 manifest and its exact SHA-256. v238 includes the IndexedDB diagnostics script parse fix.",
+  "sourceCommit": "dbe6e23be9a134d15adfcd15a99a01a367daf866"
 }
