@@ -1386,7 +1386,7 @@ function highestSharedRecordNumber(){const invoiceNums=db.invoices.map(i=>Number
 function reserveRecordNumber(n){const num=Number(n)||0;if(num<=0)return;try{const prior=Number(localStorage.getItem(INVOICE_SEQUENCE_KEY))||0;if(num>prior){localStorage.setItem(INVOICE_SEQUENCE_KEY,String(num));if(typeof logMonitorEvent==='function')logMonitorEvent('activity','record_number_reserved','record',String(num),'success',{number:num,previousHighWaterMark:prior})}}catch(e){if(typeof logMonitorEvent==='function')logMonitorEvent('storage','invoice_sequence_write_failed','invoice',String(num),'failed',{message:String(e.message||e)});}}
 function nextSharedRecordNumber(){return highestSharedRecordNumber()+1}
 function nextInvoiceNumber(){return nextSharedRecordNumber()}
-function assignNumbersToExistingIncome(){if(!Array.isArray(db.entries)||!Array.isArray(db.invoices))return;const unnumbered=db.entries.filter(e=>e&&e.type==='income'&&!e.invoiceId&&!(Number(e.number)>0)).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id||'').localeCompare(String(b.id||'')));let next=highestSharedRecordNumber()+1;for(const e of unnumbered)e.number=next++;}
+function assignNumbersToExistingIncome(){if(!Array.isArray(db.entries)||!Array.isArray(db.invoices))return;const unnumbered=db.entries.filter(e=>e&&e.type==='income'&&!e.invoiceId&&!String(e.id||'').startsWith('invoice-income-')&&!/^Invoice\s+/i.test(String(e.reference||'').trim())&&!/payment received for invoice/i.test(String(e.notes||''))&&!(Number(e.number)>0)).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id||'').localeCompare(String(b.id||'')));let next=highestSharedRecordNumber()+1;for(const e of unnumbered)e.number=next++;}
 function renderInvoiceLineItems(items){const host=$("invoiceLineItems");if(!host)return;const list=(Array.isArray(items)?items:[]).slice(0,4);host.innerHTML=Array.from({length:4},(_,n)=>{const x=list[n]||{};return `<div class="invoice-line-item"><div><label for="invItemDesc${n}">Work item ${n+1}</label><textarea id="invItemDesc${n}" placeholder="Describe this part of the work" oninput="syncInvoiceItems()">${esc(x.description||"")}</textarea></div><div><label for="invItemPrice${n}">Price (£)</label><input id="invItemPrice${n}" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" value="${x.price==null?"":esc(x.price)}" oninput="updateInvoiceTotal()"></div></div>`}).join("")}
 function readInvoiceItems(){return Array.from({length:4},(_,n)=>({description:$(`invItemDesc${n}`)?.value.trim()||"",price:Math.max(0,Number($(`invItemPrice${n}`)?.value)||0)})).filter(x=>x.description||x.price>0)}
 function syncInvoiceItems(){const a=readInvoiceItems();$('invUnitPrice').value=a.reduce((s,x)=>s+x.price,0);updateInvoiceTotal()}
@@ -1579,9 +1579,18 @@ function assignNumbersToExistingInvoices(){
   changes.push({invoice,previous:invoice.number,number:next});
   used.add(next++);
  }
- changes.forEach(x=>{x.invoice.number=x.number;});
+ const linkedChanges=[];
+ changes.forEach(x=>{
+  x.invoice.number=x.number;
+  const id=String(x.invoice.id||'');
+  db.entries.filter(e=>e&&e.type==='income'&&(String(e.invoiceId||'')===id||String(e.id||'')==='invoice-income-'+id)).forEach(e=>{
+   linkedChanges.push({entry:e,invoiceId:e.invoiceId,reference:e.reference});
+   e.invoiceId=id;e.reference='Invoice '+x.number;
+  });
+ });
  if(!persist()){
   changes.forEach(x=>{if(x.previous===undefined)delete x.invoice.number;else x.invoice.number=x.previous;});
+  linkedChanges.forEach(x=>{if(x.invoiceId===undefined)delete x.entry.invoiceId;else x.entry.invoiceId=x.invoiceId;if(x.reference===undefined)delete x.entry.reference;else x.entry.reference=x.reference;});
   return 0;
  }
  changes.forEach(x=>reserveRecordNumber(x.number));
@@ -1636,16 +1645,16 @@ function markInvoiceUnpaid(id){
 
 function removeOrphanedInvoiceIncome(){
  if(!Array.isArray(db.entries)||!Array.isArray(db.invoices))return 0;
- const invoiceNumbers=new Set(db.invoices.map(i=>String(i.number||'').trim()).filter(Boolean));
+ const invoiceIds=new Set(db.invoices.map(i=>String(i.id||'')).filter(Boolean));
  const isOrphan=e=>{
   if(!e||e.type!=='income')return false;
-  const ref=String(e.reference||'').trim().match(/^Invoice\s+(.+)$/i);
-  const note=String(e.notes||'').match(/payment received for invoice\s+([\w-]+)/i);
-  const id=String(e.id||'').match(/^invoice-income-invoice-(.+)$/i);
-  const num=ref?.[1]?.trim()||note?.[1]?.trim()||id?.[1]?.trim();
-  if(!num||invoiceNumbers.has(String(num)))return false;
-  // Require a strong invoice-generated marker; do not match generic customer income.
-  return !!ref || !!note || !!id;
+  const linkedId=String(e.invoiceId||'');
+  if(linkedId)return !invoiceIds.has(linkedId);
+  const generatedId=String(e.id||'').match(/^invoice-income-(.+)$/);
+  if(generatedId)return !invoiceIds.has(generatedId[1]);
+  // A reference or note alone is not sufficient proof that an accounting
+  // income record is orphaned. Preserve it rather than risk deleting income.
+  return false;
  };
  const before=db.entries.length;db.entries=db.entries.filter(e=>!isOrphan(e));return before-db.entries.length;
 }
