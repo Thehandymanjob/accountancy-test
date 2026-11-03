@@ -4,8 +4,8 @@
   "sourceBranch": "release239",
   "version": "244",
   "buildId": "THA-244-INVOICE-NUMBER-DRAFT-ISSUED-20261103",
-  "manifestSha256": "0cd785f254fbd7dba949323c41d621e201a589bb05fee05d2adfb46e52e259bf",
-  "updatedAt": "2026-11-03T22:00:00Z",
+  "manifestSha256": "15335d7bd12a9892eb983fe94392723fc86930d4b0487211efb9f3a2ad47d841",
+  "updatedAt": "2026-11-03T22:04:00Z",
   "note": "Test v244: invoice numbers retained for Draft and Issued; latest release notes only.",
-  "sourceCommit": "d8d0b9a4bf5790d3db3919233b71299179702837"
+  "sourceCommit": "4160c915c980ff28821f421fd1613373234accb8"
 }
