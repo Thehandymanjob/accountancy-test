@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "245",
-  "buildId": "THA-245-LEGACY-INVOICE-NUMBER-MIGRATION-20261103",
-  "manifestSha256": "7e6ebb3be4688f0665b1d97406c5dd96a0526b7aa1b89a853521d755ef9e06b9",
-  "updatedAt": "2026-11-03T22:10:00Z",
-  "note": "Test v245: safely assign missing invoice numbers to legacy invoices.",
-  "sourceCommit": "2a5a761ac1eeca824793a78f3c60c44cdc453bcc"
+  "version": "246",
+  "buildId": "THA-246-LEGACY-INVOICE-MIGRATION-SAFE-LINKS-20261103",
+  "manifestSha256": "bb4da56b53c94cf946337630a57a661d3c007b225471395b155a9179fc853407",
+  "updatedAt": "2026-11-03T22:15:00Z",
+  "note": "Test v246: assign missing invoice numbers without risking linked accounting income.",
+  "sourceCommit": "c1b2198bed47e15936c8ff382d1490ea477d424a"
 }
