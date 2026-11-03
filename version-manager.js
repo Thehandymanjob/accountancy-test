@@ -133,7 +133,7 @@ async function bootstrap(){
     }
    }catch(err){if(c)await caches.delete(target);throw err;}
   }
-  if(reg.waiting)reg.waiting.postMessage({type:'SKIP_WAITING'});
+  // Waiting workers remain pending until the user explicitly chooses Update Now.
  }catch(e){console.warn('Offline cache setup unavailable; existing app data was not changed.',e);}
 }
 function notes(m){const box=el('appReleaseNotes');if(!box)return;box.textContent='';box.style.display='block';const h=document.createElement('strong');h.textContent='Published version '+m.version+' — What this update includes';box.appendChild(h);const list=Array.isArray(m.releaseNotes)?m.releaseNotes:[];if(list.length){const ul=document.createElement('ul');ul.style.paddingLeft='20px';list.forEach(v=>{const li=document.createElement('li');li.textContent=String(v);ul.appendChild(li);});box.appendChild(ul);}else{const p=document.createElement('p');p.textContent='No release notes supplied.';box.appendChild(p);}}
@@ -167,7 +167,7 @@ window.checkForAppUpdate=async function(){
 };
 window.reloadLatestApp=async function(){
  if(!latest||!staged){status('Check for updates and finish the download first.');return;}if(busy)return;busy=true;button(false,'Installing…');progress(100,'Activating verified update…');
- try{await activateCache(staged,true);const u=new URL(location.href);u.searchParams.set('tha-installed-version',String(latest.version));u.searchParams.set('tha-installed-build',latest.buildId);u.hash='';status('Installing version '+latest.version+'…');location.replace(u.toString());}
+ try{await activateCache(staged,true);try{const reg=await navigator.serviceWorker.getRegistration(base.href);if(reg&&reg.waiting)reg.waiting.postMessage({type:'SKIP_WAITING'});}catch(swError){console.warn('The verified app cache is active; waiting Service Worker activation was deferred.',swError);}const u=new URL(location.href);u.searchParams.set('tha-installed-version',String(latest.version));u.searchParams.set('tha-installed-build',latest.buildId);u.hash='';status('Installing version '+latest.version+'…');location.replace(u.toString());}
  catch(e){busy=false;button(true,'Update Now');status('Could not activate update: '+(e.message||e)+'. Previous cache remains available.');}
 };
 const installed=el('appInstalledVersion');if(installed)installed.textContent='Installed version: '+LOCAL_VERSION+' · '+LOCAL_BUILD;button(false);
