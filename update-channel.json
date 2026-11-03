@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "231",
-  "buildId": "THA-231-MANUAL-SERVICE-WORKER-ACTIVATION-20261103",
-  "manifestSha256": "fa7e777b34835ff1f017c2ed982f604003108939c900476fb9a0e0f31cdb17ae",
-  "updatedAt": "2026-11-03T17:40:00Z",
-  "note": "Test v231: waiting Service Worker activation requires a dedicated explicit user-approval message; full release history retained.",
-  "sourceCommit": "a2cc808e433f217966b83b4e300094306300304c"
+  "version": "232",
+  "buildId": "THA-232-CACHE-POINTER-KEY-ALIGNMENT-20261103",
+  "manifestSha256": "59900306ca4b6a5c6a0e9faba94c4d2b93556c9004867c111b7f829c50163f6b",
+  "updatedAt": "2026-11-03T21:00:00Z",
+  "note": "Test v232: align updater cache pointer and rollback marker keys with the Service Worker.",
+  "sourceCommit": "5c030697f926f14aadcfdbdf9e26127dc465c11e"
 }
