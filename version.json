@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "245",
-  "buildId": "THA-245-LEGACY-INVOICE-NUMBER-MIGRATION-20261103",
+  "version": "246",
+  "buildId": "THA-246-LEGACY-INVOICE-MIGRATION-SAFE-LINKS-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "6179550b6481dbc623ce9ee79d1f8d33d755f3c06ee07ac92c8d0ae0d99c37e4"
+      "sha256": "f64fd62a629b4f0e665332cdc79175ea133b2aed2bd80bb253b1f19a9c070005"
     },
     "version-manager.js": {
       "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "v246 strengthens the legacy invoice-number migration: existing invoice-linked income records are retained and their references are updated only when linked by invoiceId or the generated invoice-income ID. Reference-only income entries are no longer deleted automatically because that link is not conclusive. Existing invoice numbers, payment data and statuses remain unchanged.",
     "v245 adds a one-time, non-destructive startup migration for older invoices with missing or invalid invoice numbers. It assigns unique numbers in date/creation order after all existing and reserved invoice/income numbers, saves and verifies the changes, and preserves existing numbers, invoice status, payment details and deleted records. No existing invoice number is overwritten.",
     "v244 keeps invoice numbers visible and assigned in both Draft and Issued states. Draft-to-Issued conversion retains the same number; invoice numbers are reserved only after a successful save. Issued payment status remains independently selectable as Paid or Unpaid. Removes the redundant Cancel button and shows only the latest release note in Software Update.",
     "v243 separates invoice status from payment status in the invoice editor. New invoices default to Draft; selecting Issued defaults payment to Paid, with editable payment date (today by default) and Bank Transfer (Cash selectable). Paid saves create or update the linked Accounting income record; Unpaid saves remove the linked invoice income record. No existing invoices are changed until edited and saved.",
