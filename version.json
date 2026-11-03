@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "233",
-  "buildId": "THA-233-INDEXEDDB-FOUNDATION-20261103",
+  "version": "234",
+  "buildId": "THA-234-INDEXEDDB-SELFTEST-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "e9c0ac2f6bc33239c7dbae2cb706a7fb9f5868d98c351e3709e70c2e2bf16f9b"
+      "sha256": "2c2634b74efd44ed4fcd920b193459232d43bddc3fbbb37c12444b7474ae9baa"
     },
     "version-manager.js": {
       "sha256": "d25ec9e5c4923c3f6276e28b12b99bf4af7d8449c8a0c6ff7a8d95735f22cb08"
@@ -18,7 +18,7 @@
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
     },
     "storage-foundation.js": {
-      "sha256": "e88f93472c81a3e0947f280d33368a467c673abae36ed8c78e0959270c52974b"
+      "sha256": "f7768eab1dcf8b9d793904257782e7f6d2788ac3b10d9c004e56671a21d420a6"
     }
   },
   "releaseNotes": [
@@ -44,7 +44,8 @@
     "A waiting Service Worker is activated only after the user presses Update Now.",
     "Earlier release notes from v228, v229 and v230 are retained in the update information.",
     "Version 232 fixes the update failure: version-manager.js now uses the same namespaced active-cache and pending-activation keys as service-worker.js.",
-    "Version 233 adds a non-destructive IndexedDB key-value foundation with verified get, set, remove, key listing, snapshot, migration and comparison APIs. Application records remain on LocalStorage pending staged integration."
+    "Version 233 adds a non-destructive IndexedDB key-value foundation with verified get, set, remove, key listing, snapshot, migration and comparison APIs. Application records remain on LocalStorage pending staged integration.",
+    "Version 234 adds a safe IndexedDB self-test for write, read, key listing and delete. It uses a temporary test key and confirms legacy LocalStorage data is not changed."
   ],
   "releaseBranch": "main"
 }
