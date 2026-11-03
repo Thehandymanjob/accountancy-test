@@ -12,16 +12,17 @@
       "sha256": "e0875e22072f46c93081ccd68d86ff01b7a88771926e14daed87ffa3831b295c"
     },
     "version-manager.js": {
-      "sha256": "3150a7c20691bc784abecb7ceca1551a3dc7ae38699dd0a2fb10a1a29d890b30"
+      "sha256": "64ca40940ddb871bd1e68e073b4cf35ba6fc5106879204c6913f3257162861eb"
     },
     "service-worker.js": {
-      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
+      "sha256": "b678e64953b56ee58ad31313927f90d038a7273e7898dc58bc7dbdb8b25b18e7"
     },
     "storage-foundation.js": {
-      "sha256": "f7768eab1dcf8b9d793904257782e7f6d2788ac3b10d9c004e56671a21d420a6"
+      "sha256": "0286825b4b174861d9fd37d7debc3ad7374649b420de52e2badfb6fc40e43fd6"
     }
   },
   "releaseNotes": [
+    "Corrected v239 release package SHA-256 values for all four required app files so the updater can verify and stage the release.",
     "Invoice status diagnostic: invoice list displays a normalized status and the exact saved status value so Draft-versus-Issued discrepancies can be identified without changing existing invoice records.",
     "Isolated experimental copy of v226 for the separate accountancy-test repository.",
     "Accounting, project, contract, factory-reset recovery, and language localStorage keys use the tha_test226_ namespace.",
