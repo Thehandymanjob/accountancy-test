@@ -1,16 +1,15 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "229",
-  "buildId": "THA-229-RESET-EMPTY-TEST-SEQUENCE-20261103",
+  "version": "230",
+  "buildId": "THA-230-RECORDS-INVOICE-ARCHIVE-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 1,
   "minimumAppVersion": "206",
   "storageNamespace": "tha_test226_",
-  "legacyDataImport": "manual-only",
   "files": {
     "index.html": {
-      "sha256": "94b6967ea4671ff24f58fbe9edbfaad609a09d7da8fb94919c31a25179480f88"
+      "sha256": "79a071693d3a43e421b70d8faeae14f0f12fed031d7724d121a360b879f3e1e9"
     },
     "version-manager.js": {
       "sha256": "45e4ad8223cf3af728cdde2bfaa12173c7d7753a8e662ba7bfef07e387b02247"
@@ -23,19 +22,11 @@
     }
   },
   "releaseNotes": [
-    "Isolated experimental copy of v226 for the separate accountancy-test repository.",
-    "Accounting, project, contract, factory-reset recovery, and language localStorage keys use the tha_test226_ namespace.",
-    "IndexedDB database and Service Worker CacheStorage names use separate test-only namespaces.",
-    "Update channel and release downloads point only to this test repository.",
-    "Production repository, production data keys, and Final_backup.json were not modified.",
-    "All remaining invoice sequence, diagnostics, report archive, help-draft, and language preference keys were moved into the tha_test226_ namespace.",
-    "Removed the hard-coded minimum invoice number; numbering now starts at 1 when no prior invoice/income number or reserved sequence exists, and otherwise continues from the highest saved or reserved number plus one.",
-    "Corrected numbering: the next number is one greater than the highest existing invoice/income number or reserved sequence; an empty installation starts at 1.",
-    "Invoice number previews no longer reserve or consume a number when the New Invoice form is opened or cancelled; a number is reserved only after a successful save.",
-    "One-time migration removes uncommitted sequence increments from earlier test builds, using the highest persisted invoice or income number as the baseline.",
-    "Factory Reset now clears the invoice sequence so a genuinely fresh local installation starts at invoice number 1.",
-    "One-time test-only cleanup removes only the exact £1 income record numbered 143 with reference ISOLATION TEST; other records are not matched or deleted.",
-    "v229 adds a one-time test-only migration: if there are no saved invoices or income records, reset stale preview/reservation sequence values to zero so the next invoice starts at 1; if saved records exist, preserve the higher reserved sequence and all records."
+    "Unifies Accounting Records so independent income, expenses, and customer invoices appear in one searchable list.",
+    "Adds a read-only View action for invoices from Records.",
+    "Invoice deletion is now a soft delete: deleted invoices remain visible in Records with a subdued DELETED status and their invoice numbers stay reserved.",
+    "Deleted invoices are excluded from the active Invoices list and cannot be edited or have payment status changed.",
+    "The shared invoice/income numbering logic from v229 is retained."
   ],
   "releaseBranch": "main"
 }
