@@ -1421,7 +1421,7 @@ function saveAndPrintInvoice(){if(saveInvoice())printInvoice($('invoiceId').valu
 function cancelInvoiceEdit(){$('invoiceEditor').hidden=true;$('invoiceListArea').hidden=false;$('invoicePreview').hidden=true;renderInvoices();window.scrollTo({top:0,behavior:'smooth'})}
 function deleteInvoice(id){
  const invoice=db.invoices.find(i=>String(i.id)===String(id));if(!invoice||invoice.deletedAt||invoice.deleted===true)return;
- const linkedEntries=db.entries.filter(e=>e.type==='income'&&(String(e.invoiceId||'')===String(invoice.id)||String(e.reference||'').trim()==='Invoice '+invoice.number||String(e.id||'')==='invoice-income-'+invoice.id||String(e.notes||'').match(/^Payment received for invoice ([\\w-]+)(?:\\b|\\s|$)/i)?.[1]===String(invoice.number)));
+ const linkedEntries=db.entries.filter(e=>e.type==='income'&&(String(e.invoiceId||'')===String(invoice.id)||String(e.reference||'').trim()==='Invoice '+invoice.number||String(e.id||'')==='invoice-income-'+invoice.id||String(e.notes||'').match(/^Payment received for invoice ([\w-]+)(?:\b|\s|$)/i)?.[1]===String(invoice.number)));
  const warning=linkedEntries.length?' This will also remove '+linkedEntries.length+' income record(s) linked to invoice '+invoice.number+' from Records.':'';
  if(!confirm('Move this invoice to Deleted records?'+warning+' Its number will remain reserved.'))return;
  const oldDb=JSON.stringify(db);
@@ -1451,7 +1451,7 @@ function viewRecordInvoice(id){
  const i=db.invoices.find(x=>String(x.id)===String(id));if(!i)return;
  show('invoices');
  $('invoiceListArea').hidden=true;$('invoiceEditor').hidden=true;
- $('invoicePreview').innerHTML=invoiceHTML(i)+'<div class="actions no-print"><button class="gold" onclick="show(\\'records\\')">Back to Records</button></div>';
+ $('invoicePreview').innerHTML=invoiceHTML(i)+'<div class="actions no-print"><button class="gold" onclick="show('records')">Back to Records</button></div>';
  $('invoicePreview').hidden=false;
  document.body.classList.remove('invoice-printing');
  window.scrollTo({top:0,behavior:'smooth'});
