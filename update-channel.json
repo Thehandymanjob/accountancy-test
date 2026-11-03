@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "238",
-  "buildId": "THA-238-INDEXEDDB-SCRIPT-PARSE-FIX-20261103",
-  "manifestSha256": "3382c32fe51f66cd4d6d5e59db77c63129518619441e900c6d289e9bb0cb0e7a",
-  "updatedAt": "2026-11-03T19:16:21.974Z",
-  "note": "Test v238: channel points to the v238 app shell and manifest with matching SHA-256 integrity values.",
-  "sourceCommit": "707e4cc460cd091b1e2fbe02645fffe4da73dd1c"
+  "version": "239",
+  "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
+  "manifestSha256": "86fff74dfbe9bcc0ca2ced9ed5524e888d3dcd2a7ca3c3cfe37010fb73e1200c",
+  "updatedAt": "2026-11-03T20:04:39.939Z",
+  "note": "Test v239: invoice list shows normalized status plus exact saved status for diagnosing Draft/Issued display discrepancy.",
+  "sourceCommit": "34b37ae0d54a9f0322f34de0dfceb854b74b145e"
 }
