@@ -1457,7 +1457,7 @@ function saveInvoice(){
  const paymentStatus=draft?'unpaid':($('invPaymentStatus').value==='paid'?'paid':'unpaid');
  const paymentDate=paymentStatus==='paid'?($('invPaymentDate').value||today()):'';
  const paymentMethod=paymentStatus==='paid'?($('invPaymentMethod').value||'bank'):'';
- if(paymentStatus==='paid'&&(!/^\\d{4}-\\d{2}-\\d{2}$/.test(paymentDate)||!['bank','cash'].includes(paymentMethod))){alert('Enter a valid payment date and method.');return false}
+ if(paymentStatus==='paid'&&(!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)||!['bank','cash'].includes(paymentMethod))){alert('Enter a valid payment date and method.');return false}
  const invoice={...(prev||{}),id,number,date,customerId:customer.id,customerName:name,phone,billingAddress,workAddress,description,items,qty,unitPrice,vat:$('invVat').value,status:draft?'draft':'issued',paymentStatus,paymentDate,paymentMethod,notes:$('invNotes').value.trim(),updatedAt:new Date().toISOString()};
  const oldInvoices=db.invoices,oldEntries=db.entries,oldCustomers=customersChanged?db.customers.filter(c=>c.id!==customer.id):db.customers;
  db.invoices=oldInvoices.some(x=>x.id===id)?oldInvoices.map(x=>x.id===id?invoice:x):[...oldInvoices,invoice];
