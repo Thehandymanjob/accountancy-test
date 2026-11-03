@@ -4,8 +4,8 @@
   "sourceBranch": "main",
   "version": "231",
   "buildId": "THA-231-MANUAL-SERVICE-WORKER-ACTIVATION-20261103",
-  "manifestSha256": "c65aaaf4dad80c35b7fa513a9bccb6ad69e1c3bc86c71e8da6385f79357606ef",
+  "manifestSha256": "fa7e777b34835ff1f017c2ed982f604003108939c900476fb9a0e0f31cdb17ae",
   "updatedAt": "2026-11-03T17:40:00Z",
-  "note": "Test v231: Service Worker activation now requires explicit Update Now approval; full release history retained.",
-  "sourceCommit": "dcc482e52beb2e55005b311cd100a6c8425e73d5"
+  "note": "Test v231: waiting Service Worker activation requires a dedicated explicit user-approval message; full release history retained.",
+  "sourceCommit": "a2cc808e433f217966b83b4e300094306300304c"
 }
