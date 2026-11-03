@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "232",
-  "buildId": "THA-232-CACHE-POINTER-KEY-ALIGNMENT-20261103",
-  "manifestSha256": "59900306ca4b6a5c6a0e9faba94c4d2b93556c9004867c111b7f829c50163f6b",
-  "updatedAt": "2026-11-03T21:00:00Z",
-  "note": "Test v232: align updater cache pointer and rollback marker keys with the Service Worker.",
+  "version": "233",
+  "buildId": "THA-233-INDEXEDDB-FOUNDATION-20261103",
+  "manifestSha256": "e3c91d2f34b87597c7854d52e77f5ef1bc04343954b3e53ce201350c3f0e94aa",
+  "updatedAt": "2026-11-03T21:30:00Z",
+  "note": "Test v233: add isolated, verified, non-destructive IndexedDB key-value storage foundation; application storage remains on LocalStorage pending staged integration.",
   "sourceCommit": "5c030697f926f14aadcfdbdf9e26127dc465c11e"
 }
