@@ -136,7 +136,7 @@ async function bootstrap(){
   // Waiting workers remain pending until the user explicitly chooses Update Now.
  }catch(e){console.warn('Offline cache setup unavailable; existing app data was not changed.',e);}
 }
-function notes(m){const box=el('appReleaseNotes');if(!box)return;box.textContent='';box.style.display='block';const h=document.createElement('strong');h.textContent='Published version '+m.version+' — What this update includes';box.appendChild(h);const list=Array.isArray(m.releaseNotes)?m.releaseNotes:[];if(list.length){const ul=document.createElement('ul');ul.style.paddingLeft='20px';list.forEach(v=>{const li=document.createElement('li');li.textContent=String(v);ul.appendChild(li);});box.appendChild(ul);}else{const p=document.createElement('p');p.textContent='No release notes supplied.';box.appendChild(p);}}
+function notes(m){const box=el('appReleaseNotes');if(!box)return;box.textContent='';box.style.display='block';const h=document.createElement('strong');h.textContent='Published version '+m.version+' — What this update includes';box.appendChild(h);const list=Array.isArray(m.releaseNotes)?m.releaseNotes.slice(0,1):[];if(list.length){const ul=document.createElement('ul');ul.style.paddingLeft='20px';list.forEach(v=>{const li=document.createElement('li');li.textContent=String(v);ul.appendChild(li);});box.appendChild(ul);}else{const p=document.createElement('p');p.textContent='No release notes supplied.';box.appendChild(p);}}
 window.checkForAppUpdate=async function(){
  if(busy)return;busy=true;latest=null;staged=null;button(false);progress(0,'',false);
  const check=document.querySelector('button[onclick="checkForAppUpdate(true)"]');if(check){check.disabled=true;check.textContent='Checking…';}
