@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "246",
-  "buildId": "THA-246-LEGACY-INVOICE-MIGRATION-SAFE-LINKS-20261103",
+  "version": "247",
+  "buildId": "THA-247-INVOICE-PAYMENT-DATE-METHOD-PICKERS-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "f64fd62a629b4f0e665332cdc79175ea133b2aed2bd80bb253b1f19a9c070005"
+      "sha256": "18cb4f51c2b62f1fc35bc3a697b3fb14bae4b483764d0651c01c721a55119a50"
     },
     "version-manager.js": {
       "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "v247 replaces the browser text prompts used by Mark paid with an in-app payment dialog: choose the payment date from the native date picker and select Bank Transfer or Cash. Existing payment recording, duplicate-payment checks and accounting links are retained.",
     "v246 strengthens the legacy invoice-number migration: existing invoice-linked income records are retained and their references are updated only when linked by invoiceId or the generated invoice-income ID. Reference-only income entries are no longer deleted automatically because that link is not conclusive. Existing invoice numbers, payment data and statuses remain unchanged.",
     "v245 adds a one-time, non-destructive startup migration for older invoices with missing or invalid invoice numbers. It assigns unique numbers in date/creation order after all existing and reserved invoice/income numbers, saves and verifies the changes, and preserves existing numbers, invoice status, payment details and deleted records. No existing invoice number is overwritten.",
     "v244 keeps invoice numbers visible and assigned in both Draft and Issued states. Draft-to-Issued conversion retains the same number; invoice numbers are reserved only after a successful save. Issued payment status remains independently selectable as Paid or Unpaid. Removes the redundant Cancel button and shows only the latest release note in Software Update.",
