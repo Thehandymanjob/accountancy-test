@@ -4,8 +4,8 @@
   "sourceBranch": "main",
   "version": "230",
   "buildId": "THA-230-RECORDS-INVOICE-ARCHIVE-20261103",
-  "manifestSha256": "d7840afd87e6992946d9c619bd17e16d9edf91372c65c4270439706a27eb7be6",
+  "manifestSha256": "9ebf6a02dc088f936eefb1ea48d5e3a833168da9b3c863cb412c30aff17fc98e",
   "updatedAt": "2026-11-03T16:19:00Z",
   "note": "Test v230: unified Records and read-only invoice archive; v229 numbering logic retained.",
-  "sourceCommit": "e22be2369c06a264886ff393633f31184296f755"
+  "sourceCommit": "401d679a18e5fd8817fce8e2b84bd3a076fa3e15"
 }
