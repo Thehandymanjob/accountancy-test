@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "246",
-  "buildId": "THA-246-LEGACY-INVOICE-MIGRATION-SAFE-LINKS-20261103",
-  "manifestSha256": "bb4da56b53c94cf946337630a57a661d3c007b225471395b155a9179fc853407",
-  "updatedAt": "2026-11-03T22:15:00Z",
-  "note": "Test v246: assign missing invoice numbers without risking linked accounting income.",
-  "sourceCommit": "c1b2198bed47e15936c8ff382d1490ea477d424a"
+  "version": "247",
+  "buildId": "THA-247-INVOICE-PAYMENT-DATE-METHOD-PICKERS-20261103",
+  "manifestSha256": "61cfcea8ee01c444c8ebbdcf55be555c8e489ef3bec44fbf933e7236aa828b97",
+  "updatedAt": "2026-11-03T22:35:00Z",
+  "note": "Test v247: in-app payment date and method selectors.",
+  "sourceCommit": "6cf3ac0534d62b0a54e998af62f0d9e3241f0be8"
 }
