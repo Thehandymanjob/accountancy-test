@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "234",
-  "buildId": "THA-234-INDEXEDDB-SELFTEST-20261103",
+  "version": "235",
+  "buildId": "THA-235-INDEXEDDB-TEST-UI-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "2c2634b74efd44ed4fcd920b193459232d43bddc3fbbb37c12444b7474ae9baa"
+      "sha256": "045b25da0503036eb7d24fd67c4e52870937c1694df8daf58a30295813f5f111"
     },
     "version-manager.js": {
       "sha256": "d25ec9e5c4923c3f6276e28b12b99bf4af7d8449c8a0c6ff7a8d95735f22cb08"
@@ -45,7 +45,8 @@
     "Earlier release notes from v228, v229 and v230 are retained in the update information.",
     "Version 232 fixes the update failure: version-manager.js now uses the same namespaced active-cache and pending-activation keys as service-worker.js.",
     "Version 233 adds a non-destructive IndexedDB key-value foundation with verified get, set, remove, key listing, snapshot, migration and comparison APIs. Application records remain on LocalStorage pending staged integration.",
-    "Version 234 adds a safe IndexedDB self-test for write, read, key listing and delete. It uses a temporary test key and confirms legacy LocalStorage data is not changed."
+    "Version 234 adds a safe IndexedDB self-test for write, read, key listing and delete. It uses a temporary test key and confirms legacy LocalStorage data is not changed.",
+    "Version 235 adds a Monitor & Diagnostics control to run the temporary IndexedDB self-test in the browser. It does not migrate or alter existing app records."
   ],
   "releaseBranch": "main"
 }
