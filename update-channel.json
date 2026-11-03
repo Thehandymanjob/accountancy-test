@@ -1,11 +1,11 @@
 {
   "app": "The Handyman Accountancy",
   "channel": "test",
-  "sourceBranch": "main",
+  "sourceBranch": "release/v239",
   "version": "239",
   "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
-  "manifestSha256": "7fa3fa80451c1bd38baffe4b8638411ddc4253c45053e9b31323456c9c4fc038",
-  "updatedAt": "2026-11-03T20:09:31.168Z",
-  "note": "Test v239: corrected SHA-256 values for all required release assets; update package integrity checks now match the published files.",
-  "sourceCommit": "9e34dc8cd4480c93a7a5495b33f5921812a598d9"
+  "manifestSha256": "fe78463b4a7a37a6651c77c7cc2688aa79c2356f050156e452c8f7e99d0b4a40",
+  "updatedAt": "2026-11-03T20:30:00Z",
+  "note": "Test v239: release manifest and all app assets are pinned to the fixed release/v239 reference.",
+  "sourceCommit": "66c21115341f83e8f6c2288d642322975cfb76cb"
 }
