@@ -50,14 +50,15 @@ try{
   details.push(n+' | manifest '+version+' | index '+hasIndex);
  }
  const pc=await caches.open(POINTER),pr=await pc.match(POINTER_URL);
- if(!pr){
-  say('DIAGNOSTIC ONLY — no active pointer was found.\\nAll CacheStorage names: '+(allNames.join('\\n')||'(none)')+'\\n\\nApp cache inspection:\\n'+(details.join('\\n')||'(no app-version cache found)')+'\\n\\nNo cache or app data has been changed. Send this screen to the developer.');
-  return;
- }
- previousName=(await pr.json()).cacheName;
- if(!previousName||previousName===targetName||!await caches.has(previousName))throw Error('The current app cache pointer is invalid. Current pointer value: '+String(previousName));
- if(!await caches.has(targetName))throw Error('The downloaded version '+manifest.version+' cache is not present in Safari. Available app caches: '+(appNames.join(', ')||'(none)'));
- 
+ const pointerWasMissing=!pr;
+ if(pr){previousName=(await pr.json()).cacheName;}
+ else{previousName=appNames.find(n=>n.includes('-v235-'))||appNames.find(n=>n.includes('-v226'));}
+ if(!previousName||previousName===targetName||!await caches.has(previousName))throw Error('No valid fallback cache found. Available caches: '+appNames.join(', '));
+ if(!await caches.has(targetName))throw Error('The downloaded version '+manifest.version+' cache is not present in Safari.');
+ const fallbackCache=await caches.open(previousName),fallbackManifestResponse=await fallbackCache.match(new URL('version.json',BASE)),fallbackIndex=await fallbackCache.match(new URL('index.html',BASE));
+ if(!fallbackManifestResponse||!fallbackIndex)throw Error('Fallback cache '+previousName+' is incomplete; no pointer has been created.');
+ const fallbackManifest=await fallbackManifestResponse.json();
+ if(!fallbackManifest.version||!fallbackManifest.buildId)throw Error('Fallback cache manifest is invalid; no pointer has been created.');
  const cache=await caches.open(targetName),names=[...new Set(['index.html','version.json',...Object.keys(manifest.files||{})])];
  const verified=[];
  for(const name of names){
@@ -78,11 +79,12 @@ try{
   verified.push(name);
  }
  $('repair').disabled=false;
- say('Ready to activate version '+manifest.version+'.\\nPrevious cache: '+previousName+'\\nVerified files: '+verified.join(', ')+'\\nNo app data has been changed.');
+ say('Ready to activate version '+manifest.version+'.\\nFallback cache: '+previousName+' (v'+fallbackManifest.version+').\\nPointer repair required: '+pointerWasMissing+'\\nVerified files: '+verified.join(', ')+'\\nNo app data has been changed.');
  $('repair').onclick=async()=>{
   $('repair').disabled=true;say('Saving rollback protection and switching to version '+manifest.version+'…');
   try{
-   const rollback={previousCache:previousName,nextCache:targetName,version:String(manifest.version),buildId:String(manifest.buildId),attempts:0,startedAt:Date.now()};
+   if(pointerWasMissing){await pc.put(POINTER_URL,new Response(JSON.stringify({cacheName:previousName}),{headers:{'Content-Type':'application/json'}}));const initial=await pc.match(POINTER_URL),initialValue=initial?await initial.json():null;if(!initialValue||initialValue.cacheName!==previousName)throw Error('Could not safely establish the verified fallback pointer.');}
+  const rollback={previousCache:previousName,nextCache:targetName,version:String(manifest.version),buildId:String(manifest.buildId),attempts:0,startedAt:Date.now()};
    await pc.put(ROLLBACK_URL,new Response(JSON.stringify(rollback),{headers:{'Content-Type':'application/json'}}));
    const check=await pc.match(ROLLBACK_URL);if(!check)throw Error('Rollback marker could not be verified.');
    const saved=await check.json();if(saved.previousCache!==previousName||saved.nextCache!==targetName)throw Error('Rollback marker verification failed.');
