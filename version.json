@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "238",
-  "buildId": "THA-238-INDEXEDDB-SCRIPT-PARSE-FIX-20261103",
+  "version": "239",
+  "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "cb2d786e23fb375b2ef786055339c023dc28cf7aed565c35279218dfa4174a91"
+      "sha256": "e0875e22072f46c93081ccd68d86ff01b7a88771926e14daed87ffa3831b295c"
     },
     "version-manager.js": {
       "sha256": "3150a7c20691bc784abecb7ceca1551a3dc7ae38699dd0a2fb10a1a29d890b30"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "Invoice status diagnostic: invoice list displays a normalized status and the exact saved status value so Draft-versus-Issued discrepancies can be identified without changing existing invoice records.",
     "Isolated experimental copy of v226 for the separate accountancy-test repository.",
     "Accounting, project, contract, factory-reset recovery, and language localStorage keys use the tha_test226_ namespace.",
     "IndexedDB database and Service Worker CacheStorage names use separate test-only namespaces.",
