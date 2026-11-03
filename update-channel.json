@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "243",
-  "buildId": "THA-243-INVOICE-PAYMENT-FORM-20261103",
-  "manifestSha256": "ac57f4be36af9e6974205db0d5f85b8e27c067649b74eb563e2e0d3169b7868a",
-  "updatedAt": "2026-11-03T21:50:00Z",
-  "note": "Test v243: separate Draft/Issued from Paid/Unpaid, editable payment date and method, and linked Accounting income.",
-  "sourceCommit": "1b32d6719e09b3c3a3afcd74f0cc787208563935"
+  "version": "244",
+  "buildId": "THA-244-INVOICE-NUMBER-DRAFT-ISSUED-20261103",
+  "manifestSha256": "0cd785f254fbd7dba949323c41d621e201a589bb05fee05d2adfb46e52e259bf",
+  "updatedAt": "2026-11-03T22:00:00Z",
+  "note": "Test v244: invoice numbers retained for Draft and Issued; latest release notes only.",
+  "sourceCommit": "d8d0b9a4bf5790d3db3919233b71299179702837"
 }
