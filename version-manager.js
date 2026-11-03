@@ -167,7 +167,7 @@ window.checkForAppUpdate=async function(){
 };
 window.reloadLatestApp=async function(){
  if(!latest||!staged){status('Check for updates and finish the download first.');return;}if(busy)return;busy=true;button(false,'Installing…');progress(100,'Activating verified update…');
- try{await activateCache(staged,true);try{const reg=await navigator.serviceWorker.getRegistration(base.href);if(reg&&reg.waiting)reg.waiting.postMessage({type:'SKIP_WAITING'});}catch(swError){console.warn('The verified app cache is active; waiting Service Worker activation was deferred.',swError);}const u=new URL(location.href);u.searchParams.set('tha-installed-version',String(latest.version));u.searchParams.set('tha-installed-build',latest.buildId);u.hash='';status('Installing version '+latest.version+'…');location.replace(u.toString());}
+ try{await activateCache(staged,true);try{const reg=await navigator.serviceWorker.getRegistration(base.href);if(reg&&reg.waiting)reg.waiting.postMessage({type:'USER_APPROVED_UPDATE'});}catch(swError){console.warn('The verified app cache is active; waiting Service Worker activation was deferred.',swError);}const u=new URL(location.href);u.searchParams.set('tha-installed-version',String(latest.version));u.searchParams.set('tha-installed-build',latest.buildId);u.hash='';status('Installing version '+latest.version+'…');location.replace(u.toString());}
  catch(e){busy=false;button(true,'Update Now');status('Could not activate update: '+(e.message||e)+'. Previous cache remains available.');}
 };
 const installed=el('appInstalledVersion');if(installed)installed.textContent='Installed version: '+LOCAL_VERSION+' · '+LOCAL_BUILD;button(false);
