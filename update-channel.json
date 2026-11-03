@@ -4,8 +4,8 @@
   "sourceBranch": "release/v239",
   "version": "239",
   "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
-  "manifestSha256": "fe78463b4a7a37a6651c77c7cc2688aa79c2356f050156e452c8f7e99d0b4a40",
+  "manifestSha256": "235e49c730f775bb44ca89f28531385827aa1f7f1f57ab238989e96610b12f38",
   "updatedAt": "2026-11-03T20:30:00Z",
-  "note": "Test v239: release manifest and all app assets are pinned to the fixed release/v239 reference.",
+  "note": "Test v239: corrected SHA-256 values using a standard-verified SHA-256 implementation; manifest and assets pinned to release/v239.",
   "sourceCommit": "66c21115341f83e8f6c2288d642322975cfb76cb"
 }
