@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "234",
-  "buildId": "THA-234-INDEXEDDB-SELFTEST-20261103",
-  "manifestSha256": "9e4c462a69cd485b7e4e40a7fd977bc081f138f63e4955251b78814b450e18c5",
-  "updatedAt": "2026-11-03T21:45:00Z",
-  "note": "Test v234: add isolated IndexedDB read/write/list/delete self-test; no legacy records are modified.",
-  "sourceCommit": "5c030697f926f14aadcfdbdf9e26127dc465c11e"
+  "version": "235",
+  "buildId": "THA-235-INDEXEDDB-TEST-UI-20261103",
+  "manifestSha256": "e79734fabdaf4f83e9ddc5f603bf6212fb643e4ab4f494c92645587e180ff304",
+  "updatedAt": "2026-11-03T21:55:00Z",
+  "note": "Test v235: add a Monitor button for the non-destructive IndexedDB self-test; no app data migration or deletion.",
+  "sourceCommit": "079e8b665b5004fe6cf689dca5d5ce1254f2bb64"
 }
