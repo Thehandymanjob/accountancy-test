@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "235",
-  "buildId": "THA-235-INDEXEDDB-TEST-UI-20261103",
+  "version": "236",
+  "buildId": "THA-236-SAFARI-UPDATE-RELOAD-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,10 +9,10 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "045b25da0503036eb7d24fd67c4e52870937c1694df8daf58a30295813f5f111"
+      "sha256": "60d8ce976b4eb9a960c3ed4aa152ff775f8ac6d6be12eea05fe10f79acfb8ffd"
     },
     "version-manager.js": {
-      "sha256": "d25ec9e5c4923c3f6276e28b12b99bf4af7d8449c8a0c6ff7a8d95735f22cb08"
+      "sha256": "3150a7c20691bc784abecb7ceca1551a3dc7ae38699dd0a2fb10a1a29d890b30"
     },
     "service-worker.js": {
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
@@ -46,7 +46,8 @@
     "Version 232 fixes the update failure: version-manager.js now uses the same namespaced active-cache and pending-activation keys as service-worker.js.",
     "Version 233 adds a non-destructive IndexedDB key-value foundation with verified get, set, remove, key listing, snapshot, migration and comparison APIs. Application records remain on LocalStorage pending staged integration.",
     "Version 234 adds a safe IndexedDB self-test for write, read, key listing and delete. It uses a temporary test key and confirms legacy LocalStorage data is not changed.",
-    "Version 235 adds a Monitor & Diagnostics control to run the temporary IndexedDB self-test in the browser. It does not migrate or alter existing app records."
+    "Version 235 adds a Monitor & Diagnostics control to run the temporary IndexedDB self-test in the browser. It does not migrate or alter existing app records.",
+    "Version 236 fixes a Safari update stall by making Service Worker approval messaging non-blocking after the verified CacheStorage pointer is activated. The app reload no longer waits for Service Worker registration lookup."
   ],
   "releaseBranch": "main"
 }
