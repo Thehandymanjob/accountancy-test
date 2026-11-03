@@ -4,8 +4,8 @@
   "sourceBranch": "release239",
   "version": "243",
   "buildId": "THA-243-INVOICE-PAYMENT-FORM-20261103",
-  "manifestSha256": "736fa44f5cf463173c705862d684b9f07f071807c4480d51f822c4b940c4acb3",
-  "updatedAt": "2026-11-03T21:48:00Z",
+  "manifestSha256": "ac57f4be36af9e6974205db0d5f85b8e27c067649b74eb563e2e0d3169b7868a",
+  "updatedAt": "2026-11-03T21:50:00Z",
   "note": "Test v243: separate Draft/Issued from Paid/Unpaid, editable payment date and method, and linked Accounting income.",
-  "sourceCommit": "3d486e6eeaa0319faa0714d206643cfd509bada4"
+  "sourceCommit": "1b32d6719e09b3c3a3afcd74f0cc787208563935"
 }
