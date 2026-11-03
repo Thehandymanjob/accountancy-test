@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "242",
-  "buildId": "THA-242-INVOICE-STATUS-FINAL-ASSIGNMENT-20261103",
-  "manifestSha256": "e319d1f615adc0ee69c87aaa50f887229faa3aa3e0b90878637dfb535f6cff22",
-  "updatedAt": "2026-11-03T21:24:00Z",
-  "note": "Test v242: sets saved invoice status after editor population and reports the actual form field value.",
-  "sourceCommit": "da6dc289e5b5dc30cf5313b867277af9dbc0a996"
+  "version": "243",
+  "buildId": "THA-243-INVOICE-PAYMENT-FORM-20261103",
+  "manifestSha256": "a29491d5d917ab5b55e3b6d72e13e1d44607f6a40eddf935677ec09ab342f895",
+  "updatedAt": "2026-11-03T21:45:00Z",
+  "note": "Test v243: separate Draft/Issued from Paid/Unpaid, editable payment date and method, and linked Accounting income.",
+  "sourceCommit": "5d5f5b379666d15d3e145d992ee3dd997262eeee"
 }
