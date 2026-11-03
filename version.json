@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "240",
-  "buildId": "THA-240-INVOICE-STATUS-READONLY-DIAGNOSTIC-20261103",
+  "version": "241",
+  "buildId": "THA-241-INVOICE-EDIT-STATUS-FIX-20261103",
   "releaseDate": "2026-11-03",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 2,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "b8a61df2c5e18a5cc3d41c7f4d4c14589a291d6d6705b10e861b5165dad89c13"
+      "sha256": "c1d8d7886814f8fffc9c57ffeb726c76dc8547762a208c3f9947a469548683d9"
     },
     "version-manager.js": {
       "sha256": "3150a7c20691bc784abecb7ceca1551a3dc7ae38699dd0a2fb10a1a29d890b30"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "v241 fixes the invoice edit status contradiction: setInvoiceDraftMode now only controls invoice-number visibility and no longer overwrites the Status field loaded from the saved invoice. The read-only v240 diagnostics remain available. No existing invoice records are changed.",
     "v240 adds a read-only invoice edit diagnostic comparing the selected invoice ID and status in memory with the same record in LocalStorage, including duplicate-ID counts. It does not change or save invoice records.",
     "Pinned v239 release to the slash-free release239 reference to avoid branch-path ambiguity in Safari raw-file requests.",
     "Pinned v239 update manifest and release assets to the dedicated release/v239 reference so the v238 updater reads a consistent, fixed release instead of the moving main branch.",
