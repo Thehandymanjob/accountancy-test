@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "240",
-  "buildId": "THA-240-INVOICE-STATUS-READONLY-DIAGNOSTIC-20261103",
-  "manifestSha256": "d8e1f894e3501d46a423580016fd60ff00798cbb4eab3789f4c2167a23fdc89d",
-  "updatedAt": "2026-11-03T20:45:00Z",
-  "note": "Test v240: read-only invoice status diagnostic compares in-memory and LocalStorage records by invoice ID; no invoice data is changed.",
-  "sourceCommit": "6cd66742f5f783d199370c3da86cab13676e299c"
+  "version": "241",
+  "buildId": "THA-241-INVOICE-EDIT-STATUS-FIX-20261103",
+  "manifestSha256": "4feec4209760d9c57bbd6a66c36af5e7bf1284350590db930b0c7352eacbac13",
+  "updatedAt": "2026-11-03T21:05:00Z",
+  "note": "Test v241: fixes invoice edit status being overwritten by the draft-mode helper; diagnostic remains read-only.",
+  "sourceCommit": "e33d0460f5713192c3770066f26a384c891cbac1"
 }
