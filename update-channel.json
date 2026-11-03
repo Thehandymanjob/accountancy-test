@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "main",
-  "version": "229",
-  "buildId": "THA-229-RESET-EMPTY-TEST-SEQUENCE-20261103",
-  "manifestSha256": "c1272bd8e3d5abae3c17f4171eddef1873717a3c3971becdc3cab43155cf41a9",
-  "updatedAt": "2026-11-03T21:00:00Z",
-  "note": "Test v229: if no saved invoices or income records exist, a one-time migration resets stale test-only sequence values to zero; saved records and genuine reserved numbers are preserved when records exist.",
-  "sourceCommit": "d7fbd06985a2dc675202d765d6f04f851ea03e75"
+  "version": "230",
+  "buildId": "THA-230-RECORDS-INVOICE-ARCHIVE-20261103",
+  "manifestSha256": "d7840afd87e6992946d9c619bd17e16d9edf91372c65c4270439706a27eb7be6",
+  "updatedAt": "2026-11-03T16:19:00Z",
+  "note": "Test v230: unified Records and read-only invoice archive; v229 numbering logic retained.",
+  "sourceCommit": "e22be2369c06a264886ff393633f31184296f755"
 }
