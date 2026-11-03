@@ -176,6 +176,31 @@
       mismatches: results.filter(x => !x.matches), results };
   }
 
+
+  async function selfTest() {
+    const testKey = "__tha_idb_self_test__:" + Date.now() + ":" + Math.random().toString(36).slice(2);
+    const testValue = JSON.stringify({ marker: "THA-IDB-SELF-TEST", createdAt: new Date().toISOString(), payload: "read-write-verify-delete" });
+    let writeVerified = false, readVerified = false, listed = false, deleteVerified = false;
+    try {
+      await set(testKey, testValue);
+      writeVerified = true;
+      readVerified = (await get(testKey)) === testValue;
+      listed = (await keys()).includes(testKey);
+      if (!readVerified || !listed) throw new Error("IndexedDB read/list verification failed");
+      await remove(testKey);
+      deleteVerified = (await get(testKey)) === null && !(await keys()).includes(testKey);
+      if (!deleteVerified) throw new Error("IndexedDB delete verification failed");
+      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION,
+        checks: { writeVerified, readVerified, listed, deleteVerified },
+        legacyDataChanged: false };
+    } catch (error) {
+      try { await remove(testKey); } catch (_) {}
+      return { ok: false, database: DB_NAME, schemaVersion: DB_VERSION,
+        checks: { writeVerified, readVerified, listed, deleteVerified },
+        legacyDataChanged: false, error: String(error && error.message || error) };
+    }
+  }
+
   async function status() {
     const db = await openDatabase();
     try {
@@ -190,7 +215,7 @@
 
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys, snapshotLegacyData, migrateLegacyData,
-    verifyMigration, status, legacyKeys: LEGACY_KEYS.slice(),
+    verifyMigration, selfTest, status, legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
 })();
