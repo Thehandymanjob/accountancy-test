@@ -1564,6 +1564,31 @@ function ensureInvoiceFields(){
    db.entries.push({id:`invoice-income-${paid133.id}`,type:'income',date:paid133.paymentDate||'2026-08-24',amount:invoiceAmounts(paid133).total,method:paid133.paymentMethod||'bank',category:'Work income',reference:`Invoice ${paid133.number}`,notes:`Payment received for invoice ${paid133.number} — ${paid133.customerName||''}`,invoiceId:paid133.id,createdAt:new Date().toISOString()});
  }
 }
+function assignNumbersToExistingInvoices(){
+ if(!storageAvailable||!Array.isArray(db.invoices)||!db.invoices.length)return 0;
+ const pending=db.invoices.filter(i=>i&&(!Number.isSafeInteger(Number(i.number))||Number(i.number)<1))
+  .sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))||String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id||'').localeCompare(String(b.id||'')));
+ if(!pending.length)return 0;
+ const used=new Set();
+ db.invoices.forEach(i=>{const n=Number(i?.number);if(Number.isSafeInteger(n)&&n>0)used.add(n);});
+ db.entries.filter(e=>e&&e.type==='income').forEach(e=>{const n=Number(e.number);if(Number.isSafeInteger(n)&&n>0)used.add(n);});
+ let next=Math.floor(highestSharedRecordNumber())+1;
+ const changes=[];
+ for(const invoice of pending){
+  while(used.has(next))next++;
+  changes.push({invoice,previous:invoice.number,number:next});
+  used.add(next++);
+ }
+ changes.forEach(x=>{x.invoice.number=x.number;});
+ if(!persist()){
+  changes.forEach(x=>{if(x.previous===undefined)delete x.invoice.number;else x.invoice.number=x.previous;});
+  return 0;
+ }
+ changes.forEach(x=>reserveRecordNumber(x.number));
+ if(typeof logMonitorEvent==='function')logMonitorEvent('activity','legacy_invoice_numbers_assigned','invoice','startup','success',{count:changes.length,firstNumber:changes[0].number,lastNumber:changes[changes.length-1].number,ordering:'date-createdAt-id'});
+ setStatus(changes.length+' older invoice(s) without a number have been assigned unique invoice numbers. Their status and payment details were preserved.');
+ return changes.length;
+}
 function recordInvoicePayment(id){return markInvoicePaid(id);}
 
 function renderInvoices(){
@@ -1627,7 +1652,7 @@ function removeOrphanedInvoiceIncome(){
 loadDB();removeKnownIsolationTestRecord();cleanupUncommittedInvoiceNumbers();resetStaleSequenceOnlyWhenNoSavedRecords();assignNumbersToExistingIncome();const removedOrphanInvoiceIncome=removeOrphanedInvoiceIncome();if(removedOrphanInvoiceIncome&&storageAvailable){persist();setStatus(`Removed ${removedOrphanInvoiceIncome} orphaned invoice-linked income record(s) because the invoice no longer exists.`,'warn')}ensureInvoicePaymentFields();if(storageAvailable){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
 // Clean distribution: do not seed personal customers or historical invoices.
 ensureInvoicePaymentFields();if(storageAvailable){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
-ensureInvoiceFields();if(storageAvailable){try{window.localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}} $('date').value=today();setPeriod();show('accountancyHome');syncLauncherBrand();
+ensureInvoiceFields();assignNumbersToExistingInvoices();if(storageAvailable){try{window.localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}} $('date').value=today();setPeriod();show('accountancyHome');syncLauncherBrand();
 
 /* Projects workspace logic: deliberately isolated from accounting database */
 const PR_KEY='tha_test226_projects_v1';let prDB={projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[],profile:{},current:null,guide:'en'};let prPhotoData='';let prLogoData='';let prSubPhotoData='';let projectsDataIntegrityError=false;
