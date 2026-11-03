@@ -4,8 +4,8 @@
   "sourceBranch": "main",
   "version": "239",
   "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
-  "manifestSha256": "86fff74dfbe9bcc0ca2ced9ed5524e888d3dcd2a7ca3c3cfe37010fb73e1200c",
-  "updatedAt": "2026-11-03T20:04:39.939Z",
-  "note": "Test v239: invoice list shows normalized status plus exact saved status for diagnosing Draft/Issued display discrepancy.",
-  "sourceCommit": "34b37ae0d54a9f0322f34de0dfceb854b74b145e"
+  "manifestSha256": "7fa3fa80451c1bd38baffe4b8638411ddc4253c45053e9b31323456c9c4fc038",
+  "updatedAt": "2026-11-03T20:09:31.168Z",
+  "note": "Test v239: corrected SHA-256 values for all required release assets; update package integrity checks now match the published files.",
+  "sourceCommit": "9e34dc8cd4480c93a7a5495b33f5921812a598d9"
 }
