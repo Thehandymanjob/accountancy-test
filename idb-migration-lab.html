@@ -36,7 +36,13 @@ small{color:#66778c}
 <h2>Stage 3 — Complete backup inspection (read-only)</h2>
 <p>Select the existing complete JSON backup. This inspects its real structure and record relationships without importing or writing anything.</p>
 <input id="backupFile" type="file" accept=".json,application/json">
-<div class="actions"><button id="backupPreview" type="button">Inspect selected backup</button></div>\n<h2>Stage 4 — Explicit staging to test IndexedDB</h2>\n<p>This button is enabled only after the selected backup passes inspection and every target store is empty. It writes an additional copy to the test database in one atomic transaction. It does not alter the backup, LocalStorage, production, or app storage mode.</p>\n<div class="actions"><button id="stage" class="danger" type="button" disabled>Stage backup into test IndexedDB</button></div>\n<h2>Stage 5 — Read-only audit of staged data</h2>\n<p>Select the same backup and inspect it again. This audit compares every staged record with the backup, checks linked IDs, dates and image payloads, and does not write or delete anything.</p>\n<div class="actions"><button id="audit" class="secondary" type="button" disabled>Audit staged data</button></div>
+<div class="actions"><button id="backupPreview" type="button">Inspect selected backup</button></div>
+<h2>Stage 4 — Explicit staging to test IndexedDB</h2>
+<p>This button is enabled only after the selected backup passes inspection and every target store is empty. It writes an additional copy to the test database in one atomic transaction. It does not alter the backup, LocalStorage, production, or app storage mode.</p>
+<div class="actions"><button id="stage" class="danger" type="button" disabled>Stage backup into test IndexedDB</button></div>
+<h2>Stage 5 — Read-only audit of staged data</h2>
+<p>Select the same backup and inspect it again. This audit compares every staged record with the backup, checks linked IDs, dates and image payloads, and does not write or delete anything.</p>
+<div class="actions"><button id="audit" class="secondary" type="button" disabled>Audit staged data</button></div>
 <div class="safe">The selected file is read locally in this browser. It is not uploaded, changed, or written to LocalStorage or IndexedDB.</div>
 <pre id="result" aria-live="polite">Ready. No operation has run.</pre>
 <small>Do not use the production app for this test. No production data or production database is accessed.</small>
