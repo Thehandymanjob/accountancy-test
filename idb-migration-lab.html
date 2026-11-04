@@ -29,13 +29,15 @@ small{color:#66778c}
 <button id="verify" class="secondary" type="button">Verify raw copied data</button>
 <button id="status" class="secondary" type="button">Show IndexedDB status</button>
 </div>
-<h2>Stage 2 — Structured staging</h2>
-<p>First run a read-only preview. Staging is allowed only if all target stores are empty and the preview has no blocking errors. Existing records in target stores are never overwritten.</p>
-<div class="actions">
-<button id="preview" type="button">Preview structured records</button>
-<button id="stage" class="danger" type="button" disabled>Stage structured records in IndexedDB</button>
-</div>
-<div class="safe">Staging preserves every original raw JSON value in the KV mirror and the legacy snapshot store. The structured records are an additional copy, not a cutover.</div>
+<h2>Stage 2 — Current browser mirror</h2>
+<p>Read-only check of mirrored browser keys. Structured writes are paused until the complete record model and relationships have been audited.</p>
+<div class="actions"><button id="preview" type="button">Preview mirrored records</button><button id="stage" class="danger" type="button" disabled>Staging paused — audit required</button></div>
+<div class="notice">The test browser may not yet contain Projects or Contracts keys. Missing keys are reported as missing; no empty replacement data is created.</div>
+<h2>Stage 3 — Complete backup inspection (read-only)</h2>
+<p>Select the existing complete JSON backup. This inspects its real structure and record relationships without importing or writing anything.</p>
+<input id="backupFile" type="file" accept=".json,application/json">
+<div class="actions"><button id="backupPreview" type="button">Inspect selected backup</button></div>
+<div class="safe">The selected file is read locally in this browser. It is not uploaded, changed, or written to LocalStorage or IndexedDB.</div>
 <pre id="result" aria-live="polite">Ready. No operation has run.</pre>
 <small>Do not use the production app for this test. No production data or production database is accessed.</small>
 </main>
@@ -46,6 +48,7 @@ const out=document.getElementById("result");
 const buttons=[...document.querySelectorAll("button")];
 const stageButton=document.getElementById("stage");
 let lastPlan=null;
+stageButton.disabled=true;
 function busy(on){buttons.forEach(b=>{if(b.id!=="stage"||on)b.disabled=on});if(on)stageButton.disabled=true}
 function show(value){out.textContent=typeof value==="string"?value:JSON.stringify(value,null,2)}
 function api(){if(!window.HandymanStorageFoundation)throw new Error("Storage foundation did not load");return window.HandymanStorageFoundation}
@@ -96,27 +99,38 @@ async function buildPlan(){
 }
 document.getElementById("verify").addEventListener("click",async()=>{busy(true);try{const r=await api().verifyMigration();show({stage:"raw mirror verification",...r,localStorageChanged:false})}catch(e){show({ok:false,error:String(e.message||e)})}finally{busy(false)}});
 document.getElementById("status").addEventListener("click",async()=>{busy(true);try{show(await api().status())}catch(e){show({ok:false,error:String(e.message||e)})}finally{busy(false)}});
-document.getElementById("preview").addEventListener("click",async()=>{busy(true);stageButton.disabled=true;lastPlan=null;show("Reading mirrored JSON and checking target stores…");try{lastPlan=await buildPlan();const canStage=lastPlan.allEmpty&&lastPlan.idErrors.length===0;stageButton.disabled=!canStage;show({stage:"read-only structured preview",ok:canStage,summary:lastPlan.summary,targetStoreCounts:lastPlan.counts,targetStoresEmpty:lastPlan.allEmpty,blockingErrors:lastPlan.idErrors,rawSources:lastPlan.rawKeys,localStorageChanged:false,applicationCutover:false,note:canStage?"Preview passed. Structured staging can now be run.":"Staging blocked; no records were written."})}catch(e){lastPlan=null;show({ok:false,error:String(e.message||e),localStorageChanged:false})}finally{busy(false);if(!lastPlan||!lastPlan.allEmpty||lastPlan.idErrors.length)stageButton.disabled=true}});
-stageButton.addEventListener("click",async()=>{
- if(!lastPlan||!lastPlan.allEmpty||lastPlan.idErrors.length){show("Run a successful preview first. No data was written.");return}
- if(!confirm("Write the previewed structured copies into the seven currently empty IndexedDB stores? Raw KV and LocalStorage values will remain unchanged. This cannot be undone from this page."))return;
- busy(true);show("Writing structured copies in one IndexedDB transaction…");
- const mapping={customers:"customers",invoices:"invoices",accountingEntries:"accountingEntries",projects:"projects",contracts:"contracts",projectReceipts:"receipts",projectExpenses:"expenses"};
- let db;
- try{
-  db=await api().openDatabase();
-  const names=Object.keys(mapping);
-  const tx=db.transaction(names,"readwrite");
-  for(const [store,source] of Object.entries(mapping)){
-   for(const record of lastPlan.records[source])tx.objectStore(store).add(record);
-  }
-  await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error||new Error("Transaction failed"));tx.onabort=()=>rej(tx.error||new Error("Transaction aborted"))});
-  db.close();db=null;
-  const status=await api().status();
-  show({stage:"structured staging",ok:true,summary:lastPlan.summary,verifiedStoreCounts:status.stores,localStorageChanged:false,rawKvMirrorPreserved:true,applicationCutover:false,notice:"Structured staging completed. This is not yet a full field/relationship integrity audit."});
- }catch(e){if(db)db.close();show({stage:"structured staging",ok:false,error:String(e.message||e),localStorageChanged:false,note:"If the transaction aborted, IndexedDB rolls back the complete write transaction."})}
- finally{busy(false);stageButton.disabled=true}
-});
+document.getElementById("preview").addEventListener("click",async()=>{busy(true);stageButton.disabled=true;lastPlan=null;show("Reading mirrored JSON and checking target stores…");try{lastPlan=await buildPlan();const canStage=false;stageButton.disabled=true;show({stage:"read-only structured preview",ok:canStage,summary:lastPlan.summary,targetStoreCounts:lastPlan.counts,targetStoresEmpty:lastPlan.allEmpty,blockingErrors:lastPlan.idErrors,rawSources:lastPlan.rawKeys,localStorageChanged:false,applicationCutover:false,note:"Read-only preview only. Structured staging remains paused pending full schema and relationship audit."})}catch(e){lastPlan=null;show({ok:false,error:String(e.message||e),localStorageChanged:false})}finally{busy(false);if(!lastPlan||!lastPlan.allEmpty||lastPlan.idErrors.length)stageButton.disabled=true}});
+
+stageButton.addEventListener("click",()=>{show("Staging is intentionally disabled until the complete backup structure and all relationships are audited. No data was written.");});
+function countArray(value){return Array.isArray(value)?value.length:0}
+function validateIdList(label,items,errors){const seen=new Set();(items||[]).forEach((item,index)=>{if(!item||typeof item!=="object"||item.id===undefined||item.id===null||String(item.id)===""){errors.push(label+"["+index+"] has no id");return}const id=String(item.id);if(seen.has(id))errors.push(label+" has duplicate id "+id);seen.add(id)});}
+function inspectBackup(root){
+ if(!root||typeof root!=="object"||Array.isArray(root))throw new Error("Backup root must be a JSON object");
+ if(root.app!=="The Handyman Accountancy"||root.backupType!=="complete-user-data")throw new Error("This is not a recognised complete The Handyman Accountancy backup");
+ const a=root.data,p=root.projects,c=root.contracts;
+ if(!a||typeof a!=="object"||!Array.isArray(a.entries)||!Array.isArray(a.customers)||!Array.isArray(a.invoices)||!a.settings||typeof a.settings!=="object")throw new Error("Accounting section is incomplete or has an unexpected structure");
+ if(!p||typeof p!=="object"||!Array.isArray(p.projects)||!Array.isArray(p.workers)||!Array.isArray(p.partners)||!Array.isArray(p.contractors)||!Array.isArray(p.companies)||!Array.isArray(p.companyJobs)||!p.profile||typeof p.profile!=="object")throw new Error("Projects section is incomplete or has an unexpected structure");
+ if(!Array.isArray(c))throw new Error("Contracts section must be an array");
+ const errors=[],lists={customers:a.customers,invoices:a.invoices,accountingEntries:a.entries,projects:p.projects,workers:p.workers,partners:p.partners,contractors:p.contractors,companies:p.companies,companyJobs:p.companyJobs,contracts:c};
+ for(const [name,list] of Object.entries(lists))validateIdList(name,list,errors);
+ const ledgerCounts={income:0,expenses:0,wages:0,tools:0,food:0,materials:0},ledgerErrors=[];
+ for(const project of p.projects){
+  if(!Array.isArray(project.subprojects))ledgerErrors.push("Project "+project.id+" has no valid subprojects array");
+  const ledgers=[{label:"project "+project.id,value:project},...(Array.isArray(project.subprojects)?project.subprojects.map(sub=>({label:"subproject "+sub.id,value:sub})):[])];
+  for(const entry of ledgers)for(const key of Object.keys(ledgerCounts)){const rows=entry.value[key];if(rows!==undefined&&!Array.isArray(rows)){ledgerErrors.push(entry.label+"."+key+" is not an array");continue}if(Array.isArray(rows)){ledgerCounts[key]+=rows.length;validateIdList(entry.label+"."+key,rows,ledgerErrors)}}
+ }
+ const customerIds=new Set(a.customers.map(x=>String(x.id))),invoiceIds=new Set(a.invoices.map(x=>String(x.id)));
+ const unresolvedCustomers=a.invoices.filter(x=>x.customerId!=null&&!customerIds.has(String(x.customerId))).map(x=>({invoiceId:x.id,customerId:x.customerId}));
+ const unresolvedInvoiceLinks=a.entries.filter(x=>x.invoiceId&&!invoiceIds.has(String(x.invoiceId))).map(x=>({entryId:x.id,invoiceId:x.invoiceId}));
+ if(unresolvedCustomers.length)errors.push("Invoices contain customerId references that do not resolve");
+ if(unresolvedInvoiceLinks.length)errors.push("Accounting entries contain invoiceId references that do not resolve");
+ const imageFields=[];
+ if(typeof p.profile.logo==="string"&&p.profile.logo.startsWith("data:image/"))imageFields.push({location:"projects.profile.logo",characters:p.profile.logo.length});
+ p.projects.forEach(project=>{if(typeof project.photo==="string"&&project.photo.startsWith("data:image/"))imageFields.push({location:"project:"+project.id+".photo",characters:project.photo.length});(project.subprojects||[]).forEach(sub=>{if(typeof sub.photo==="string"&&sub.photo.startsWith("data:image/"))imageFields.push({location:"subproject:"+sub.id+".photo",characters:sub.photo.length})})});
+ return {stage:"complete backup read-only inspection",ok:errors.length===0&&ledgerErrors.length===0,backupVersion:root.version,exportedAt:root.exportedAt,counts:{accountingEntries:a.entries.length,customers:a.customers.length,invoices:a.invoices.length,projects:p.projects.length,subprojects:p.projects.reduce((n,x)=>n+countArray(x.subprojects),0),workers:p.workers.length,partners:p.partners.length,contractors:p.contractors.length,companies:p.companies.length,companyJobs:p.companyJobs.length,contracts:c.length,projectLedgerRecords:ledgerCounts},relationshipChecks:{unresolvedInvoiceCustomers:unresolvedCustomers,unresolvedAccountingInvoiceLinks:unresolvedInvoiceLinks},imageFields,blockingErrors:[...errors,...ledgerErrors],localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,note:"Inspection only. No records have been staged or imported."};
+}
+document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);try{const parsed=JSON.parse(await file.text());show(inspectBackup(parsed))}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false})}finally{busy(false);stageButton.disabled=true}});
+
 })();
 </script>
 </body>
