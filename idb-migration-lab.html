@@ -8,11 +8,12 @@
 :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b45;background:#f3f6fa}
 body{margin:0;padding:20px;max-width:760px;margin-inline:auto}
 main{background:#fff;border:1px solid #dce4ee;border-radius:16px;padding:20px;box-shadow:0 8px 28px #142b4a12}
-h1{font-size:22px;margin:0 0 8px}p{line-height:1.55;color:#52647a}
+h1{font-size:22px;margin:0 0 8px}h2{font-size:17px;margin:22px 0 8px}p{line-height:1.55;color:#52647a}
 .notice{background:#fff8e8;border:1px solid #f0d79c;border-radius:10px;padding:12px;color:#654b16}
+.safe{background:#edf8f1;border:1px solid #b9dec6;border-radius:10px;padding:12px;color:#205b35}
 .actions{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}
 button{border:0;border-radius:10px;padding:12px 16px;font-weight:700;background:#174d83;color:white}
-button.secondary{background:#e8eef5;color:#173c69}button:disabled{opacity:.55}
+button.secondary{background:#e8eef5;color:#173c69}button.danger{background:#8d3a32}button:disabled{opacity:.55}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb;padding:14px;border-radius:10px;min-height:100px;font-size:13px}
 small{color:#66778c}
 </style>
@@ -21,39 +22,100 @@ small{color:#66778c}
 <body>
 <main>
 <h1>IndexedDB Migration Lab — Test v247</h1>
-<p>This isolated tool copies the test app's namespaced LocalStorage values into the test IndexedDB key-value store. It does not change, remove, rename, or overwrite any LocalStorage value. It does not connect to production storage.</p>
-<div class="notice"><strong>Safety boundary:</strong> This page is for the <code>accountancy-test</code> site only. It uses database <code>the_handyman_accountancy_test226</code> and prefix <code>tha_test226_</code>. Do not use this page on the production site. The operation is a raw, byte-for-byte storage mirror, not yet the final normalized-table migration.</div>
+<p>Stage 2 reads the verified raw mirror and prepares structured records in isolated IndexedDB stores. LocalStorage remains the active application storage.</p>
+<div class="notice"><strong>Safety boundary:</strong> Test repository only. Database <code>the_handyman_accountancy_test226</code>; namespace <code>tha_test226_</code>. Never open this tool on the production site. It does not modify or delete LocalStorage and does not switch the app to IndexedDB.</div>
+<h2>Stage 1 — Raw mirror</h2>
 <div class="actions">
-<button id="copy" type="button">Snapshot + copy test data to IndexedDB</button>
-<button id="verify" class="secondary" type="button">Verify copied data</button>
+<button id="verify" class="secondary" type="button">Verify raw copied data</button>
 <button id="status" class="secondary" type="button">Show IndexedDB status</button>
 </div>
+<h2>Stage 2 — Structured staging</h2>
+<p>First run a read-only preview. Staging is allowed only if all target stores are empty and the preview has no blocking errors. Existing records in target stores are never overwritten.</p>
+<div class="actions">
+<button id="preview" type="button">Preview structured records</button>
+<button id="stage" class="danger" type="button" disabled>Stage structured records in IndexedDB</button>
+</div>
+<div class="safe">Staging preserves every original raw JSON value in the KV mirror and the legacy snapshot store. The structured records are an additional copy, not a cutover.</div>
 <pre id="result" aria-live="polite">Ready. No operation has run.</pre>
-<small>LocalStorage remains the active application storage. No app cutover is performed.</small>
+<small>Do not use the production app for this test. No production data or production database is accessed.</small>
 </main>
 <script>
 (function(){
 "use strict";
 const out=document.getElementById("result");
 const buttons=[...document.querySelectorAll("button")];
-function busy(on){buttons.forEach(b=>b.disabled=on)}
+const stageButton=document.getElementById("stage");
+let lastPlan=null;
+function busy(on){buttons.forEach(b=>{if(b.id!=="stage"||on)b.disabled=on});if(on)stageButton.disabled=true}
 function show(value){out.textContent=typeof value==="string"?value:JSON.stringify(value,null,2)}
 function api(){if(!window.HandymanStorageFoundation)throw new Error("Storage foundation did not load");return window.HandymanStorageFoundation}
-document.getElementById("copy").addEventListener("click",async()=>{
- if(!confirm("Copy all tha_test226_ LocalStorage values into the isolated test IndexedDB? Existing LocalStorage values will not be changed."))return;
- busy(true);show("Taking a verified snapshot and copying raw values…");
- try{const result=await api().migrateLegacyData();show({operation:"raw mirror",...result,localStorageChanged:false,applicationCutover:false})}
- catch(e){show({ok:false,error:String(e&&e.message||e),localStorageChanged:false})}
- finally{busy(false)}
-});
-document.getElementById("verify").addEventListener("click",async()=>{
- busy(true);show("Comparing every namespaced LocalStorage value with its IndexedDB copy…");
- try{const result=await api().verifyMigration();show({...result,localStorageChanged:false})}
- catch(e){show({ok:false,error:String(e&&e.message||e)})}
- finally{busy(false)}
-});
-document.getElementById("status").addEventListener("click",async()=>{
- busy(true);try{show(await api().status())}catch(e){show({ok:false,error:String(e&&e.message||e)})}finally{busy(false)}
+function parseRaw(key){return api().get(key).then(raw=>{if(raw===null)throw new Error("Missing raw KV mirror for "+key);try{return JSON.parse(raw)}catch(e){throw new Error("Invalid JSON in "+key+": "+e.message)}})}
+function arr(v){if(Array.isArray(v))return v;if(v&&Array.isArray(v.items))return v.items;if(v&&Array.isArray(v.records))return v.records;return []}
+function unwrap(v,field){if(v&&Array.isArray(v[field]))return v[field];if(v&&v.data&&Array.isArray(v.data[field]))return v.data[field];return arr(v)}
+function idFor(item,prefix,index){return item&&item.id!=null&&String(item.id)!==""?String(item.id):prefix+":"+index}
+function cloneRecord(item,id,meta){return Object.assign({},item&&typeof item==="object"?item:{value:item},meta||{},{id})}
+function flattenProject(project,records){
+ const pid=String(project.id);
+ for(const [collection,kind] of [["income","receipt"],["expenses","expense"],["wages","wage"],["tools","tool"],["food","food"],["materials","material"]]){
+  arr(project[collection]).forEach((item,i)=>{
+   const rid=idFor(item,"project:"+pid+":"+collection,i);
+   const record=cloneRecord(item,rid,{parentProjectId:pid,subprojectId:null,sourceCollection:collection,recordKind:kind});
+   (kind==="receipt"?records.receipts:records.expenses).push(record);
+  });
+ }
+ arr(project.subprojects).forEach((sub,si)=>{
+  const sid=String(sub.id==null?("subproject:"+pid+":"+si):sub.id);
+  for(const [collection,kind] of [["income","receipt"],["expenses","expense"],["wages","wage"],["tools","tool"],["food","food"],["materials","material"]]){
+   arr(sub[collection]).forEach((item,i)=>{
+    const rid=idFor(item,"project:"+pid+":"+sid+":"+collection,i);
+    const record=cloneRecord(item,rid,{parentProjectId:pid,subprojectId:sid,sourceCollection:collection,recordKind:kind});
+    (kind==="receipt"?records.receipts:records.expenses).push(record);
+   });
+  }
+ });
+}
+async function buildPlan(){
+ const rawKeys=["tha_test226_accounting_v1","tha_test226_projects_v1","tha_test226_contracts_v1"];
+ const [accounting,workspace,contractData]=await Promise.all(rawKeys.map(parseRaw));
+ const records={customers:unwrap(accounting,"customers"),invoices:unwrap(accounting,"invoices"),accountingEntries:unwrap(accounting,"entries"),projects:unwrap(workspace,"projects"),contracts:unwrap(contractData,"contracts"),receipts:[],expenses:[]};
+ records.projects.forEach(p=>flattenProject(p,records));
+ const targets=["customers","invoices","accountingEntries","projects","contracts","projectReceipts","projectExpenses"];
+ const db=await api().openDatabase();
+ let counts={};
+ try{for(const name of targets){const tx=db.transaction([name],"readonly");counts[name]=await new Promise((res,rej)=>{const q=tx.objectStore(name).count();q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})}}
+ finally{db.close()}
+ const idErrors=[];
+ for(const name of ["customers","invoices","accountingEntries","projects","contracts"]){
+  const seen=new Set();records[name].forEach((r,i)=>{if(!r||r.id==null)idErrors.push(name+" record "+i+" has no id");else if(seen.has(String(r.id)))idErrors.push(name+" duplicate id "+r.id);else seen.add(String(r.id))});
+ }
+ for(const name of ["receipts","expenses"]){
+  const seen=new Set();records[name].forEach(r=>{if(seen.has(String(r.id)))idErrors.push(name+" duplicate id "+r.id);else seen.add(String(r.id))});
+ }
+ const allEmpty=Object.values(counts).every(n=>n===0);
+ return {records,counts,allEmpty,idErrors,summary:{customers:records.customers.length,invoices:records.invoices.length,accountingEntries:records.accountingEntries.length,projects:records.projects.length,contracts:records.contracts.length,projectReceipts:records.receipts.length,projectExpenses:records.expenses.length},rawKeys};
+}
+document.getElementById("verify").addEventListener("click",async()=>{busy(true);try{const r=await api().verifyMigration();show({stage:"raw mirror verification",...r,localStorageChanged:false})}catch(e){show({ok:false,error:String(e.message||e)})}finally{busy(false)}});
+document.getElementById("status").addEventListener("click",async()=>{busy(true);try{show(await api().status())}catch(e){show({ok:false,error:String(e.message||e)})}finally{busy(false)}});
+document.getElementById("preview").addEventListener("click",async()=>{busy(true);stageButton.disabled=true;lastPlan=null;show("Reading mirrored JSON and checking target stores…");try{lastPlan=await buildPlan();const canStage=lastPlan.allEmpty&&lastPlan.idErrors.length===0;stageButton.disabled=!canStage;show({stage:"read-only structured preview",ok:canStage,summary:lastPlan.summary,targetStoreCounts:lastPlan.counts,targetStoresEmpty:lastPlan.allEmpty,blockingErrors:lastPlan.idErrors,rawSources:lastPlan.rawKeys,localStorageChanged:false,applicationCutover:false,note:canStage?"Preview passed. Structured staging can now be run.":"Staging blocked; no records were written."})}catch(e){lastPlan=null;show({ok:false,error:String(e.message||e),localStorageChanged:false})}finally{busy(false);if(!lastPlan||!lastPlan.allEmpty||lastPlan.idErrors.length)stageButton.disabled=true}});
+stageButton.addEventListener("click",async()=>{
+ if(!lastPlan||!lastPlan.allEmpty||lastPlan.idErrors.length){show("Run a successful preview first. No data was written.");return}
+ if(!confirm("Write the previewed structured copies into the seven currently empty IndexedDB stores? Raw KV and LocalStorage values will remain unchanged. This cannot be undone from this page."))return;
+ busy(true);show("Writing structured copies in one IndexedDB transaction…");
+ const mapping={customers:"customers",invoices:"invoices",accountingEntries:"accountingEntries",projects:"projects",contracts:"contracts",projectReceipts:"receipts",projectExpenses:"expenses"};
+ let db;
+ try{
+  db=await api().openDatabase();
+  const names=Object.keys(mapping);
+  const tx=db.transaction(names,"readwrite");
+  for(const [store,source] of Object.entries(mapping)){
+   for(const record of lastPlan.records[source])tx.objectStore(store).add(record);
+  }
+  await new Promise((res,rej)=>{tx.oncomplete=res;tx.onerror=()=>rej(tx.error||new Error("Transaction failed"));tx.onabort=()=>rej(tx.error||new Error("Transaction aborted"))});
+  db.close();db=null;
+  const status=await api().status();
+  show({stage:"structured staging",ok:true,summary:lastPlan.summary,verifiedStoreCounts:status.stores,localStorageChanged:false,rawKvMirrorPreserved:true,applicationCutover:false,notice:"Structured staging completed. This is not yet a full field/relationship integrity audit."});
+ }catch(e){if(db)db.close();show({stage:"structured staging",ok:false,error:String(e.message||e),localStorageChanged:false,note:"If the transaction aborted, IndexedDB rolls back the complete write transaction."})}
+ finally{busy(false);stageButton.disabled=true}
 });
 })();
 </script>
