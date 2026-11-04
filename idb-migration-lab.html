@@ -223,6 +223,11 @@ async function auditStagedBackup(){
 }
 auditButton.addEventListener("click",async()=>{busy(true);try{show(await auditStagedBackup())}catch(e){show({stage:"read-only staged-data integrity audit",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false})}finally{busy(false);auditButton.disabled=false;stageButton.disabled=!inspectedReport?.stageReady}});
 
+function compareRecordList(expected,actual){
+ const sortRows=list=>list.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+ const a=sortRows(expected),b=sortRows(actual);
+ return {recordSetMatch:JSON.stringify(canonical(a))===JSON.stringify(canonical(b)),countExpected:expected.length,countActual:actual.length,arrayOrderPreserved:JSON.stringify(expected.map(x=>String(x.id)))===JSON.stringify(actual.map(x=>String(x.id)))};
+}
 async function auditAppCompatibility(){
  if(!inspectedBackup||!inspectedReport?.backupInspectionOk)throw new Error("Inspect the complete backup first");
  const db=await api().openDatabase();
@@ -234,18 +239,31 @@ async function auditAppCompatibility(){
   const settings=rows.accountingSettings.find(x=>x.id==="settings");
   const metadata=rows.projectMetadata.find(x=>x.id==="projectMetadata");
   if(!settings||!metadata)throw new Error("Required singleton settings or project metadata record is missing");
-  const appAccounting={entries:rows.accountingEntries,customers:rows.customers,invoices:rows.invoices,customExpenseCategories:categoryRows.map(x=>x.value),settings:settings.value,thirdPartyTransactions:rows.thirdPartyTransactions};
-  const appProjects={projects:rows.projects,workers:rows.workers,partners:rows.partners,contractors:rows.contractors,companies:rows.companies,companyJobs:rows.companyJobs,profile:metadata.profile,current:metadata.current,guide:metadata.guide,currentSubproject:metadata.currentSubproject,profitReportProjectId:metadata.profitReportProjectId};
-  const expectedAccounting=inspectedBackup.data;
-  const expectedProjects=inspectedBackup.projects;
-  const expectedContracts=inspectedBackup.contracts;
-  const comparisons={
-   accounting:{exactMatch:JSON.stringify(canonical(appAccounting))===JSON.stringify(canonical(expectedAccounting)),expectedKeys:Object.keys(expectedAccounting),reconstructedKeys:Object.keys(appAccounting),recordCounts:{entries:appAccounting.entries.length,customers:appAccounting.customers.length,invoices:appAccounting.invoices.length}},
-   projects:{exactMatch:JSON.stringify(canonical(appProjects))===JSON.stringify(canonical(expectedProjects)),expectedKeys:Object.keys(expectedProjects),reconstructedKeys:Object.keys(appProjects),recordCounts:{projects:appProjects.projects.length,workers:appProjects.workers.length,partners:appProjects.partners.length,contractors:appProjects.contractors.length,companies:appProjects.companies.length,companyJobs:appProjects.companyJobs.length}},
-   contracts:{exactMatch:JSON.stringify(canonical(rows.contracts))===JSON.stringify(canonical(expectedContracts)),expectedCount:expectedContracts.length,reconstructedCount:rows.contracts.length}
+  const expectedA=inspectedBackup.data,expectedP=inspectedBackup.projects;
+  const accountingLists={
+   entries:compareRecordList(expectedA.entries,rows.accountingEntries),
+   customers:compareRecordList(expectedA.customers,rows.customers),
+   invoices:compareRecordList(expectedA.invoices,rows.invoices),
+   thirdPartyTransactions:compareRecordList(expectedA.thirdPartyTransactions,rows.thirdPartyTransactions)
   };
-  const allMatch=Object.values(comparisons).every(x=>x.exactMatch);
-  return {stage:"read-only application data-shape compatibility audit",ok:allMatch,database:api().databaseName,schemaVersion:api().schemaVersion,comparisons,localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,applicationWritesTested:false,note:allMatch?"IndexedDB can reconstruct the exact legacy object shapes expected by the current accounting, projects and contracts loaders. This confirms data-shape compatibility only; the app still uses LocalStorage and has not been connected to IndexedDB.":"One or more reconstructed app objects differ from the selected backup. Do not connect the app to IndexedDB until the differences are resolved."};
+  const expectedCategories=expectedA.customExpenseCategories;
+  const categoryValues=categoryRows.map(x=>x.value);
+  const accountingScalarsMatch=JSON.stringify(canonical(settings.value))===JSON.stringify(canonical(expectedA.settings))&&JSON.stringify(canonical(categoryValues))===JSON.stringify(canonical(expectedCategories));
+  const projectLists={
+   projects:compareRecordList(expectedP.projects,rows.projects),
+   workers:compareRecordList(expectedP.workers,rows.workers),
+   partners:compareRecordList(expectedP.partners,rows.partners),
+   contractors:compareRecordList(expectedP.contractors,rows.contractors),
+   companies:compareRecordList(expectedP.companies,rows.companies),
+   companyJobs:compareRecordList(expectedP.companyJobs,rows.companyJobs)
+  };
+  const expectedMetadata={profile:expectedP.profile,current:expectedP.current,guide:expectedP.guide,currentSubproject:expectedP.currentSubproject,profitReportProjectId:expectedP.profitReportProjectId};
+  const actualMetadata={profile:metadata.profile,current:metadata.current,guide:metadata.guide,currentSubproject:metadata.currentSubproject,profitReportProjectId:metadata.profitReportProjectId};
+  const contracts=compareRecordList(inspectedBackup.contracts,rows.contracts);
+  const allContentMatches=Object.values(accountingLists).every(x=>x.recordSetMatch)&&accountingScalarsMatch&&Object.values(projectLists).every(x=>x.recordSetMatch)&&JSON.stringify(canonical(expectedMetadata))===JSON.stringify(canonical(actualMetadata))&&contracts.recordSetMatch;
+  const orderChecks=[...Object.values(accountingLists),...Object.values(projectLists),contracts];
+  const orderPreserved=orderChecks.every(x=>x.arrayOrderPreserved);
+  return {stage:"read-only application data-shape compatibility audit",ok:allContentMatches&&orderPreserved,recordContentMatches:allContentMatches,arrayOrderPreserved:orderPreserved,database:api().databaseName,schemaVersion:api().schemaVersion,comparisons:{accounting:{lists:accountingLists,settingsAndCategoriesMatch:accountingScalarsMatch},projects:{lists:projectLists,metadataMatch:JSON.stringify(canonical(expectedMetadata))===JSON.stringify(canonical(actualMetadata))},contracts},cutoverReadiness:allContentMatches&&orderPreserved,note:allContentMatches&&!orderPreserved?"All records and fields match, but IndexedDB getAll() orders records by primary key, not original array position. The app adapter must preserve original array order before cutover.":"This is a read-only reconstruction check. LocalStorage and IndexedDB were not changed; the app still uses LocalStorage.",localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,applicationWritesTested:false};
  }finally{db.close()}
 }
 compatibilityButton.addEventListener("click",async()=>{busy(true);try{show(await auditAppCompatibility())}catch(e){show({stage:"read-only application data-shape compatibility audit",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false})}finally{busy(false)}});
