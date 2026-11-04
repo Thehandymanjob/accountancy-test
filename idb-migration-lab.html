@@ -17,7 +17,7 @@ button.secondary{background:#e8eef5;color:#173c69}button.danger{background:#8d3a
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb;padding:14px;border-radius:10px;min-height:100px;font-size:13px}
 small{color:#66778c}
 </style>
-<script src="storage-foundation.js?v=4"></script>
+<script src="storage-foundation.js?v=5"></script>
 </head>
 <body>
 <main>
@@ -43,8 +43,11 @@ small{color:#66778c}
 <h2>Stage 5 — Read-only audit of staged data</h2>
 <p>Select the same backup and inspect it again. This audit compares every staged record with the backup, checks linked IDs, dates and image payloads, and does not write or delete anything.</p>
 <div class="actions"><button id="audit" class="secondary" type="button" disabled>Audit staged data</button></div>
-<h2>Stage 6 — Application data-shape compatibility (read-only)</h2>
-<p>Rebuild the exact object shapes expected by the current app loaders from IndexedDB, then compare them with the selected backup. This is a read-only compatibility check; it does not connect the app to IndexedDB or enable editing.</p>
+<h2>Stage 6 — Preserve original array order</h2>
+<p>After confirming staged records match the backup, save a separate order manifest in the test IndexedDB. This stores only the original ordered IDs; it does not change any business record.</p>
+<div class="actions"><button id="preserveOrder" class="secondary" type="button" disabled>Preserve original array order</button></div>
+<h2>Stage 7 — Application data-shape compatibility (read-only)</h2>
+<p>Rebuild the exact object shapes expected by the current app loaders from IndexedDB, applying the saved order manifest, then compare them with the selected backup. This does not connect the app to IndexedDB or enable editing.</p>
 <div class="actions"><button id="compatibility" class="secondary" type="button" disabled>Check app data compatibility</button></div>
 <div class="safe">The selected file is read locally in this browser. It is not uploaded, changed, or written to LocalStorage or IndexedDB.</div>
 <pre id="result" aria-live="polite">Ready. No operation has run.</pre>
@@ -58,7 +61,7 @@ const buttons=[...document.querySelectorAll("button")];
 const stageButton=document.getElementById("stage");
 let lastPlan=null;
 stageButton.disabled=true;
-function busy(on){buttons.forEach(b=>{if(on){b.disabled=true;return}if(b.id==="stage"){b.disabled=!inspectedReport?.stageReady;return}if(b.id==="audit"){b.disabled=!inspectedReport?.backupInspectionOk;return}if(b.id==="compatibility"){b.disabled=!inspectedReport?.backupInspectionOk;return}b.disabled=false})}
+function busy(on){buttons.forEach(b=>{if(on){b.disabled=true;return}if(b.id==="stage"){b.disabled=!inspectedReport?.stageReady;return}if(b.id==="audit"){b.disabled=!inspectedReport?.backupInspectionOk;return}if(b.id==="compatibility"){b.disabled=!inspectedReport?.backupInspectionOk;return}if(b.id==="preserveOrder"){b.disabled=!inspectedReport?.backupInspectionOk;return}b.disabled=false})}
 function show(value){out.textContent=typeof value==="string"?value:JSON.stringify(value,null,2)}
 function api(){if(!window.HandymanStorageFoundation)throw new Error("Storage foundation did not load");return window.HandymanStorageFoundation}
 function parseRaw(key){return api().get(key).then(raw=>{if(raw===null)throw new Error("Missing raw KV mirror for "+key);try{return JSON.parse(raw)}catch(e){throw new Error("Invalid JSON in "+key+": "+e.message)}})}
@@ -116,6 +119,8 @@ const auditButton=document.getElementById("audit");
 auditButton.disabled=true;
 const compatibilityButton=document.getElementById("compatibility");
 compatibilityButton.disabled=true;
+const preserveOrderButton=document.getElementById("preserveOrder");
+preserveOrderButton.disabled=true;
 async function storeCounts(db,names){const result={};for(const name of names){const tx=db.transaction([name],"readonly");result[name]=await new Promise((resolve,reject)=>{const q=tx.objectStore(name).count();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error("Count failed: "+name))})}return result}
 function buildStageRecords(root){
  const a=root.data,p=root.projects,c=root.contracts;
@@ -228,47 +233,99 @@ function compareRecordList(expected,actual){
  const a=sortRows(expected),b=sortRows(actual);
  return {recordSetMatch:JSON.stringify(canonical(a))===JSON.stringify(canonical(b)),countExpected:expected.length,countActual:actual.length,arrayOrderPreserved:JSON.stringify(expected.map(x=>String(x.id)))===JSON.stringify(actual.map(x=>String(x.id)))};
 }
+const ORDERED_COLLECTIONS={
+ accountingEntries:"entries",customers:"customers",invoices:"invoices",thirdPartyTransactions:"thirdPartyTransactions",
+ projects:"projects",workers:"workers",partners:"partners",contractors:"contractors",companies:"companies",companyJobs:"companyJobs",contracts:"contracts"
+};
+async function readStoreAll(db,name){
+ if(!db.objectStoreNames.contains(name))throw new Error("Missing IndexedDB store: "+name);
+ const tx=db.transaction([name],"readonly");
+ return await new Promise((resolve,reject)=>{const q=tx.objectStore(name).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error("Read failed: "+name))});
+}
+function expectedOrderLists(){
+ const a=inspectedBackup.data,p=inspectedBackup.projects;
+ return {accountingEntries:a.entries.map(x=>String(x.id)),customers:a.customers.map(x=>String(x.id)),invoices:a.invoices.map(x=>String(x.id)),
+ thirdPartyTransactions:a.thirdPartyTransactions.map(x=>String(x.id)),projects:p.projects.map(x=>String(x.id)),workers:p.workers.map(x=>String(x.id)),
+ partners:p.partners.map(x=>String(x.id)),contractors:p.contractors.map(x=>String(x.id)),companies:p.companies.map(x=>String(x.id)),
+ companyJobs:p.companyJobs.map(x=>String(x.id)),contracts:inspectedBackup.contracts.map(x=>String(x.id))};
+}
+async function preserveOriginalArrayOrder(){
+ if(!inspectedBackup||!inspectedReport?.backupInspectionOk)throw new Error("Inspect the complete backup first");
+ const db=await api().openDatabase();
+ try{
+  if(!db.objectStoreNames.contains("recordOrder"))throw new Error("The order-manifest store is unavailable. Reload the updated test lab.");
+  const orders=expectedOrderLists(),contentChecks={};
+  for(const [storeName,backupField] of Object.entries(ORDERED_COLLECTIONS)){
+   const expected=inspectedBackup.data[backupField]||inspectedBackup.projects[backupField]||inspectedBackup.contracts;
+   const actual=await readStoreAll(db,storeName);
+   const a=expected.map(canonical).sort((x,y)=>String(x.id).localeCompare(String(y.id)));
+   const b=actual.map(canonical).sort((x,y)=>String(x.id).localeCompare(String(y.id)));
+   const exact=JSON.stringify(a)===JSON.stringify(b);
+   contentChecks[storeName]={backup:expected.length,indexedDB:actual.length,exactMatch:exact};
+   if(!exact)throw new Error("Order manifest blocked: "+storeName+" records do not exactly match the selected backup.");
+  }
+  const existing=await readStoreAll(db,"recordOrder");
+  if(existing.length){
+   const matches=Object.entries(orders).every(([name,ids])=>{const row=existing.find(x=>x.id===name);return !!row&&JSON.stringify(row.orderedIds)===JSON.stringify(ids)});
+   if(!matches)throw new Error("An existing order manifest differs from this backup. It was not overwritten.");
+   return {stage:"original array order manifest verification",ok:true,alreadyPresent:true,collections:Object.keys(orders),contentChecks,localStorageChanged:false,backupFileChanged:false,note:"The existing order manifest already matches this backup; no IndexedDB records were changed."};
+  }
+  const rows=Object.entries(orders).map(([name,orderedIds])=>({id:name,orderedIds}));
+  const tx=db.transaction(["recordOrder"],"readwrite");
+  const done=new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error("Order manifest transaction failed"));tx.onabort=()=>reject(tx.error||new Error("Order manifest transaction aborted"))});
+  try{for(const row of rows)tx.objectStore("recordOrder").add(row);await done}catch(error){try{tx.abort()}catch(_){}throw error}
+  const saved=await readStoreAll(db,"recordOrder");
+  const verified=rows.every(row=>{const got=saved.find(x=>x.id===row.id);return !!got&&JSON.stringify(got.orderedIds)===JSON.stringify(row.orderedIds)});
+  if(!verified)throw new Error("Order manifest read-back verification failed.");
+  return {stage:"original array order manifest creation",ok:true,collections:Object.keys(orders),recordCount:rows.reduce((n,x)=>n+x.orderedIds.length,0),contentChecks,manifestVerified:true,localStorageChanged:false,backupFileChanged:false,applicationCutover:false,note:"Only ordered ID lists were added to the isolated test IndexedDB. Business records were not changed."};
+ }finally{db.close()}
+}
+preserveOrderButton.addEventListener("click",async()=>{busy(true);try{show(await preserveOriginalArrayOrder())}catch(e){show({stage:"original array order manifest",ok:false,error:String(e.message||e),localStorageChanged:false,backupFileChanged:false,applicationCutover:false})}finally{busy(false)}});
 async function auditAppCompatibility(){
  if(!inspectedBackup||!inspectedReport?.backupInspectionOk)throw new Error("Inspect the complete backup first");
  const db=await api().openDatabase();
  const names=["customers","invoices","accountingEntries","projects","contracts","workers","partners","contractors","companies","companyJobs","customExpenseCategories","thirdPartyTransactions","accountingSettings","projectMetadata"];
  try{
-  const rows={};
-  for(const name of names){if(!db.objectStoreNames.contains(name))throw new Error("Missing IndexedDB store: "+name);const tx=db.transaction([name],"readonly");rows[name]=await new Promise((resolve,reject)=>{const q=tx.objectStore(name).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error("Read failed: "+name))})}
+  const rows={};for(const name of names)rows[name]=await readStoreAll(db,name);
+  const manifestRows=await readStoreAll(db,"recordOrder"),manifest={};
+  for(const row of manifestRows){if(!row||typeof row.id!=="string"||!Array.isArray(row.orderedIds))throw new Error("Invalid order manifest record");manifest[row.id]=row.orderedIds}
+  const expectedOrders=expectedOrderLists(),orderedRows={},orderChecks={};
+  for(const [storeName,ids] of Object.entries(expectedOrders)){
+   const order=manifest[storeName];if(!order)throw new Error("Missing saved order manifest for "+storeName);
+   const byId=new Map(rows[storeName].map(row=>[String(row.id),row]));
+   const reordered=order.map(id=>byId.get(String(id)));
+   const missing=order.filter(id=>!byId.has(String(id)));
+   const extras=rows[storeName].filter(row=>!order.includes(String(row.id))).map(row=>String(row.id));
+   if(missing.length||extras.length||reordered.some(x=>!x))throw new Error("Order manifest ID mismatch for "+storeName+": "+JSON.stringify({missing,extras}));
+   orderedRows[storeName]=reordered;
+   orderChecks[storeName]={manifestCount:order.length,indexedDBCount:rows[storeName].length,restoredOrderMatchesBackup:JSON.stringify(order)===JSON.stringify(ids)};
+  }
   const categoryRows=rows.customExpenseCategories.slice().sort((a,b)=>Number(String(a.id).replace("category:",""))-Number(String(b.id).replace("category:","")));
-  const settings=rows.accountingSettings.find(x=>x.id==="settings");
-  const metadata=rows.projectMetadata.find(x=>x.id==="projectMetadata");
+  const settings=rows.accountingSettings.find(x=>x.id==="settings"),metadata=rows.projectMetadata.find(x=>x.id==="projectMetadata");
   if(!settings||!metadata)throw new Error("Required singleton settings or project metadata record is missing");
   const expectedA=inspectedBackup.data,expectedP=inspectedBackup.projects;
-  const accountingLists={
-   entries:compareRecordList(expectedA.entries,rows.accountingEntries),
-   customers:compareRecordList(expectedA.customers,rows.customers),
-   invoices:compareRecordList(expectedA.invoices,rows.invoices),
-   thirdPartyTransactions:compareRecordList(expectedA.thirdPartyTransactions,rows.thirdPartyTransactions)
-  };
-  const expectedCategories=expectedA.customExpenseCategories;
-  const categoryValues=categoryRows.map(x=>x.value);
+  const accountingLists={entries:compareRecordList(expectedA.entries,orderedRows.accountingEntries),customers:compareRecordList(expectedA.customers,orderedRows.customers),
+   invoices:compareRecordList(expectedA.invoices,orderedRows.invoices),thirdPartyTransactions:compareRecordList(expectedA.thirdPartyTransactions,orderedRows.thirdPartyTransactions)};
+  const expectedCategories=expectedA.customExpenseCategories,categoryValues=categoryRows.map(x=>x.value);
   const accountingScalarsMatch=JSON.stringify(canonical(settings.value))===JSON.stringify(canonical(expectedA.settings))&&JSON.stringify(canonical(categoryValues))===JSON.stringify(canonical(expectedCategories));
-  const projectLists={
-   projects:compareRecordList(expectedP.projects,rows.projects),
-   workers:compareRecordList(expectedP.workers,rows.workers),
-   partners:compareRecordList(expectedP.partners,rows.partners),
-   contractors:compareRecordList(expectedP.contractors,rows.contractors),
-   companies:compareRecordList(expectedP.companies,rows.companies),
-   companyJobs:compareRecordList(expectedP.companyJobs,rows.companyJobs)
-  };
+  const projectLists={projects:compareRecordList(expectedP.projects,orderedRows.projects),workers:compareRecordList(expectedP.workers,orderedRows.workers),
+   partners:compareRecordList(expectedP.partners,orderedRows.partners),contractors:compareRecordList(expectedP.contractors,orderedRows.contractors),
+   companies:compareRecordList(expectedP.companies,orderedRows.companies),companyJobs:compareRecordList(expectedP.companyJobs,orderedRows.companyJobs)};
   const expectedMetadata={profile:expectedP.profile,current:expectedP.current,guide:expectedP.guide,currentSubproject:expectedP.currentSubproject,profitReportProjectId:expectedP.profitReportProjectId};
   const actualMetadata={profile:metadata.profile,current:metadata.current,guide:metadata.guide,currentSubproject:metadata.currentSubproject,profitReportProjectId:metadata.profitReportProjectId};
-  const contracts=compareRecordList(inspectedBackup.contracts,rows.contracts);
+  const contracts=compareRecordList(inspectedBackup.contracts,orderedRows.contracts);
   const allContentMatches=Object.values(accountingLists).every(x=>x.recordSetMatch)&&accountingScalarsMatch&&Object.values(projectLists).every(x=>x.recordSetMatch)&&JSON.stringify(canonical(expectedMetadata))===JSON.stringify(canonical(actualMetadata))&&contracts.recordSetMatch;
-  const orderChecks=[...Object.values(accountingLists),...Object.values(projectLists),contracts];
-  const orderPreserved=orderChecks.every(x=>x.arrayOrderPreserved);
-  return {stage:"read-only application data-shape compatibility audit",ok:allContentMatches&&orderPreserved,recordContentMatches:allContentMatches,arrayOrderPreserved:orderPreserved,database:api().databaseName,schemaVersion:api().schemaVersion,comparisons:{accounting:{lists:accountingLists,settingsAndCategoriesMatch:accountingScalarsMatch},projects:{lists:projectLists,metadataMatch:JSON.stringify(canonical(expectedMetadata))===JSON.stringify(canonical(actualMetadata))},contracts},cutoverReadiness:allContentMatches&&orderPreserved,note:allContentMatches&&!orderPreserved?"All records and fields match, but IndexedDB getAll() orders records by primary key, not original array position. The app adapter must preserve original array order before cutover.":"This is a read-only reconstruction check. LocalStorage and IndexedDB were not changed; the app still uses LocalStorage.",localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,applicationWritesTested:false};
+  const orderPreserved=Object.values(orderChecks).every(x=>x.restoredOrderMatchesBackup)&&[...Object.values(accountingLists),...Object.values(projectLists),contracts].every(x=>x.arrayOrderPreserved);
+  return {stage:"read-only application data-shape compatibility audit",ok:allContentMatches&&orderPreserved,recordContentMatches:allContentMatches,arrayOrderPreserved:orderPreserved,
+   orderManifest:{storedIn:"recordOrder",collections:orderChecks},database:api().databaseName,schemaVersion:api().schemaVersion,
+   comparisons:{accounting:{lists:accountingLists,settingsAndCategoriesMatch:accountingScalarsMatch},projects:{lists:projectLists,metadataMatch:JSON.stringify(canonical(expectedMetadata))===JSON.stringify(canonical(actualMetadata))},contracts},
+   cutoverReadiness:allContentMatches&&orderPreserved,note:allContentMatches&&orderPreserved?"All records and fields match, and the original array order has been reconstructed from the separate IndexedDB order manifest. This remains a test-only compatibility check; no app cutover has occurred.":"Compatibility checks did not all pass. Do not connect the application to IndexedDB.",
+   localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,applicationWritesTested:false};
  }finally{db.close()}
 }
 compatibilityButton.addEventListener("click",async()=>{busy(true);try{show(await auditAppCompatibility())}catch(e){show({stage:"read-only application data-shape compatibility audit",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false})}finally{busy(false)}});
 
-document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);stageButton.disabled=true;auditButton.disabled=true;inspectedBackup=null;inspectedReport=null;try{const parsed=JSON.parse(await file.text());const report=inspectBackup(parsed);const db=await api().openDatabase();let targetCounts;try{targetCounts=await storeCounts(db,["customers","projects","invoices","contracts","accountingEntries","projectReceipts","projectExpenses","workers","partners","contractors","companies","companyJobs","customExpenseCategories","thirdPartyTransactions","accountingSettings","projectMetadata"])}finally{db.close()}const occupied=Object.entries(targetCounts).filter(([,n])=>n!==0);const backupOk=report.ok;report.backupInspectionOk=backupOk;report.targetStoresEmpty=occupied.length===0;report.occupiedTargetStores=occupied;report.schemaVersion=api().schemaVersion;report.database=api().databaseName;report.stageReady=backupOk&&report.targetStoresEmpty;report.ok=backupOk;if(backupOk){inspectedBackup=parsed;inspectedReport=report;auditButton.disabled=false;compatibilityButton.disabled=false;stageButton.disabled=!report.stageReady}else{inspectedBackup=null;inspectedReport=null;auditButton.disabled=true;compatibilityButton.disabled=true;stageButton.disabled=true}show({...report,note:report.stageReady?"Backup inspection passed and target stores are empty. Staging is available.":backupOk?"Backup inspection passed, but target stores are not empty. Staging is blocked; read-only audit remains available.":"Backup inspection has blocking errors. Both staging and audit are blocked."})}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false});inspectedBackup=null;inspectedReport=null}finally{busy(false);if(!inspectedBackup){stageButton.disabled=true;compatibilityButton.disabled=true}}});
+document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);stageButton.disabled=true;auditButton.disabled=true;inspectedBackup=null;inspectedReport=null;try{const parsed=JSON.parse(await file.text());const report=inspectBackup(parsed);const db=await api().openDatabase();let targetCounts;try{targetCounts=await storeCounts(db,["customers","projects","invoices","contracts","accountingEntries","projectReceipts","projectExpenses","workers","partners","contractors","companies","companyJobs","customExpenseCategories","thirdPartyTransactions","accountingSettings","projectMetadata"])}finally{db.close()}const occupied=Object.entries(targetCounts).filter(([,n])=>n!==0);const backupOk=report.ok;report.backupInspectionOk=backupOk;report.targetStoresEmpty=occupied.length===0;report.occupiedTargetStores=occupied;report.schemaVersion=api().schemaVersion;report.database=api().databaseName;report.stageReady=backupOk&&report.targetStoresEmpty;report.ok=backupOk;if(backupOk){inspectedBackup=parsed;inspectedReport=report;auditButton.disabled=false;compatibilityButton.disabled=false;preserveOrderButton.disabled=false;stageButton.disabled=!report.stageReady}else{inspectedBackup=null;inspectedReport=null;auditButton.disabled=true;compatibilityButton.disabled=true;stageButton.disabled=true}show({...report,note:report.stageReady?"Backup inspection passed and target stores are empty. Staging is available.":backupOk?"Backup inspection passed, but target stores are not empty. Staging is blocked; read-only audit remains available.":"Backup inspection has blocking errors. Both staging and audit are blocked."})}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false});inspectedBackup=null;inspectedReport=null}finally{busy(false);if(!inspectedBackup){stageButton.disabled=true;compatibilityButton.disabled=true;preserveOrderButton.disabled=true}}});
 
 })();
 </script>
