@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   const DB_NAME = "the_handyman_accountancy_test226";
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   const PREFIX = "tha_test226_";
   const LEGACY_KEYS = [
     "tha_test226_accounting_v1",
@@ -16,7 +16,7 @@
   const STORES = ["legacySnapshots", "customers", "projects", "invoices", "contracts",
     "accountingEntries", "projectReceipts", "projectExpenses", "workers", "partners",
     "contractors", "companies", "companyJobs", "customExpenseCategories",
-    "thirdPartyTransactions", "accountingSettings", "projectMetadata", "auditLog"];
+    "thirdPartyTransactions", "accountingSettings", "projectMetadata", "auditLog", "recordOrder"];
   const KV_STORE = "kv";
 
   function openDatabase() {
