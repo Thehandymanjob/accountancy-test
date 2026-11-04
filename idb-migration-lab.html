@@ -127,7 +127,26 @@ function inspectBackup(root){
  const imageFields=[];
  if(typeof p.profile.logo==="string"&&p.profile.logo.startsWith("data:image/"))imageFields.push({location:"projects.profile.logo",characters:p.profile.logo.length});
  p.projects.forEach(project=>{if(typeof project.photo==="string"&&project.photo.startsWith("data:image/"))imageFields.push({location:"project:"+project.id+".photo",characters:project.photo.length});(project.subprojects||[]).forEach(sub=>{if(typeof sub.photo==="string"&&sub.photo.startsWith("data:image/"))imageFields.push({location:"subproject:"+sub.id+".photo",characters:sub.photo.length})})});
- return {stage:"complete backup read-only inspection",ok:errors.length===0&&ledgerErrors.length===0,backupVersion:root.version,exportedAt:root.exportedAt,counts:{accountingEntries:a.entries.length,customers:a.customers.length,invoices:a.invoices.length,projects:p.projects.length,subprojects:p.projects.reduce((n,x)=>n+countArray(x.subprojects),0),workers:p.workers.length,partners:p.partners.length,contractors:p.contractors.length,companies:p.companies.length,companyJobs:p.companyJobs.length,contracts:c.length,projectLedgerRecords:ledgerCounts},relationshipChecks:{unresolvedInvoiceCustomers:unresolvedCustomers,unresolvedAccountingInvoiceLinks:unresolvedInvoiceLinks},imageFields,blockingErrors:[...errors,...ledgerErrors],localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,note:"Inspection only. No records have been staged or imported."};
+ const receipts=[],expenses=[],ledgerIds={receipts:new Set(),expenses:new Set()};
+ const ledgerKinds=[["income","receipt",receipts],["expenses","expense",expenses],["wages","expense",expenses],["tools","expense",expenses],["food","expense",expenses],["materials","expense",expenses]];
+ for(const project of p.projects){for(const scope of [{obj:project,subprojectId:null},...(project.subprojects||[]).map(sub=>({obj:sub,subprojectId:String(sub.id)}))]){
+  for(const [collection,kind,target] of ledgerKinds){for(const item of scope.obj[collection]||[]){
+   const label=kind==="receipt"?"receipts":"expenses",id=item&&item.id!=null?String(item.id):"";
+   if(!id)ledgerErrors.push("Missing ledger record id in "+collection+" for project "+project.id);
+   else if(ledgerIds[label].has(id))ledgerErrors.push("Duplicate "+label+" id "+id);
+   else ledgerIds[label].add(id);
+   target.push({...(item&&typeof item==="object"?item:{value:item}),parentProjectId:String(project.id),subprojectId:scope.subprojectId,sourceCollection:collection,recordKind:kind});
+  }}
+ }}
+ const partnerIds=new Set(p.partners.map(x=>String(x.id))),contractorIds=new Set(p.contractors.map(x=>String(x.id)));
+ const unresolvedPartners=p.projects.filter(x=>x.partnerId&&!partnerIds.has(String(x.partnerId))).map(x=>({projectId:x.id,partnerId:x.partnerId}));
+ const allExpenseSource=[...p.projects.flatMap(x=>x.expenses||[]),...p.projects.flatMap(x=>(x.subprojects||[]).flatMap(y=>y.expenses||[]))];
+ const unresolvedContractors=allExpenseSource.filter(x=>x.contractorId&&!contractorIds.has(String(x.contractorId))).map(x=>({expenseId:x.id,contractorId:x.contractorId}));
+ if(unresolvedPartners.length)errors.push("Project partner references do not resolve");
+ if(unresolvedContractors.length)errors.push("Project expense contractor references do not resolve");
+ const emptyDateReceipts=receipts.filter(x=>x.date===""||x.date==null).length;
+ const migrationPreview={targetCounts:{customers:a.customers.length,invoices:a.invoices.length,accountingEntries:a.entries.length,projects:p.projects.length,contracts:c.length,projectReceipts:receipts.length,projectExpenses:expenses.length},ledgerIdChecks:{receiptIds:ledgerIds.receipts.size,expenseIds:ledgerIds.expenses.size,allExplicit:true},emptyReceiptDatesPreserved:emptyDateReceipts,relationshipChecks:{unresolvedPartners,unresolvedContractors},sourceObjectsRetained:true,generatedIds:0};
+ return {stage:"complete backup read-only inspection",ok:errors.length===0&&ledgerErrors.length===0,backupVersion:root.version,exportedAt:root.exportedAt,counts:{accountingEntries:a.entries.length,customers:a.customers.length,invoices:a.invoices.length,projects:p.projects.length,subprojects:p.projects.reduce((n,x)=>n+countArray(x.subprojects),0),workers:p.workers.length,partners:p.partners.length,contractors:p.contractors.length,companies:p.companies.length,companyJobs:p.companyJobs.length,contracts:c.length,projectLedgerRecords:ledgerCounts},relationshipChecks:{unresolvedInvoiceCustomers:unresolvedCustomers,unresolvedAccountingInvoiceLinks:unresolvedInvoiceLinks},migrationPreview,imageFields,blockingErrors:[...errors,...ledgerErrors],localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,note:"Read-only migration mapping preview. No records have been staged or imported."};
 }
 document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);try{const parsed=JSON.parse(await file.text());show(inspectBackup(parsed))}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false})}finally{busy(false);stageButton.disabled=true}});
 
