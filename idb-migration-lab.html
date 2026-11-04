@@ -231,8 +231,8 @@ auditButton.addEventListener("click",async()=>{busy(true);try{show(await auditSt
 
 function compareRecordList(expected,actual){
  const sortRows=list=>list.slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
- const a=sortRows(expected),b=sortRows(actual);
- return {recordSetMatch:JSON.stringify(canonical(a))===JSON.stringify(canonical(b)),countExpected:expected.length,countActual:actual.length,arrayOrderPreserved:JSON.stringify(expected.map(x=>String(x.id)))===JSON.stringify(actual.map(x=>String(x.id)))};
+ const sortedExpected=sortRows(expected),sortedActual=sortRows(actual);
+ return {recordSetMatch:JSON.stringify(canonical(sortedExpected))===JSON.stringify(canonical(sortedActual)),countExpected:expected.length,countActual:actual.length,arrayOrderPreserved:JSON.stringify(expected.map(x=>String(x.id)))===JSON.stringify(actual.map(x=>String(x.id)))};
 }
 const ORDERED_COLLECTIONS={
  accountingEntries:"entries",customers:"customers",invoices:"invoices",thirdPartyTransactions:"thirdPartyTransactions",
