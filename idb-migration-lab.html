@@ -254,16 +254,27 @@ async function preserveOriginalArrayOrder(){
  const db=await api().openDatabase();
  try{
   if(!db.objectStoreNames.contains("recordOrder"))throw new Error("The order-manifest store is unavailable. Reload the updated test lab.");
-  const orders=expectedOrderLists(),contentChecks={};
+  const orders=expectedOrderLists(),contentChecks={},mismatches=[];
   for(const [storeName,backupField] of Object.entries(ORDERED_COLLECTIONS)){
    const expected=inspectedBackup.data[backupField]||inspectedBackup.projects[backupField]||inspectedBackup.contracts;
    const actual=await readStoreAll(db,storeName);
-   const a=expected.map(canonical).sort((x,y)=>String(x.id).localeCompare(String(y.id)));
-   const b=actual.map(canonical).sort((x,y)=>String(x.id).localeCompare(String(y.id)));
-   const exact=JSON.stringify(a)===JSON.stringify(b);
-   contentChecks[storeName]={backup:expected.length,indexedDB:actual.length,exactMatch:exact};
-   if(!exact)throw new Error("Order manifest blocked: "+storeName+" records do not exactly match the selected backup.");
+   const expectedById=new Map(expected.map(row=>[String(row.id),row]));
+   const actualById=new Map(actual.map(row=>[String(row.id),row]));
+   const missingIds=[...expectedById.keys()].filter(id=>!actualById.has(id));
+   const extraIds=[...actualById.keys()].filter(id=>!expectedById.has(id));
+   const differingRecords=[];
+   for(const [id,want] of expectedById){
+    const got=actualById.get(id);if(!got)continue;
+    const wantKeys=Object.keys(want||{}).sort(),gotKeys=Object.keys(got||{}).sort();
+    const fields=[...new Set([...wantKeys,...gotKeys])].filter(key=>JSON.stringify(canonical(want[key]))!==JSON.stringify(canonical(got[key])));
+    if(fields.length)differingRecords.push({id,fields});
+    if(differingRecords.length>=5)break;
+   }
+   const exact=expected.length===actual.length&&!missingIds.length&&!extraIds.length&&!differingRecords.length;
+   contentChecks[storeName]={backup:expected.length,indexedDB:actual.length,exactMatch:exact,missingIds:missingIds.slice(0,10),extraIds:extraIds.slice(0,10),differingRecords};
+   if(!exact)mismatches.push(storeName);
   }
+  if(mismatches.length)return {stage:"original array order manifest diagnostic",ok:false,blocked:true,mismatchedCollections:mismatches,contentChecks,manifestWritten:false,localStorageChanged:false,indexedDBBusinessRecordsChanged:false,backupFileChanged:false,applicationCutover:false,note:"No order manifest was written. The report identifies missing/extra IDs and field names only; record values are not exposed."};
   const existing=await readStoreAll(db,"recordOrder");
   if(existing.length){
    const matches=Object.entries(orders).every(([name,ids])=>{const row=existing.find(x=>x.id===name);return !!row&&JSON.stringify(row.orderedIds)===JSON.stringify(ids)});
