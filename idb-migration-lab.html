@@ -22,7 +22,7 @@ small{color:#66778c}
 <body>
 <main>
 <h1>IndexedDB Migration Lab — Test v247 / Foundation v3</h1>
-<p>Stage 2 reads the verified raw mirror and prepares structured records in isolated IndexedDB stores. LocalStorage remains the active application storage.</p>
+<p>Stages 1–3 inspect the raw mirror and complete backup. Stage 4 creates an additional copy from the selected backup in isolated IndexedDB only after a clean inspection and empty-store check. LocalStorage remains the active application storage.</p>
 <div class="notice"><strong>Safety boundary:</strong> Test repository only. Database <code>the_handyman_accountancy_test226</code>; namespace <code>tha_test226_</code>. Never open this tool on the production site. It does not modify or delete LocalStorage and does not switch the app to IndexedDB.</div>
 <h2>Stage 1 — Raw mirror</h2>
 <div class="actions">
@@ -31,12 +31,12 @@ small{color:#66778c}
 </div>
 <h2>Stage 2 — Current browser mirror</h2>
 <p>Read-only check of mirrored browser keys. Structured writes are paused until the complete record model and relationships have been audited.</p>
-<div class="actions"><button id="preview" type="button">Preview mirrored records</button><button id="stage" class="danger" type="button" disabled>Staging paused — audit required</button></div>
+<div class="actions"><button id="preview" type="button">Preview mirrored records</button></div>
 <div class="notice">The test browser may not yet contain Projects or Contracts keys. Missing keys are reported as missing; no empty replacement data is created.</div>
 <h2>Stage 3 — Complete backup inspection (read-only)</h2>
 <p>Select the existing complete JSON backup. This inspects its real structure and record relationships without importing or writing anything.</p>
 <input id="backupFile" type="file" accept=".json,application/json">
-<div class="actions"><button id="backupPreview" type="button">Inspect selected backup</button></div>
+<div class="actions"><button id="backupPreview" type="button">Inspect selected backup</button></div>\n<h2>Stage 4 — Explicit staging to test IndexedDB</h2>\n<p>This button is enabled only after the selected backup passes inspection and every target store is empty. It writes an additional copy to the test database in one atomic transaction. It does not alter the backup, LocalStorage, production, or app storage mode.</p>\n<div class="actions"><button id="stage" class="danger" type="button" disabled>Stage backup into test IndexedDB</button></div>
 <div class="safe">The selected file is read locally in this browser. It is not uploaded, changed, or written to LocalStorage or IndexedDB.</div>
 <pre id="result" aria-live="polite">Ready. No operation has run.</pre>
 <small>Do not use the production app for this test. No production data or production database is accessed.</small>
@@ -101,7 +101,40 @@ document.getElementById("verify").addEventListener("click",async()=>{busy(true);
 document.getElementById("status").addEventListener("click",async()=>{busy(true);try{show(await api().status())}catch(e){show({ok:false,error:String(e.message||e)})}finally{busy(false)}});
 document.getElementById("preview").addEventListener("click",async()=>{busy(true);stageButton.disabled=true;show("Checking raw KV mirror inventory…");try{const expected=["tha_test226_accounting_v1","tha_test226_projects_v1","tha_test226_contracts_v1","tha_test226_factory_reset_recovery_v1"];const results=[];for(const key of expected){const raw=await api().get(key);let validJson=null;if(raw!==null){try{JSON.parse(raw);validJson=true}catch(_){validJson=false}}results.push({key,present:raw!==null,bytes:raw===null?0:new Blob([raw]).size,validJson})}show({stage:"read-only KV mirror inventory",ok:results.every(x=>x.present&&x.validJson===true),results,missing:results.filter(x=>!x.present).map(x=>x.key),localStorageChanged:false,indexedDBChanged:false,applicationCutover:false,note:"Inventory only. Missing source keys are not fabricated; structured staging remains disabled."})}catch(e){show({stage:"read-only KV mirror inventory",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false})}finally{busy(false);stageButton.disabled=true}});
 
-stageButton.addEventListener("click",()=>{show("Staging is intentionally disabled until the complete backup structure and all relationships are audited. No data was written.");});
+let inspectedBackup=null;
+let inspectedReport=null;
+async function storeCounts(db,names){const result={};for(const name of names){const tx=db.transaction([name],"readonly");result[name]=await new Promise((resolve,reject)=>{const q=tx.objectStore(name).count();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error("Count failed: "+name))})}return result}
+function buildStageRecords(root){
+ const a=root.data,p=root.projects,c=root.contracts;
+ const records={
+  customers:a.customers.map(x=>({...x})),invoices:a.invoices.map(x=>({...x})),accountingEntries:a.entries.map(x=>({...x})),
+  projects:p.projects.map(x=>({...x})),contracts:c.map(x=>({...x})),workers:p.workers.map(x=>({...x})),partners:p.partners.map(x=>({...x})),
+  contractors:p.contractors.map(x=>({...x})),companies:p.companies.map(x=>({...x})),companyJobs:p.companyJobs.map(x=>({...x})),
+  customExpenseCategories:a.customExpenseCategories.map((value,index)=>({id:"category:"+index,value})),
+  thirdPartyTransactions:a.thirdPartyTransactions.map(x=>({...x})),accountingSettings:[{id:"settings",value:{...a.settings}}],
+  projectMetadata:[{id:"projectMetadata",profile:{...p.profile},current:p.current,guide:p.guide,currentSubproject:p.currentSubproject,profitReportProjectId:p.profitReportProjectId}]
+ };
+ const receipts=[],expenses=[],ledgerKinds=[["income","receipt"],["expenses","expense"],["wages","wage"],["tools","tool"],["food","food"],["materials","material"]];
+ for(const project of p.projects){const scopes=[{obj:project,subprojectId:null},...(project.subprojects||[]).map(sub=>({obj:sub,subprojectId:String(sub.id)}))];for(const scope of scopes)for(const [collection,kind] of ledgerKinds)for(const item of scope.obj[collection]||[]){const row={...item,parentProjectId:String(project.id),subprojectId:scope.subprojectId,sourceCollection:collection,recordKind:kind};(kind==="receipt"?receipts:expenses).push(row)}}
+ records.projectReceipts=receipts;records.projectExpenses=expenses;return records;
+}
+async function stageSelectedBackup(){
+ if(!inspectedBackup||!inspectedReport||!inspectedReport.ok)throw new Error("A successful complete backup inspection is required first");
+ const plan=buildStageRecords(inspectedBackup),names=Object.keys(plan),db=await api().openDatabase();
+ try{
+  const before=await storeCounts(db,names),occupied=Object.entries(before).filter(([,count])=>count!==0);
+  if(occupied.length)throw new Error("Staging blocked: target stores are not empty: "+JSON.stringify(occupied));
+  for(const [name,rows] of Object.entries(plan)){const ids=new Set();rows.forEach((row,index)=>{if(!row||row.id==null||String(row.id)==="")throw new Error(name+" row "+index+" has no explicit id");const id=String(row.id);if(ids.has(id))throw new Error(name+" contains duplicate id "+id);ids.add(id)})}
+  const tx=db.transaction(names,"readwrite"),done=new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error("Atomic staging transaction failed"));tx.onabort=()=>reject(tx.error||new Error("Atomic staging transaction aborted"))});
+  try{for(const [name,rows] of Object.entries(plan)){const store=tx.objectStore(name);for(const row of rows)store.add(row)}await done}catch(error){try{tx.abort()}catch(_){}throw error}
+  const actual={};for(const name of names){const readTx=db.transaction([name],"readonly");actual[name]=await new Promise((resolve,reject)=>{const q=readTx.objectStore(name).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error("Read-back failed: "+name))})}
+  const comparisons={};for(const name of names){const expected=plan[name],found=actual[name];comparisons[name]={expected:expected.length,actual:found.length,idsMatch:expected.map(x=>String(x.id)).sort().join("|")===found.map(x=>String(x.id)).sort().join("|"),recordsMatch:expected.length===found.length&&expected.every(row=>{const got=found.find(x=>String(x.id)===String(row.id));return !!got&&JSON.stringify(got)===JSON.stringify(row)})}}
+  const failed=Object.entries(comparisons).filter(([,v])=>v.expected!==v.actual||!v.idsMatch||!v.recordsMatch);if(failed.length)throw new Error("Read-back verification mismatch: "+JSON.stringify(failed));
+  const finalCounts=await storeCounts(db,names);
+  return {stage:"atomic backup staging and read-back verification",ok:true,database:api().databaseName,schemaVersion:api().schemaVersion,counts:finalCounts,comparisons,localStorageChanged:false,backupFileChanged:false,applicationCutover:false,note:"Backup data is staged as an additional copy in the isolated test IndexedDB. LocalStorage remains untouched; the app has not switched storage."};
+ }finally{db.close()}
+}
+stageButton.addEventListener("click",async()=>{if(!inspectedBackup||!inspectedReport||!inspectedReport.ok){show({ok:false,error:"Run a successful complete backup inspection first."});return}if(!window.confirm("Stage this backup into the isolated TEST IndexedDB? This writes only to the test database. It does not change LocalStorage, the backup file, or production."))return;busy(true);try{show(await stageSelectedBackup())}catch(e){show({stage:"backup staging",ok:false,error:String(e.message||e),localStorageChanged:false,backupFileChanged:false,applicationCutover:false,note:"If the transaction failed, IndexedDB rolls back the entire atomic write."})}finally{busy(false);stageButton.disabled=true}});
 function countArray(value){return Array.isArray(value)?value.length:0}
 function validateIdList(label,items,errors){const seen=new Set();(items||[]).forEach((item,index)=>{if(!item||typeof item!=="object"||item.id===undefined||item.id===null||String(item.id)===""){errors.push(label+"["+index+"] has no id");return}const id=String(item.id);if(seen.has(id))errors.push(label+" has duplicate id "+id);seen.add(id)});}
 function inspectBackup(root){
@@ -148,7 +181,7 @@ function inspectBackup(root){
  const migrationPreview={targetStorePlan:{customers:a.customers.length,invoices:a.invoices.length,accountingEntries:a.entries.length,projects:p.projects.length,contracts:c.length,projectReceipts:receipts.length,projectExpenses:expenses.length,workers:p.workers.length,partners:p.partners.length,contractors:p.contractors.length,companies:p.companies.length,companyJobs:p.companyJobs.length,customExpenseCategories:a.customExpenseCategories.length,thirdPartyTransactions:a.thirdPartyTransactions.length,accountingSettings:1,projectMetadata:1},ledgerIdChecks:{receiptIds:ledgerIds.receipts.size,expenseIds:ledgerIds.expenses.size,allExplicit:true},emptyReceiptDatesPreserved:emptyDateReceipts,relationshipChecks:{unresolvedPartners,unresolvedContractors},preservedSingletonFields:{accountingSettings:Object.keys(a.settings),projectMetadata:["profile","current","guide","currentSubproject","profitReportProjectId"]},sourceObjectsRetained:true,generatedIds:0,allBackupCollectionsAccountedFor:true};
  return {stage:"complete backup read-only inspection",ok:errors.length===0&&ledgerErrors.length===0,backupVersion:root.version,exportedAt:root.exportedAt,counts:{accountingEntries:a.entries.length,customers:a.customers.length,invoices:a.invoices.length,projects:p.projects.length,subprojects:p.projects.reduce((n,x)=>n+countArray(x.subprojects),0),workers:p.workers.length,partners:p.partners.length,contractors:p.contractors.length,companies:p.companies.length,companyJobs:p.companyJobs.length,contracts:c.length,projectLedgerRecords:ledgerCounts},relationshipChecks:{unresolvedInvoiceCustomers:unresolvedCustomers,unresolvedAccountingInvoiceLinks:unresolvedInvoiceLinks},migrationPreview,imageFields,blockingErrors:[...errors,...ledgerErrors],localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,note:"Read-only migration mapping preview. No records have been staged or imported."};
 }
-document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);try{const parsed=JSON.parse(await file.text());show(inspectBackup(parsed))}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false})}finally{busy(false);stageButton.disabled=true}});
+document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);stageButton.disabled=true;inspectedBackup=null;inspectedReport=null;try{const parsed=JSON.parse(await file.text());const report=inspectBackup(parsed);const db=await api().openDatabase();let targetCounts;try{targetCounts=await storeCounts(db,["customers","projects","invoices","contracts","accountingEntries","projectReceipts","projectExpenses","workers","partners","contractors","companies","companyJobs","customExpenseCategories","thirdPartyTransactions","accountingSettings","projectMetadata"])}finally{db.close()}const occupied=Object.entries(targetCounts).filter(([,n])=>n!==0);report.targetStoresEmpty=occupied.length===0;report.occupiedTargetStores=occupied;report.schemaVersion=api().schemaVersion;report.database=api().databaseName;report.ok=report.ok&&report.targetStoresEmpty;if(report.ok){inspectedBackup=parsed;inspectedReport=report;stageButton.disabled=false}show({...report,stageReady:report.ok,note:report.ok?"Inspection passed. The Stage button is now available for an explicit user-confirmed write to the isolated test database.":"Staging is blocked until inspection passes and all target stores are empty."})}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false});inspectedBackup=null;inspectedReport=null}finally{busy(false);if(!inspectedBackup)stageButton.disabled=true}});
 
 })();
 </script>
