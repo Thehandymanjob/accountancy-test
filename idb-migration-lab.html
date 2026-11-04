@@ -43,6 +43,9 @@ small{color:#66778c}
 <h2>Stage 5 — Read-only audit of staged data</h2>
 <p>Select the same backup and inspect it again. This audit compares every staged record with the backup, checks linked IDs, dates and image payloads, and does not write or delete anything.</p>
 <div class="actions"><button id="audit" class="secondary" type="button" disabled>Audit staged data</button></div>
+<h2>Stage 6 — Application data-shape compatibility (read-only)</h2>
+<p>Rebuild the exact object shapes expected by the current app loaders from IndexedDB, then compare them with the selected backup. This is a read-only compatibility check; it does not connect the app to IndexedDB or enable editing.</p>
+<div class="actions"><button id="compatibility" class="secondary" type="button" disabled>Check app data compatibility</button></div>
 <div class="safe">The selected file is read locally in this browser. It is not uploaded, changed, or written to LocalStorage or IndexedDB.</div>
 <pre id="result" aria-live="polite">Ready. No operation has run.</pre>
 <small>Do not use the production app for this test. No production data or production database is accessed.</small>
@@ -55,7 +58,7 @@ const buttons=[...document.querySelectorAll("button")];
 const stageButton=document.getElementById("stage");
 let lastPlan=null;
 stageButton.disabled=true;
-function busy(on){buttons.forEach(b=>{if(on){b.disabled=true;return}if(b.id==="stage"){b.disabled=!inspectedReport?.stageReady;return}if(b.id==="audit"){b.disabled=!inspectedReport?.backupInspectionOk;return}b.disabled=false})}
+function busy(on){buttons.forEach(b=>{if(on){b.disabled=true;return}if(b.id==="stage"){b.disabled=!inspectedReport?.stageReady;return}if(b.id==="audit"){b.disabled=!inspectedReport?.backupInspectionOk;return}if(b.id==="compatibility"){b.disabled=!inspectedReport?.backupInspectionOk;return}b.disabled=false})}
 function show(value){out.textContent=typeof value==="string"?value:JSON.stringify(value,null,2)}
 function api(){if(!window.HandymanStorageFoundation)throw new Error("Storage foundation did not load");return window.HandymanStorageFoundation}
 function parseRaw(key){return api().get(key).then(raw=>{if(raw===null)throw new Error("Missing raw KV mirror for "+key);try{return JSON.parse(raw)}catch(e){throw new Error("Invalid JSON in "+key+": "+e.message)}})}
@@ -111,6 +114,8 @@ let inspectedBackup=null;
 let inspectedReport=null;
 const auditButton=document.getElementById("audit");
 auditButton.disabled=true;
+const compatibilityButton=document.getElementById("compatibility");
+compatibilityButton.disabled=true;
 async function storeCounts(db,names){const result={};for(const name of names){const tx=db.transaction([name],"readonly");result[name]=await new Promise((resolve,reject)=>{const q=tx.objectStore(name).count();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error("Count failed: "+name))})}return result}
 function buildStageRecords(root){
  const a=root.data,p=root.projects,c=root.contracts;
@@ -217,7 +222,35 @@ async function auditStagedBackup(){
  }finally{db.close()}
 }
 auditButton.addEventListener("click",async()=>{busy(true);try{show(await auditStagedBackup())}catch(e){show({stage:"read-only staged-data integrity audit",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false})}finally{busy(false);auditButton.disabled=false;stageButton.disabled=!inspectedReport?.stageReady}});
-document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);stageButton.disabled=true;auditButton.disabled=true;inspectedBackup=null;inspectedReport=null;try{const parsed=JSON.parse(await file.text());const report=inspectBackup(parsed);const db=await api().openDatabase();let targetCounts;try{targetCounts=await storeCounts(db,["customers","projects","invoices","contracts","accountingEntries","projectReceipts","projectExpenses","workers","partners","contractors","companies","companyJobs","customExpenseCategories","thirdPartyTransactions","accountingSettings","projectMetadata"])}finally{db.close()}const occupied=Object.entries(targetCounts).filter(([,n])=>n!==0);const backupOk=report.ok;report.backupInspectionOk=backupOk;report.targetStoresEmpty=occupied.length===0;report.occupiedTargetStores=occupied;report.schemaVersion=api().schemaVersion;report.database=api().databaseName;report.stageReady=backupOk&&report.targetStoresEmpty;report.ok=backupOk;if(backupOk){inspectedBackup=parsed;inspectedReport=report;auditButton.disabled=false;stageButton.disabled=!report.stageReady}else{inspectedBackup=null;inspectedReport=null;auditButton.disabled=true;stageButton.disabled=true}show({...report,note:report.stageReady?"Backup inspection passed and target stores are empty. Staging is available.":backupOk?"Backup inspection passed, but target stores are not empty. Staging is blocked; read-only audit remains available.":"Backup inspection has blocking errors. Both staging and audit are blocked."})}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false});inspectedBackup=null;inspectedReport=null}finally{busy(false);if(!inspectedBackup)stageButton.disabled=true}});
+
+async function auditAppCompatibility(){
+ if(!inspectedBackup||!inspectedReport?.backupInspectionOk)throw new Error("Inspect the complete backup first");
+ const db=await api().openDatabase();
+ const names=["customers","invoices","accountingEntries","projects","contracts","workers","partners","contractors","companies","companyJobs","customExpenseCategories","thirdPartyTransactions","accountingSettings","projectMetadata"];
+ try{
+  const rows={};
+  for(const name of names){if(!db.objectStoreNames.contains(name))throw new Error("Missing IndexedDB store: "+name);const tx=db.transaction([name],"readonly");rows[name]=await new Promise((resolve,reject)=>{const q=tx.objectStore(name).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error||new Error("Read failed: "+name))})}
+  const categoryRows=rows.customExpenseCategories.slice().sort((a,b)=>Number(String(a.id).replace("category:",""))-Number(String(b.id).replace("category:","")));
+  const settings=rows.accountingSettings.find(x=>x.id==="settings");
+  const metadata=rows.projectMetadata.find(x=>x.id==="projectMetadata");
+  if(!settings||!metadata)throw new Error("Required singleton settings or project metadata record is missing");
+  const appAccounting={entries:rows.accountingEntries,customers:rows.customers,invoices:rows.invoices,customExpenseCategories:categoryRows.map(x=>x.value),settings:settings.value,thirdPartyTransactions:rows.thirdPartyTransactions};
+  const appProjects={projects:rows.projects,workers:rows.workers,partners:rows.partners,contractors:rows.contractors,companies:rows.companies,companyJobs:rows.companyJobs,profile:metadata.profile,current:metadata.current,guide:metadata.guide,currentSubproject:metadata.currentSubproject,profitReportProjectId:metadata.profitReportProjectId};
+  const expectedAccounting=inspectedBackup.data;
+  const expectedProjects=inspectedBackup.projects;
+  const expectedContracts=inspectedBackup.contracts;
+  const comparisons={
+   accounting:{exactMatch:JSON.stringify(canonical(appAccounting))===JSON.stringify(canonical(expectedAccounting)),expectedKeys:Object.keys(expectedAccounting),reconstructedKeys:Object.keys(appAccounting),recordCounts:{entries:appAccounting.entries.length,customers:appAccounting.customers.length,invoices:appAccounting.invoices.length}},
+   projects:{exactMatch:JSON.stringify(canonical(appProjects))===JSON.stringify(canonical(expectedProjects)),expectedKeys:Object.keys(expectedProjects),reconstructedKeys:Object.keys(appProjects),recordCounts:{projects:appProjects.projects.length,workers:appProjects.workers.length,partners:appProjects.partners.length,contractors:appProjects.contractors.length,companies:appProjects.companies.length,companyJobs:appProjects.companyJobs.length}},
+   contracts:{exactMatch:JSON.stringify(canonical(rows.contracts))===JSON.stringify(canonical(expectedContracts)),expectedCount:expectedContracts.length,reconstructedCount:rows.contracts.length}
+  };
+  const allMatch=Object.values(comparisons).every(x=>x.exactMatch);
+  return {stage:"read-only application data-shape compatibility audit",ok:allMatch,database:api().databaseName,schemaVersion:api().schemaVersion,comparisons,localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false,applicationWritesTested:false,note:allMatch?"IndexedDB can reconstruct the exact legacy object shapes expected by the current accounting, projects and contracts loaders. This confirms data-shape compatibility only; the app still uses LocalStorage and has not been connected to IndexedDB.":"One or more reconstructed app objects differ from the selected backup. Do not connect the app to IndexedDB until the differences are resolved."};
+ }finally{db.close()}
+}
+compatibilityButton.addEventListener("click",async()=>{busy(true);try{show(await auditAppCompatibility())}catch(e){show({stage:"read-only application data-shape compatibility audit",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false,applicationCutover:false})}finally{busy(false)}});
+
+document.getElementById("backupPreview").addEventListener("click",async()=>{const file=document.getElementById("backupFile").files?.[0];if(!file){show({ok:false,error:"Select the existing complete backup JSON file first.",noDataChanged:true});return}busy(true);stageButton.disabled=true;auditButton.disabled=true;inspectedBackup=null;inspectedReport=null;try{const parsed=JSON.parse(await file.text());const report=inspectBackup(parsed);const db=await api().openDatabase();let targetCounts;try{targetCounts=await storeCounts(db,["customers","projects","invoices","contracts","accountingEntries","projectReceipts","projectExpenses","workers","partners","contractors","companies","companyJobs","customExpenseCategories","thirdPartyTransactions","accountingSettings","projectMetadata"])}finally{db.close()}const occupied=Object.entries(targetCounts).filter(([,n])=>n!==0);const backupOk=report.ok;report.backupInspectionOk=backupOk;report.targetStoresEmpty=occupied.length===0;report.occupiedTargetStores=occupied;report.schemaVersion=api().schemaVersion;report.database=api().databaseName;report.stageReady=backupOk&&report.targetStoresEmpty;report.ok=backupOk;if(backupOk){inspectedBackup=parsed;inspectedReport=report;auditButton.disabled=false;compatibilityButton.disabled=false;stageButton.disabled=!report.stageReady}else{inspectedBackup=null;inspectedReport=null;auditButton.disabled=true;compatibilityButton.disabled=true;stageButton.disabled=true}show({...report,note:report.stageReady?"Backup inspection passed and target stores are empty. Staging is available.":backupOk?"Backup inspection passed, but target stores are not empty. Staging is blocked; read-only audit remains available.":"Backup inspection has blocking errors. Both staging and audit are blocked."})}catch(e){show({stage:"complete backup read-only inspection",ok:false,error:String(e.message||e),localStorageChanged:false,indexedDBChanged:false,backupFileChanged:false});inspectedBackup=null;inspectedReport=null}finally{busy(false);if(!inspectedBackup){stageButton.disabled=true;compatibilityButton.disabled=true}}});
 
 })();
 </script>
