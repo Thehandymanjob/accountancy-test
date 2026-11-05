@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "248",
-  "buildId": "THA-248-PROJECT-SAVE-FEEDBACK-AUTOFILL-20261105",
-  "manifestSha256": "267bed287a3df7f6178675aa3ad66209b3fc79c93e7d8bd5c3ade6bfcadb16f9",
-  "updatedAt": "2026-11-05T23:30:00Z",
-  "note": "Test v248: all release asset SHA-256 checksums verified with a self-tested SHA-256 implementation.",
-  "sourceCommit": "35ff42464e2bc411094d2a7ca6de7a46bbcbddc5"
+  "version": "249",
+  "buildId": "THA-249-PROJECT-SAVE-AND-ALL-FIELD-FOCUS-20261105",
+  "manifestSha256": "243f059bbf452dff79072b6822abbbeae2e370fc520a2d3c245bc2b4052ad788",
+  "updatedAt": "2026-11-05T23:55:00Z",
+  "note": "Test v249: executable save feedback, project persistence read-back verification, and iPhone form scroll/autofill correction.",
+  "sourceCommit": "86a44b8d86224f6f83b2a3da57408022b423fc32"
 }
