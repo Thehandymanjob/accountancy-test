@@ -7,6 +7,7 @@
   "use strict";
   const PREFIX = "__tha_v6_stage_test__:";
   const SOURCE_ARRAYS = ["income","expenses","wages","tools","food","materials"];
+  let ownedIds = null;
   const STORES = ["legacySnapshots","customers","projects","invoices","contracts",
     "accountingEntries","projectReceipts","projectExpenses","workers","partners",
     "contractors","companies","companyJobs","customExpenseCategories",
@@ -146,6 +147,8 @@
         }
       }
       await done;
+      ownedIds = Object.fromEntries(stores.map(store => [store,
+        store === "legacySnapshots" ? [snapshot.id] : normalized[store].map(x => x.id)]));
       const verifyTx = db.transaction(stores,"readonly");
       const verifyDone = txDone(verifyTx);
       const counts = {};
@@ -172,13 +175,13 @@
     const f=foundation(), db=await f.openDatabase();
     try {
       const tx=db.transaction(STORES,"readwrite"), done=txDone(tx);
+      if (!ownedIds) {
+        tx.abort();
+        throw new Error("No staging records are owned by this test run; refusing broad cleanup.");
+      }
       for (const store of STORES) {
         const os=tx.objectStore(store);
-        const all=await request(os.getAll());
-        for (const item of all) {
-          const id=String(item.id || "");
-          if (id.startsWith(PREFIX)) os.delete(item.id);
-        }
+        for (const id of ownedIds[store] || []) os.delete(id);
       }
       await done;
       const verify=db.transaction(STORES,"readonly"), verifyDone=txDone(verify);
@@ -188,7 +191,9 @@
         leftovers[store]=all.filter(x=>String(x.id||"").startsWith(PREFIX)).length;
       }
       await verifyDone;
-      return {ok:Object.values(leftovers).every(x=>x===0),leftovers};
+      const ok=Object.values(leftovers).every(x=>x===0);
+      if(ok) ownedIds=null;
+      return {ok,leftovers};
     } finally { db.close(); }
   }
   function syntheticFixture() {
