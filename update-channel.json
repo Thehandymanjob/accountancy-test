@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "247",
-  "buildId": "THA-247-INVOICE-PAYMENT-DATE-METHOD-PICKERS-20261103",
-  "manifestSha256": "af9ddb31599574b89c0bed9dfb2715b43e8d706fd63a6479f701e3985ad17fc4",
-  "updatedAt": "2026-11-05T22:00:00Z",
-  "note": "Test v247: Extra Job sub-project pricing; Extra Work receipt type removed.",
-  "sourceCommit": "cc550a884e23026a937d286ba3af61b3ff106956"
+  "version": "248",
+  "buildId": "THA-248-PROJECT-SAVE-FEEDBACK-AUTOFILL-20261105",
+  "manifestSha256": "b9cfc0c858f5f8eda9837db831f43cd4f6441677be8e7c8aa7a6a00e402881f6",
+  "updatedAt": "2026-11-05T22:24:00Z",
+  "note": "Test v248: reliable project creation, save feedback, rapid-click protection and iPhone phone-field autofill handling; storage foundation aligned to schema v4.",
+  "sourceCommit": "53af328f0ec8ffb5e4021fc3eafd805adb75f391"
 }
