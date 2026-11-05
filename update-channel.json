@@ -4,8 +4,8 @@
   "sourceBranch": "release239",
   "version": "248",
   "buildId": "THA-248-PROJECT-SAVE-FEEDBACK-AUTOFILL-20261105",
-  "manifestSha256": "c3fa35b638bf9fcb253bb34aba0a6d6c94a2081b8407b273c035e2e9114c1649",
-  "updatedAt": "2026-11-05T22:50:00Z",
-  "note": "Test v248: corrected manifest integrity values against the published release files.",
-  "sourceCommit": "ccaeaa05396a8a952f8acce573cfb2a2706d6b08"
+  "manifestSha256": "a6fe128357768fb33e3c459cd686d860881f2834159f3c871b0d50884094d408",
+  "updatedAt": "2026-11-05T22:55:00Z",
+  "note": "Test v248: release manifest checksums repaired and matched to the exact published assets.",
+  "sourceCommit": "ff7bdca234b20c7708cd26000a39cb7fc2344ac5"
 }
