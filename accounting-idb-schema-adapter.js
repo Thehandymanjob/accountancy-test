@@ -118,12 +118,14 @@
       checks.unknownFieldsPreserved = loaded.unknownTopLevel.preserve[1] === null &&
         loaded.entries[0].futureField.keep === true;
       checks.roundTrip = deepEqual(loaded, fixture) && result.ok === true;
-      if (!Object.values(checks).every(Boolean))
-        throw new Error("Pre-cleanup schema checks failed.");
+      const preCleanupChecks = [checks.emptyKey, checks.schemaAccepted, checks.unknownFieldsPreserved,
+        checks.nullAndBlankPreserved, checks.nestedInvoiceItemsPreserved, checks.roundTrip];
+      if (!preCleanupChecks.every(Boolean)) throw new Error("One or more pre-cleanup schema checks failed.");
       await remove();
       ownsKey = false;
       checks.cleanup = (await load()) === null;
       if (!checks.cleanup) throw new Error("Cleanup verification failed: dedicated test record is still readable.");
+      if (!Object.values(checks).every(Boolean)) throw new Error("One or more final schema checks failed.");
       return {ok:true,database:api().databaseName,schemaVersion:api().schemaVersion,
         checks,legacyDataChanged:false,appCutover:false};
     } catch (e) {
