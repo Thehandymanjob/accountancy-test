@@ -10,7 +10,7 @@ button{border:0;border-radius:10px;padding:13px 16px;font-weight:700;background:
 button:disabled{opacity:.55}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb;padding:14px;border-radius:10px;font-size:13px}a{color:#174d83}
 </style>
 <script src="storage-foundation.js?v=5"></script>
-<script src="accounting-idb-schema-adapter.js?v=1"></script></head>
+<script src="accounting-idb-schema-adapter.js?v=3" onload="window.__thaSchemaAdapterLoaded=true" onerror="window.__thaSchemaAdapterLoadError=true"></script></head>
 <body><main>
 <h1>Accounting Schema Round-trip — Test Only</h1>
 <p>This is the next stage after the generic IndexedDB test. Its synthetic fixture follows the accounting backup v6 structure: entries, customers, invoices, invoice items, settings and optional collections.</p>
@@ -24,7 +24,7 @@ button:disabled{opacity:.55}pre{white-space:pre-wrap;overflow-wrap:anywhere;back
 </main><script>
 (function(){const b=document.getElementById("run"),o=document.getElementById("result");
 b.addEventListener("click",async()=>{b.disabled=true;b.textContent="Running…";o.textContent="Running schema-aware round-trip test…";
-try{if(!window.HandymanAccountingSchemaAdapter)throw new Error("Schema adapter failed to load.");
+try{if(!window.HandymanAccountingSchemaAdapter){const reason=window.__thaSchemaAdapterLoadError?"Browser could not download accounting-idb-schema-adapter.js (script load error).":"Script downloaded but did not register HandymanAccountingSchemaAdapter; check JavaScript parse/runtime error.";throw new Error(reason);}
 o.textContent=JSON.stringify(await window.HandymanAccountingSchemaAdapter.selfTest(),null,2);}
 catch(e){o.textContent=JSON.stringify({ok:false,error:String(e&&e.message||e),legacyDataChanged:false,appCutover:false},null,2);}
 finally{b.disabled=false;b.textContent="Run accounting schema round-trip test";}});})();
