@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "249",
-  "buildId": "THA-249-PROJECT-SAVE-AND-ALL-FIELD-FOCUS-20261105",
+  "version": "250",
+  "buildId": "THA-250-STORAGE-ERROR-DIAGNOSTICS-IMAGE-COMPRESSION-IOS-SCROLL-20261105",
   "releaseDate": "2026-11-05",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 4,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "8d326cc1646688fde37d4fac2784c0ab4cb6efdddb07ac5b0a8e22f60e4b28c2"
+      "sha256": "f831fcb8753203dc607a72db1f1c23326a557acd3319a531388c4a47a0a648f2"
     },
     "version-manager.js": {
       "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
@@ -22,6 +22,8 @@
     }
   },
   "releaseNotes": [
+    "v250 changes the iPhone Projects workspace from a fixed nested scroll container to document-level scrolling, reducing keyboard/focus viewport jumps across all form fields.",
+    "v250 exposes the actual project persistence failure (including recovery-lock versus storage-quota errors) instead of a generic message. Project cover photos are compressed to a much smaller size before being stored in LocalStorage.",
     "v249 stabilizes the entire New Project form on iPhone Safari: disables autofill/autocorrect on every project field and removes nested scrolling from the workspace so the page uses one scroll container while the keyboard is open.",
     "v249 fixes the v248 save-feedback script placement so it executes in the browser. Project creation now sets an explicit save result, verifies the new project by reading it back from LocalStorage, displays an in-form success or failure message, and restores the prior project list if verification fails.",
     "v248 makes project creation reliable: new projects have Sub-projects enabled immediately, the saved project is set as the active project, and a failed save restores the prior in-memory project list.",
