@@ -76,11 +76,12 @@
     const db = await api().openDatabase();
     try {
       const tx = db.transaction(["kv"], "readwrite");
-      tx.objectStore("kv").delete(assertKey(KEY));
-      await completed(tx);
+      const done = completed(tx);
+      await request(tx.objectStore("kv").delete(assertKey(KEY)));
+      await done;
       const verify = db.transaction(["kv"], "readonly");
-      if (await request(verify.objectStore("kv").get(KEY)))
-        throw new Error("Accounting test-key cleanup failed.");
+      const remaining = await request(verify.objectStore("kv").get(KEY));
+      if (remaining) throw new Error("Accounting test-key cleanup failed: record still exists after delete transaction.");
       return true;
     } finally { db.close(); }
   }
@@ -118,15 +119,27 @@
         loaded.entries[0].futureField.keep === true;
       checks.roundTrip = deepEqual(loaded, fixture) && result.ok === true;
       if (!Object.values(checks).every(Boolean))
-        throw new Error("One or more schema round-trip checks failed.");
-      await remove(); ownsKey = false;
+        throw new Error("Pre-cleanup schema checks failed.");
+      await remove();
+      ownsKey = false;
       checks.cleanup = (await load()) === null;
+      if (!checks.cleanup) throw new Error("Cleanup verification failed: dedicated test record is still readable.");
       return {ok:true,database:api().databaseName,schemaVersion:api().schemaVersion,
         checks,legacyDataChanged:false,appCutover:false};
     } catch (e) {
-      if (ownsKey) { try { await remove(); } catch (_) {} }
+      let cleanupError = null;
+      if (ownsKey) {
+        try {
+          await remove();
+          ownsKey = false;
+          checks.cleanup = (await load()) === null;
+        } catch (cleanupFailure) {
+          cleanupError = String(cleanupFailure && cleanupFailure.message || cleanupFailure);
+        }
+      }
       return {ok:false,checks,legacyDataChanged:false,appCutover:false,
-        error:String(e && e.message || e)};
+        error:String(e && e.message || e),
+        cleanupError};
     }
   }
   root.HandymanAccountingSchemaAdapter = Object.freeze({load,save,remove,selfTest,validate});
