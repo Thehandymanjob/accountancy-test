@@ -139,12 +139,17 @@
       customExpenseCategories: ["Prototype category"],
       settings: { businessName: "Prototype only" }
     };
-    const checks = { initiallyEmpty: false, create: false, read: false, update: false, delete: false, legacyKeyUntouched: false };
+    const checks = { initiallyEmpty: false, create: false, read: false, update: false, delete: false, legacyKeyGuard: false };
+    let ownsTestKey = false;
     try {
       const initial = await repo.load();
       checks.initiallyEmpty = initial === null;
-      if (!checks.initiallyEmpty) throw new Error("Prototype test key is not empty; refusing to overwrite it.");
+      if (!checks.initiallyEmpty) throw new Error("Prototype test key is not empty; refusing to overwrite or delete it.");
+      try { createRepository({ key: LEGACY_KEY }); }
+      catch (_) { checks.legacyKeyGuard = true; }
+      if (!checks.legacyKeyGuard) throw new Error("Legacy accounting key guard did not block access.");
       await repo.save(fixture);
+      ownsTestKey = true;
       checks.create = true;
       const loaded = await repo.load();
       checks.read = JSON.stringify(loaded) === JSON.stringify(fixture);
@@ -160,11 +165,11 @@
       await repo.remove();
       checks.delete = (await repo.load()) === null;
       if (!checks.delete) throw new Error("Delete verification failed.");
-      checks.legacyKeyUntouched = true;
+      checks.legacyKeyGuard = true;
       return { ok: true, database: foundation().databaseName, schemaVersion: foundation().schemaVersion,
         testKey: key, checks, legacyDataChanged: false, appCutover: false };
     } catch (error) {
-      try { await repo.remove(); } catch (_) {}
+      if (ownsTestKey) { try { await repo.remove(); } catch (_) {} }
       return { ok: false, database: foundation().databaseName, schemaVersion: foundation().schemaVersion,
         testKey: key, checks, legacyDataChanged: false, appCutover: false,
         error: String(error && error.message || error) };
