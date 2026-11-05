@@ -1,27 +1,31 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "247",
-  "buildId": "THA-247-INVOICE-PAYMENT-DATE-METHOD-PICKERS-20261103",
-  "releaseDate": "2026-11-03",
+  "version": "248",
+  "buildId": "THA-248-PROJECT-SAVE-FEEDBACK-AUTOFILL-20261105",
+  "releaseDate": "2026-11-05",
   "releaseStatus": "isolated-experimental",
-  "databaseSchema": 2,
+  "databaseSchema": 4,
   "minimumAppVersion": "206",
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "7f0de29cdfd8ea39e8e8eacca52a25275227aab9aa0d62b71cf209de85cd412c"
+      "sha256": "e7e0c597cb8ab0d4ba494a73d68af45598d1a0297ba2d35b033329a78d61a8e3"
     },
     "version-manager.js": {
-      "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
+      "sha256": "d5bdb438c5923b1565c8ee3d805502342a4fc46a50bd03430d6ff45835b0b3e8"
     },
     "service-worker.js": {
-      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
+      "sha256": "ba94e074831f31afe89407df354eb02bee8d87cbbf1463db9ba912137bcc4726"
     },
     "storage-foundation.js": {
-      "sha256": "f7768eab1dcf8b9d793904257782e7f6d2788ac3b10d9c004e56671a21d420a6"
+      "sha256": "c30fd9a22825ae5497912455dd33c7656defe3586214dc5c0d43439155d79191"
     }
   },
   "releaseNotes": [
+    "v248 makes project creation reliable: new projects have Sub-projects enabled immediately, the saved project is set as the active project, and a failed save restores the prior in-memory project list.",
+    "v248 adds shared save-result feedback and rapid-repeat-click protection for Accounting, Projects and Contracts save actions. Failed saves show an error instead of a success message.",
+    "v248 disables contact autofill on telephone fields, including dynamically rendered fields, to reduce unwanted iPhone Safari autofill prompts and viewport jumps.",
+    "v248 aligns the isolated test IndexedDB foundation with schema v4 used by the test site. The upgrade adds missing stores and does not delete LocalStorage backups or existing IndexedDB records.",
     "v247 update: remove the separate Extra Work receipt type. Agreed project price is now calculated only from sub-project prices; receipts no longer increase contract price. Additional work must be recorded as a separately priced Extra Job sub-project.",
     "v247 replaces the browser text prompts used by Mark paid with an in-app payment dialog: choose the payment date from the native date picker and select Bank Transfer or Cash. Existing payment recording, duplicate-payment checks and accounting links are retained.",
     "v246 strengthens the legacy invoice-number migration: existing invoice-linked income records are retained and their references are updated only when linked by invoiceId or the generated invoice-income ID. Reference-only income entries are no longer deleted automatically because that link is not conclusive. Existing invoice numbers, payment data and statuses remain unchanged.",
