@@ -5,7 +5,7 @@
   "version": "249",
   "buildId": "THA-249-PROJECT-SAVE-AND-ALL-FIELD-FOCUS-20261105",
   "manifestSha256": "243f059bbf452dff79072b6822abbbeae2e370fc520a2d3c245bc2b4052ad788",
-  "updatedAt": "2026-11-05T23:55:00Z",
-  "note": "Test v249: executable save feedback, project persistence read-back verification, and iPhone form scroll/autofill correction.",
-  "sourceCommit": "86a44b8d86224f6f83b2a3da57408022b423fc32"
+  "updatedAt": "2026-11-05T23:59:00Z",
+  "note": "Test v249: project save verification, all-field iPhone form handling, and SHA-256 self-test verified release manifest.",
+  "sourceCommit": "fcd630fa9d0bd7ec4fb533a4e1ee9fdf5a606c3a"
 }
