@@ -35,9 +35,11 @@
   if(parsed.app!==undefined&&parsed.app!=="The Handyman Accountancy")throw new Error("This backup belongs to a different app.");
   if(parsed.backupType!==undefined&&parsed.backupType!=="complete-user-data")throw new Error("Unsupported backup type.");
   const candidate=validate(parsed.projects);
-  const normalized=JSON.parse(JSON.stringify(candidate));
-  normalized.projects=normalized.projects.map(p=>({...p,price:(Array.isArray(p.subprojects)?p.subprojects:[]).reduce((sum,s)=>sum+Math.max(0,Number(s&&s.price)||0),0)}));
-  const raw=JSON.stringify(normalized);
+  // Preserve the backup's Projects object byte-for-byte at the JSON data level.
+  // Price normalization is deliberately deferred until the app's own restore
+  // rules are applied; this lab must not alter the £300/sub-project evidence.
+  const preserved=JSON.parse(JSON.stringify(candidate));
+  const raw=JSON.stringify(preserved);
   const previous=await readKey(KEY);
   try{
    const result=await writeKey(KEY,raw);
