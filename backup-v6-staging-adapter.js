@@ -172,13 +172,11 @@
     } finally { db.close(); }
   }
   async function cleanup() {
-    const f=foundation(), db=await f.openDatabase();
+    const f=foundation();
+    if (!ownedIds) throw new Error("No staging records are owned by this test run; refusing broad cleanup.");
+    const db=await f.openDatabase();
     try {
       const tx=db.transaction(STORES,"readwrite"), done=txDone(tx);
-      if (!ownedIds) {
-        tx.abort();
-        throw new Error("No staging records are owned by this test run; refusing broad cleanup.");
-      }
       for (const store of STORES) {
         const os=tx.objectStore(store);
         for (const id of ownedIds[store] || []) os.delete(id);
