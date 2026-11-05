@@ -91,7 +91,9 @@
       nullAndBlankPreserved:false, nestedInvoiceItemsPreserved:false, roundTrip:false, cleanup:false};
     let ownsKey = false;
     try {
-      const initial = await load();\n      checks.emptyKey = initial === null;\n      if (!checks.emptyKey) throw new Error("Test key already contains data; refusing to overwrite it.");
+      const initial = await load();
+      checks.emptyKey = initial === null;
+      if (!checks.emptyKey) throw new Error("Test key already contains data; refusing to overwrite it.");
       const fixture = {
         entries:[{id:"test-entry-1",type:"income",date:"",amount:0,method:null,
           category:"",reference:"",notes:"",invoiceId:"test-invoice-1",createdAt:"2026-11-05T10:00:00Z",
