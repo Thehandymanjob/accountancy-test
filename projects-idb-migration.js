@@ -87,7 +87,7 @@
  "use strict";
  const map={projects:"projects",workers:"workers",partners:"partners",contractors:"contractors",companies:"companies",companyJobs:"companyJobs"};
  const profileId="__tha_projects_profile_v1__",stateId="__tha_projects_workspace_state_v1__",manifestId="__tha_projects_workspace_manifest_v1__";
- function api(){const a=root.HandymanStorageFoundation;if(!a||!a.bulkAddAcrossStores||!a.getAllRecords)throw Error("IndexedDB repository API unavailable");return a;}
+ function api(){const a=root.HandymanStorageFoundation;if(!a||!a.bulkAddAcrossStores||!a.bulkWriteAcrossStores||!a.getAllRecords)throw Error("IndexedDB repository API unavailable");return a;}
  function prepare(x){
   if(!x||typeof x!=="object"||Array.isArray(x)||!Array.isArray(x.projects)||!Array.isArray(x.workers))throw Error("Projects and workers arrays are required.");
   for(const k of ["partners","contractors","companies","companyJobs"])if(x[k]!==undefined&&!Array.isArray(x[k]))throw Error(k+" must be an array.");
@@ -138,7 +138,62 @@
   }
   const conflictingTotal=existing.reduce((n,x)=>n+x.conflictingCount,0),identicalTotal=existing.reduce((n,x)=>n+x.identicalCount,0);return {ok:duplicates.length===0&&conflictingTotal===0,readOnly:true,willWrite:false,appCutover:false,localStorageChanged:false,backupChanged:false,fileName:file.name,fileBytes:file.size,stores,totalRecords,totalSubprojects:b.projects.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),approxIndexedDBBytes:totalBytes,duplicateIncomingIds:duplicates,identicalExistingRecords:identicalTotal,conflictingExistingRecords:conflictingTotal,existingRecordComparisons:existing,conflictDetails};
  }
- async function importWorkspace(x){const rows=prepare(x),a=api(),collisions=[];for(const [store,records] of Object.entries(rows)){for(const record of records){const existing=await a.getRecord(store,record.id);if(existing)collisions.push({store,id:String(record.id)});}}if(collisions.length)throw new Error("Import blocked before writing: "+collisions.slice(0,12).map(c=>c.store+"/"+c.id).join(", ")+(collisions.length>12?" (+"+(collisions.length-12)+" more)":"")+". Existing IndexedDB records were not overwritten.");const r=await a.bulkAddAcrossStores(rows);return {ok:true,atomic:r.atomic,appCutover:false,localStorageChanged:false,backupChanged:false,written:r.written,verification:r.verification,subprojects:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0)};}
+ function stableValue(v){return Array.isArray(v)?v.map(stableValue):(v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stableValue(v[k])])):v);}
+ function sameValue(a,b){return JSON.stringify(stableValue(a))===JSON.stringify(stableValue(b));}
+ function mergeProjectIncome(existing,incoming){
+  if(!existing||!incoming||String(existing.id)!==String(incoming.id))throw Error("Project/subproject identity mismatch.");
+  const topChanged=[...new Set([...Object.keys(existing),...Object.keys(incoming)])].filter(k=>!sameValue(existing[k],incoming[k]));
+  if(topChanged.some(k=>k!=="subprojects"))throw Error("Project conflict outside subprojects: "+topChanged.filter(k=>k!=="subprojects").join(", "));
+  const oldSubs=Array.isArray(existing.subprojects)?existing.subprojects:[],newSubs=Array.isArray(incoming.subprojects)?incoming.subprojects:[];
+  const oldMap=new Map(),newMap=new Map();
+  for(const p of oldSubs){if(!p||p.id===undefined||oldMap.has(String(p.id)))throw Error("Existing subprojects contain missing or duplicate IDs.");oldMap.set(String(p.id),p);}
+  for(const p of newSubs){if(!p||p.id===undefined||newMap.has(String(p.id)))throw Error("Backup subprojects contain missing or duplicate IDs.");newMap.set(String(p.id),p);}
+  if(oldMap.size!==newMap.size||[...oldMap.keys()].some(id=>!newMap.has(id)))throw Error("Subproject additions/removals require manual review.");
+  const mergedSubs=oldSubs.map(oldSub=>{
+   const newSub=newMap.get(String(oldSub.id));
+   const changed=[...new Set([...Object.keys(oldSub),...Object.keys(newSub)])].filter(k=>!sameValue(oldSub[k],newSub[k]));
+   if(changed.some(k=>k!=="income"))throw Error("Subproject "+oldSub.id+" has changes outside Income: "+changed.filter(k=>k!=="income").join(", "));
+   const oldIncome=Array.isArray(oldSub.income)?oldSub.income:[],newIncome=Array.isArray(newSub.income)?newSub.income:[];
+   const byId=new Map();
+   for(const item of oldIncome){if(!item||item.id===undefined||byId.has(String(item.id)))throw Error("Existing Income contains missing or duplicate IDs in subproject "+oldSub.id);byId.set(String(item.id),item);}
+   const appended=[];
+   for(const item of newIncome){
+    if(!item||item.id===undefined)throw Error("Backup Income item has no ID in subproject "+oldSub.id);
+    const id=String(item.id);
+    if(byId.has(id)){if(!sameValue(byId.get(id),item))throw Error("Income ID collision with different values: "+id);continue;}
+    byId.set(id,item);appended.push(item);
+   }
+   return {...oldSub,income:[...oldIncome,...appended]};
+  });
+  return {...existing,subprojects:mergedSubs};
+ }
+ async function importWorkspace(x){
+  const rows=prepare(x),a=api();
+  if(typeof a.bulkWriteAcrossStores!=="function")throw Error("Atomic cross-store merge API is unavailable; no data was written.");
+  const ops={},conflicts=[],skipped=[],mergedProjects=[];
+  for(const [store,records] of Object.entries(rows)){
+   ops[store]={add:[],put:[]};
+   for(const incoming of records){
+    const prior=await a.getRecord(store,incoming.id);
+    if(!prior){ops[store].add.push(incoming);continue;}
+    if(sameValue(prior,incoming)){skipped.push({store,id:String(incoming.id),reason:"identical"});continue;}
+    if(store==="projects"){
+     try{
+      const merged=mergeProjectIncome(prior,incoming);
+      if(!sameValue(prior,merged)){ops[store].put.push(merged);mergedProjects.push(String(incoming.id));}
+      else skipped.push({store,id:String(incoming.id),reason:"no changes"});
+     }catch(e){conflicts.push({store,id:String(incoming.id),reason:e.message});}
+    }else conflicts.push({store,id:String(incoming.id),reason:"Existing record differs; automatic merge is not permitted."});
+   }
+  }
+  if(conflicts.length)throw new Error("Import stopped before writing because conflicts need review: "+conflicts.slice(0,8).map(c=>c.store+"/"+c.id+": "+c.reason).join(" | "));
+  const total=Object.values(ops).reduce((n,g)=>n+g.add.length+g.put.length,0);
+  if(!total)return {ok:true,atomic:true,added:0,updated:0,skipped,mergedProjects,appCutover:false,localStorageChanged:false,backupChanged:false};
+  const r=await a.bulkWriteAcrossStores(ops);
+  return {ok:true,atomic:r.atomic,added:r.added,updated:r.updated,skipped,mergedProjects,verification:r.verification,
+   subprojects:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),
+   appCutover:false,localStorageChanged:false,backupChanged:false};
+ }
  async function importBackupFile(file){if(!file)throw Error("Select a backup JSON file");const b=JSON.parse(await file.text());if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");return importWorkspace(b.projects);}
  async function readSummary(){const a=api(),o={ok:true,appCutover:false,stores:{}};for(const s of [...Object.values(map),"projectMetadata"]){const r=await a.getAllRecords(s);o.stores[s]={count:r.length,ids:r.map(x=>x.id)};}const p=await a.getAllRecords("projects");o.subprojects=p.reduce((n,x)=>n+(Array.isArray(x.subprojects)?x.subprojects.length:0),0);o.manifest=o.stores.projectMetadata.ids.includes(manifestId);return o;}
  async function selfTest(){
