@@ -207,7 +207,7 @@
     o.expectedMetadataCount=3;
     o.metadataRecords=r.map(x=>({id:x.id,kind:x.kind||null,keys:Object.keys(x).sort()}));
     o.unexpectedMetadataRecords=r.filter(x=>!expected.has(x.id)).map(x=>({id:x.id,kind:x.kind||null,keys:Object.keys(x).sort()}));
-    o.metadataComplete=[stateId,manifestId,manifestId].every(id=>r.some(x=>x.id===id));
+    o.metadataComplete=[profileId,stateId,manifestId].every(id=>r.some(x=>x.id===id));
     const legacy=r.find(x=>x.id==="projectMetadata"),profile=r.find(x=>x.id===profileId),state=r.find(x=>x.id===stateId);
     if(legacy){
      const legacyState={...legacy};delete legacyState.id;delete legacyState.profile;
