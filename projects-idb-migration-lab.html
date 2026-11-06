@@ -14,17 +14,17 @@ label{font-weight:700;display:block;margin:14px 0 7px}
 <h1>Projects IndexedDB Migration Lab</h1>
 <p>Preparation and capacity test for moving Projects data away from LocalStorage.</p>
 <div class="notice"><strong>Safety boundary:</strong> This is an isolated test. It writes only to a dedicated IndexedDB key. It does not change the live Projects data, Accounting, Contracts, LocalStorage, or the selected backup file. It does not activate IndexedDB as the app's storage.</div>
-<button id="test">Run 6 MB photo round-trip test</button>
+<button id="test">Run normalized 6 MB photo round-trip test</button>
 <label for="backup">Select the complete JSON backup</label><input id="backup" type="file" accept=".json,application/json">
-<button id="import">Import Projects section into isolated IndexedDB</button>
-<button id="read">Read back and verify imported Projects</button>
+<button id="import">Import Projects workspace into separate IndexedDB stores</button>
+<button id="read">Read back and verify normalized IndexedDB stores</button>
 <pre id="result">Ready. No operation has run.</pre>
 </main>
 <script>
 (()=>{const out=document.getElementById("result"),buttons=[...document.querySelectorAll("button")];
 function busy(v){buttons.forEach(b=>b.disabled=v)}function show(v){out.textContent=JSON.stringify(v,null,2)}
-document.getElementById("test").onclick=async()=>{busy(true);try{show(await HandymanProjectsIDBMigration.selfTest())}catch(e){show({ok:false,error:e.message,liveDataChanged:false})}finally{busy(false)}};
-document.getElementById("import").onclick=async()=>{const f=document.getElementById("backup").files[0];if(!f){show({ok:false,error:"Choose a backup file first."});return}if(!confirm("Copy only the Projects section into the isolated IndexedDB test area? The live app data and LocalStorage will not be changed."))return;busy(true);try{show(await HandymanProjectsIDBMigration.importFile(f))}catch(e){show({ok:false,error:e.message,liveDataChanged:false})}finally{busy(false)}};
-document.getElementById("read").onclick=async()=>{busy(true);try{const x=await HandymanProjectsIDBMigration.load();show(x?{ok:true,projects:x.projects.length,subprojects:x.projects.reduce((n,p)=>n+(p.subprojects||[]).length,0),workers:x.workers.length,companies:(x.companies||[]).length,companyJobs:(x.companyJobs||[]).length,appCutover:false}:{ok:true,record:null})}catch(e){show({ok:false,error:e.message})}finally{busy(false)}};
+document.getElementById("test").onclick=async()=>{busy(true);try{show(await HandymanProjectsIDBRepository.selfTest())}catch(e){show({ok:false,error:e.message,liveDataChanged:false})}finally{busy(false)}};
+document.getElementById("import").onclick=async()=>{const f=document.getElementById("backup").files[0];if(!f){show({ok:false,error:"Choose a backup file first."});return}if(!confirm("Copy only the Projects section into the isolated IndexedDB test area? The live app data and LocalStorage will not be changed."))return;busy(true);try{show(await HandymanProjectsIDBRepository.importBackupFile(f))}catch(e){show({ok:false,error:e.message,liveDataChanged:false})}finally{busy(false)}};
+document.getElementById("read").onclick=async()=>{busy(true);try{show(await HandymanProjectsIDBRepository.readSummary())}catch(e){show({ok:false,error:e.message})}finally{busy(false)}};
 })();
 </script></body></html>
