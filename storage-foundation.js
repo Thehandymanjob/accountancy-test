@@ -59,10 +59,13 @@
   }
 
   function enumerateLegacyKeys() {
+    // Snapshot/migration scope must match the all-origin inventory. Capture
+    // every same-origin LocalStorage key, while retaining known absent keys
+    // as explicit "not present" entries for auditability.
     const found = new Set(LEGACY_KEYS);
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith(PREFIX)) found.add(key);
+      if (key) found.add(key);
     }
     return [...found].sort();
   }
@@ -342,6 +345,14 @@
   async function snapshotLegacyData() {
     const db = await openDatabase();
     const snapshots = [];
+    const digest = value => {
+      let hash = 2166136261;
+      for (let i = 0; i < value.length; i++) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
+      }
+      return ("00000000" + (hash >>> 0).toString(16)).slice(-8);
+    };
     try {
       for (const key of enumerateLegacyKeys()) {
         const raw = localStorage.getItem(key);
@@ -351,24 +362,47 @@
         }
         let validJson = true;
         try { JSON.parse(raw); } catch (_) { validJson = false; }
+        const byteLength = new Blob([raw]).size;
+        const baseId = "snapshot:" + digest(key) + ":" + digest(raw) + ":" + byteLength;
         const record = {
-          id: "snapshot:" + key,
+          id: baseId,
           legacyKey: key,
           present: true,
           raw,
-          byteLength: new Blob([raw]).size,
+          byteLength,
           validJson,
-          capturedAt: new Date().toISOString()
+          capturedAt: new Date().toISOString(),
+          snapshotPolicy: "append-only-content-addressed-v1"
         };
-        const tx = db.transaction(["legacySnapshots"], "readwrite");
-        tx.objectStore("legacySnapshots").put(record);
-        await transactionDone(tx);
+        // Never replace an earlier snapshot. Reuse an exact match; if a
+        // digest collision is detected, use a distinct timestamped ID.
+        let candidateId = baseId;
+        let existing = await requestResult(db.transaction(["legacySnapshots"], "readonly")
+          .objectStore("legacySnapshots").get(candidateId));
+        if (existing && (existing.legacyKey !== key || existing.raw !== raw)) {
+          candidateId = baseId + ":" + Date.now().toString(36);
+          existing = await requestResult(db.transaction(["legacySnapshots"], "readonly")
+            .objectStore("legacySnapshots").get(candidateId));
+          if (existing && (existing.legacyKey !== key || existing.raw !== raw)) {
+            throw new Error("Snapshot ID collision; existing snapshots were preserved for " + key);
+          }
+        }
+        if (!existing) {
+          record.id = candidateId;
+          const tx = db.transaction(["legacySnapshots"], "readwrite");
+          tx.objectStore("legacySnapshots").add(record);
+          await transactionDone(tx);
+        }
         const readTx = db.transaction(["legacySnapshots"], "readonly");
-        const stored = await requestResult(readTx.objectStore("legacySnapshots").get(record.id));
-        if (!stored || stored.raw !== raw) throw new Error("Snapshot verification failed for " + key);
-        snapshots.push({ legacyKey: key, present: true, byteLength: record.byteLength, validJson });
+        const stored = await requestResult(readTx.objectStore("legacySnapshots").get(candidateId));
+        if (!stored || stored.legacyKey !== key || stored.raw !== raw) {
+          throw new Error("Snapshot verification failed for " + key);
+        }
+        snapshots.push({ legacyKey: key, present: true, byteLength, validJson,
+          snapshotId: candidateId, reusedExisting: !!existing });
       }
-      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION, snapshots };
+      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION,
+        scope: "all same-origin LocalStorage keys", appendOnly: true, snapshots };
     } finally { db.close(); }
   }
 
