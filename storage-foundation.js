@@ -477,13 +477,15 @@
       projects: /projects_v1/i,
       contracts: /contracts_v1/i,
       language: /language/i,
-      reports: /report_/i,
+      reports: /report_|report_archive|report_settings|report_workflow/i,
       diagnostics: /monitor_log|isolation_test/i,
       recovery: /factory_reset|help_contact/i
     };
+    // Inventory every key on this app origin, including report/help keys that
+    // intentionally do not use the main THA prefix. Values are never returned.
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (!key || !key.startsWith(PREFIX)) continue;
+      if (!key) continue;
       const raw = localStorage.getItem(key);
       let jsonValid = true, parsedType = "string";
       try {
@@ -517,7 +519,7 @@
       return {
         ok: true, readOnly: true, willWrite: false, localStorageChanged: false, indexedDBChanged: false,
         database: DB_NAME, schemaVersion: DB_VERSION,
-        localStorage: { prefix: PREFIX, keyCount: localKeys.length, totalBytes: localKeys.reduce((n,x)=>n+x.bytes,0), keys: localKeys },
+        localStorage: { scope: "all same-origin keys", prefix: PREFIX, keyCount: localKeys.length, totalBytes: localKeys.reduce((n,x)=>n+x.bytes,0), keys: localKeys },
         indexedDB: { counts, kv, typedRecords: typed },
         note: "Metadata-only inventory. Record values, private notes, contact details and raw payloads are not exposed."
       };
