@@ -523,6 +523,111 @@
       };
     } finally { db.close(); }
   }
+
+  async function inspectMigrationSources() {
+    const byteLength = value => new Blob([String(value ?? "")]).size;
+    const digest = value => {
+      const text = String(value ?? "");
+      let hash = 2166136261;
+      for (let i = 0; i < text.length; i++) { hash ^= text.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+      return ("00000000" + (hash >>> 0).toString(16)).slice(-8);
+    };
+    const safeJson = raw => { try { return { valid: true, value: JSON.parse(raw) }; } catch (_) { return { valid: false, value: null }; } };
+    const summarizeTree = value => {
+      const root = Array.isArray(value) ? value : (value && typeof value === "object" ? value : {});
+      const findArray = (obj, names) => {
+        for (const name of names) if (Array.isArray(obj && obj[name])) return obj[name];
+        return [];
+      };
+      const projects = findArray(root, ["projects","projectList"]);
+      const subprojects = [];
+      const projectRows = projects.map(project => {
+        const children = findArray(project, ["subProjects","subprojects","sub_projects","jobs"]);
+        children.forEach(child => subprojects.push({ id: child && (child.id ?? child._id) ?? null, parentId: project && (project.id ?? project._id) ?? null }));
+        return { id: project && (project.id ?? project._id) ?? null, subprojectCount: children.length,
+          subprojectIds: children.map(child => child && (child.id ?? child._id) ?? null) };
+      });
+      const counts = {};
+      for (const name of ["workers","partners","contractors","companies","companyJobs","company_jobs"]) counts[name] = findArray(root,[name]).length;
+      const photos = [];
+      const scan = (node, path, depth) => {
+        if (!node || typeof node !== "object" || depth > 8) return;
+        if (Array.isArray(node)) { node.forEach((v,i)=>scan(v,path+"["+i+"]",depth+1)); return; }
+        for (const [key,val] of Object.entries(node)) {
+          if (typeof val === "string" && /(photo|image|base64|dataurl)/i.test(key)) photos.push({ field:key, bytes:byteLength(val) });
+          else if (val && typeof val === "object") scan(val,path+"."+key,depth+1);
+        }
+      };
+      scan(root,"root",0);
+      return { projectCount:projects.length, projectRows, totalSubprojects:subprojects.length, relatedCounts:counts,
+        photoLikeFields:photos.length, photoLikeBytes:photos.reduce((n,x)=>n+x.bytes,0) };
+    };
+    const local = {};
+    for (let i=0;i<localStorage.length;i++) {
+      const key=localStorage.key(i);
+      if (key && key.startsWith(PREFIX)) local[key]=localStorage.getItem(key);
+    }
+    const db=await openDatabase();
+    try {
+      const readAll = async name => {
+        const tx=db.transaction([name],"readonly");
+        const done=transactionDone(tx);
+        const rows=await requestResult(tx.objectStore(name).getAll());
+        await done; return rows;
+      };
+      const readKv = async key => {
+        const tx=db.transaction([KV_STORE],"readonly");
+        const done=transactionDone(tx);
+        const row=await requestResult(tx.objectStore(KV_STORE).get(key));
+        await done; return row ? String(row.value ?? "") : null;
+      };
+      const [typedProjects,typedContracts,settings,snapshots,kvProjects]=await Promise.all([
+        readAll("projects"),readAll("contracts"),readAll("accountingSettings"),readAll("legacySnapshots"),
+        readKv("__tha_idb_projects_migration_v1__")
+      ]);
+      const parsedPackage=kvProjects===null?null:safeJson(kvProjects);
+      const packageValue=parsedPackage&&parsedPackage.valid?parsedPackage.value:null;
+      const packageSummary=packageValue===null?null:summarizeTree(packageValue);
+      const typedProjectRows=typedProjects.map(p=>({id:String(p.id),subprojectIds:(Array.isArray(p.subProjects)?p.subProjects:Array.isArray(p.subprojects)?p.subprojects:[]).map(x=>String(x&&x.id!==undefined?x.id:"")).filter(Boolean)}));
+      const typedProjectIds=new Set(typedProjectRows.map(x=>x.id));
+      const packageProjectIds=new Set(packageSummary?packageSummary.projectRows.map(x=>x.id).filter(x=>x!==null).map(String):[]);
+      const projectComparison={package:packageSummary,typed:{projectCount:typedProjects.length,projectRows:typedProjectRows},
+        projectIdsOnlyInPackage:[...packageProjectIds].filter(x=>!typedProjectIds.has(x)),
+        projectIdsOnlyInTyped:[...typedProjectIds].filter(x=>!packageProjectIds.has(x))};
+      const snapshotSummary={};
+      for(const key of Object.keys(local)){
+        const current=local[key], rows=snapshots.filter(x=>x.legacyKey===key && x.present && typeof x.raw==="string");
+        snapshotSummary[key]={currentBytes:byteLength(current),currentDigest:digest(current),
+          snapshots:rows.map(x=>({id:x.id,capturedAt:x.capturedAt||null,bytes:byteLength(x.raw),digest:digest(x.raw),matchesCurrent:x.raw===current})),
+          matchingSnapshotCount:rows.filter(x=>x.raw===current).length};
+      }
+      const kvComparison={};
+      for(const key of Object.keys(local)){
+        const stored=await readKv(key), current=local[key];
+        kvComparison[key]={localBytes:byteLength(current),kvPresent:stored!==null,kvBytes:stored===null?0:byteLength(stored),
+          exactMatch:stored===null?null:stored===current,localDigest:digest(current),kvDigest:stored===null?null:digest(stored)};
+      }
+      const settingsSummary=settings.map(row=>({id:String(row.id),fields:Object.keys(row).sort(),
+        nestedFields:Object.fromEntries(Object.entries(row).filter(([,v])=>v&&typeof v==="object"&&!Array.isArray(v)).map(([k,v])=>[k,Object.keys(v).sort()]))}));
+      const contractsLocal=local[PREFIX+"contracts_v1"]??null;
+      const projectsLocal=local[PREFIX+"projects_v1"]??null;
+      const safeLocalSummary=raw=>raw===null?{present:false}:({present:true,bytes:byteLength(raw),digest:digest(raw),jsonValid:safeJson(raw).valid});
+      return {ok:true,readOnly:true,willWrite:false,localStorageChanged:false,indexedDBChanged:false,
+        database:DB_NAME,schemaVersion:DB_VERSION,
+        localStorageSources:{projects:safeLocalSummary(projectsLocal),contracts:safeLocalSummary(contractsLocal),
+          monitorLog:safeLocalSummary(local[PREFIX+"monitor_log_v1"]??null)},
+        projects:projectComparison,
+        projectsPackage:{present:kvProjects!==null,bytes:kvProjects===null?0:byteLength(kvProjects),digest:kvProjects===null?null:digest(kvProjects),
+          jsonValid:parsedPackage?parsedPackage.valid:null,summary:packageSummary},
+        contracts:{typedCount:typedContracts.length,typedIds:typedContracts.map(x=>String(x.id)),
+          localStoragePresent:contractsLocal!==null},
+        monitorLog:{localStorage:safeLocalSummary(local[PREFIX+"monitor_log_v1"]??null),
+          kv:kvComparison[PREFIX+"monitor_log_v1"]||null,snapshots:snapshotSummary[PREFIX+"monitor_log_v1"]||[]},
+        kvComparison,snapshotComparison:snapshotSummary,accountingSettings:settingsSummary,
+        note:"Read-only structural comparison. Digests are non-cryptographic diagnostics; no raw values, names, addresses, contacts or private notes are returned."};
+    } finally { db.close(); }
+  }
+
   async function status() {
     const db = await openDatabase();
     try {
@@ -538,7 +643,7 @@
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
     putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkAddAcrossStoresVerified, bulkWriteAcrossStores,
-    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, status,
+    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
