@@ -53,8 +53,8 @@
   function transactionDone(tx) {
     return new Promise((resolve, reject) => {
       tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error || new Error("IndexedDB transaction failed"));
-      tx.onabort = () => reject(tx.error || new Error("IndexedDB transaction aborted"));
+      tx.onerror = () => { const e = tx.error; reject(new Error("IndexedDB transaction failed" + (e && e.name ? " (" + e.name + ")" : "") + (e && e.message ? ": " + e.message : ""))); };
+      tx.onabort = () => { const e = tx.error; reject(new Error("IndexedDB transaction aborted" + (e && e.name ? " (" + e.name + ")" : "") + (e && e.message ? ": " + e.message : ""))); };
     });
   }
 
