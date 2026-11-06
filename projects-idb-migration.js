@@ -125,7 +125,7 @@
    if(!checks.duplicateCollisionRejected||!checks.atomicRollbackOnCollision)throw Error("Atomic collision rollback test failed");
    return {ok:true,checks,legacyLocalStorageChanged:false,liveDataChanged:false,appCutover:false,bytes:new Blob([JSON.stringify(fixture)]).size};
   }finally{
-   if(committed){for(const [store,ids] of [["projects",[projectId]],["workers",[workerId]],["projectMetadata",[stateId,metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
+   if(committed){for(const [store,ids] of [["projects",[projectId,collisionProjectId]],["workers",[workerId,collisionWorkerId]],["projectMetadata",[stateId,metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
   }
  }
  root.HandymanProjectsIDBRepository=Object.freeze({prepare,importWorkspace,importBackupFile,readSummary,selfTest,stores:Object.values(map)});
