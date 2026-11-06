@@ -415,7 +415,7 @@
 
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
-    putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords,
+    putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores,
     snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
