@@ -114,13 +114,13 @@
     const id=String(record.id);if(seen.has(id))duplicates.push({store,id});seen.add(id);
     bytes+=new TextEncoder().encode(JSON.stringify(record)).length;
    }
-   const collisions=[];
-   for(const record of records)if(await a.getRecord(store,record.id))collisions.push(String(record.id));
-   if(collisions.length)existing.push({store,count:collisions.length,ids:collisions.slice(0,10)});
-   stores[store]={records:records.length,approxBytes:bytes,existingCollisions:collisions.length};
+   const identical=[],conflicting=[];
+   for(const record of records){const prior=await a.getRecord(store,record.id);if(prior){if(JSON.stringify(prior)===JSON.stringify(record))identical.push(String(record.id));else conflicting.push(String(record.id));}}
+   if(identical.length||conflicting.length)existing.push({store,identicalCount:identical.length,identicalIds:identical.slice(0,10),conflictingCount:conflicting.length,conflictingIds:conflicting.slice(0,10)});
+   stores[store]={records:records.length,approxBytes:bytes,identicalExisting:identical.length,conflictingExisting:conflicting.length,missing:records.length-identical.length-conflicting.length};
    totalRecords+=records.length;totalBytes+=bytes;
   }
-  return {ok:duplicates.length===0&&existing.length===0,readOnly:true,willWrite:false,appCutover:false,localStorageChanged:false,backupChanged:false,fileName:file.name,fileBytes:file.size,stores,totalRecords,totalSubprojects:b.projects.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),approxIndexedDBBytes:totalBytes,duplicateIncomingIds:duplicates,existingRecordCollisions:existing};
+  const conflictingTotal=existing.reduce((n,x)=>n+x.conflictingCount,0),identicalTotal=existing.reduce((n,x)=>n+x.identicalCount,0);return {ok:duplicates.length===0&&conflictingTotal===0,readOnly:true,willWrite:false,appCutover:false,localStorageChanged:false,backupChanged:false,fileName:file.name,fileBytes:file.size,stores,totalRecords,totalSubprojects:b.projects.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),approxIndexedDBBytes:totalBytes,duplicateIncomingIds:duplicates,identicalExistingRecords:identicalTotal,conflictingExistingRecords:conflictingTotal,existingRecordComparisons:existing};
  }
  async function importWorkspace(x){const rows=prepare(x),a=api(),collisions=[];for(const [store,records] of Object.entries(rows)){for(const record of records){const existing=await a.getRecord(store,record.id);if(existing)collisions.push({store,id:String(record.id)});}}if(collisions.length)throw new Error("Import blocked before writing: "+collisions.slice(0,12).map(c=>c.store+"/"+c.id).join(", ")+(collisions.length>12?" (+"+(collisions.length-12)+" more)":"")+". Existing IndexedDB records were not overwritten.");const r=await a.bulkAddAcrossStores(rows);return {ok:true,atomic:r.atomic,appCutover:false,localStorageChanged:false,backupChanged:false,written:r.written,verification:r.verification,subprojects:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0)};}
  async function importBackupFile(file){if(!file)throw Error("Select a backup JSON file");const b=JSON.parse(await file.text());if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");return importWorkspace(b.projects);}
