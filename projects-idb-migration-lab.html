@@ -13,7 +13,7 @@ label{font-weight:700;display:block;margin:14px 0 7px}
 <body><main>
 <h1>Projects IndexedDB Migration Lab</h1>
 <p>Preparation and capacity test for moving Projects data away from LocalStorage.</p>
-<div class="notice"><strong>Safety boundary:</strong> This is an isolated test. It writes to separate IndexedDB stores in one atomic transaction. Existing records are never overwritten. It does not change live app data, Accounting, Contracts, LocalStorage, or the selected backup file. It does not activate IndexedDB as the app's storage.</div>
+<div class="notice"><strong>Safety boundary:</strong> This is an isolated test. It writes to separate IndexedDB stores in one atomic transaction. Identical records are skipped. Existing Projects are updated only by a verified Income-level merge; other conflicts stop the whole operation. It does not change live app data, Accounting, Contracts, LocalStorage, or the selected backup file. It does not activate IndexedDB as the app's storage.</div>
 <button id="test">Run normalized 6 MB photo round-trip test</button>
 <label for="backup">Select the complete JSON backup</label><input id="backup" type="file" accept=".json,application/json">
 <button id="inspect">Inspect backup (read-only, no writing)</button>
