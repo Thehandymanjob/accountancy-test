@@ -216,6 +216,17 @@
    checks.duplicateCollisionRejected=collisionRejected;checks.atomicRollbackOnCollision=!!afterCollision&&afterCollision.marker===sentinel.marker&&partial===null;
    await api().deleteRecord("projects",collisionProjectId);
    if(!checks.duplicateCollisionRejected||!checks.atomicRollbackOnCollision)throw Error("Atomic collision rollback test failed");
+   const baseIncome=[{id:"income-a",amount:100},{id:"income-b",amount:200},{id:"income-c",amount:300}];
+   const incomingIncome=[{id:"income-a",amount:100},{id:"income-b",amount:200},{id:"income-c",amount:300},{id:"income-d",amount:400}];
+   const baseProject={id:"merge-project-test",subprojects:[{id:"merge-sub-test",name:"Synthetic",income:baseIncome}]};
+   const incomingProject={id:"merge-project-test",subprojects:[{id:"merge-sub-test",name:"Synthetic",income:incomingIncome}]};
+   const merged=mergeProjectIncome(baseProject,incomingProject),mergedIncome=merged.subprojects[0].income;
+   checks.incomeMergeAddsOnlyMissing=mergedIncome.length===4&&mergedIncome.some(x=>x.id==="income-d"&&x.amount===400);
+   checks.incomeMergePreservesExisting=mergedIncome.find(x=>x.id==="income-a").amount===100&&baseProject.subprojects[0].income.length===3;
+   let incomeCollisionRejected=false;
+   try{mergeProjectIncome(baseProject,{id:"merge-project-test",subprojects:[{id:"merge-sub-test",name:"Synthetic",income:[...incomingIncome,{id:"income-a",amount:999}]}]});}catch(_){incomeCollisionRejected=true;}
+   checks.incomeCollisionRejected=incomeCollisionRejected;
+   if(!checks.incomeMergeAddsOnlyMissing||!checks.incomeMergePreservesExisting||!checks.incomeCollisionRejected)throw Error("Income-level merge self-test failed");
    return {ok:true,checks,legacyLocalStorageChanged:false,liveDataChanged:false,appCutover:false,bytes:new Blob([JSON.stringify(fixture)]).size};
   }finally{
    if(committed){for(const [store,ids] of [["projects",[projectId,collisionProjectId]],["workers",[workerId,collisionWorkerId]],["projectMetadata",[stateId,metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
