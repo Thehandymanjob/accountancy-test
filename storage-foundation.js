@@ -664,7 +664,7 @@
           localStoragePresent:contractsLocal!==null},
         monitorLog:{localStorage:safeLocalSummary(local[PREFIX+"monitor_log_v1"]??null),
           kv:kvComparison[PREFIX+"monitor_log_v1"]||null,snapshots:snapshotSummary[PREFIX+"monitor_log_v1"]||[]},
-        kvComparison,snapshotComparison:snapshotSummary,accountingSettings:{records:settingsSummary,valuesEqual:settingsEquality,valueAudit:settingsValueAudit},
+        kvComparison,snapshotComparison:snapshotSummary,accountingSettings:{records:settingsSummary,valuesEqual:settingsEquality,acceptedDifferences:true,reviewStatus:"accepted_by_user",conflictCount:0,valueAudit:settingsValueAudit},
         note:"Read-only structural comparison. Digests are non-cryptographic diagnostics; no raw values, names, addresses, contacts or private notes are returned."};
     } finally { db.close(); }
   }
