@@ -197,7 +197,43 @@
    appCutover:false,localStorageChanged:false,backupChanged:false};
  }
  async function importBackupFile(file){if(!file)throw Error("Select a backup JSON file");const b=JSON.parse(await file.text());if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");return importWorkspace(b.projects);}
- async function readSummary(){const a=api(),o={ok:true,appCutover:false,stores:{}};for(const s of [...Object.values(map),"projectMetadata"]){const r=await a.getAllRecords(s);o.stores[s]={count:r.length,ids:r.map(x=>x.id)};if(s==="projectMetadata"){const expected=new Set([profileId,stateId,manifestId]);o.expectedMetadataCount=3;o.metadataRecords=r.map(x=>({id:x.id,kind:x.kind||null,keys:Object.keys(x).sort()}));o.unexpectedMetadataRecords=r.filter(x=>!expected.has(x.id)).map(x=>({id:x.id,kind:x.kind||null,keys:Object.keys(x).sort()}));o.metadataComplete=[stateId,manifestId].every(id=>r.some(x=>x.id===id));}}const p=await a.getAllRecords("projects");o.subprojects=p.reduce((n,x)=>n+(Array.isArray(x.subprojects)?x.subprojects.length:0),0);o.manifest=o.stores.projectMetadata.ids.includes(manifestId);return o;}
+ async function readSummary(){
+  const a=api(),o={ok:true,appCutover:false,stores:{}},allMeta=await a.getAllRecords("projectMetadata");
+  for(const s of [...Object.values(map),"projectMetadata"]){
+   const r=s==="projectMetadata"?allMeta:await a.getAllRecords(s);
+   o.stores[s]={count:r.length,ids:r.map(x=>x.id)};
+   if(s==="projectMetadata"){
+    const expected=new Set([profileId,stateId,manifestId]);
+    o.expectedMetadataCount=3;
+    o.metadataRecords=r.map(x=>({id:x.id,kind:x.kind||null,keys:Object.keys(x).sort()}));
+    o.unexpectedMetadataRecords=r.filter(x=>!expected.has(x.id)).map(x=>({id:x.id,kind:x.kind||null,keys:Object.keys(x).sort()}));
+    o.metadataComplete=[stateId,manifestId,manifestId].every(id=>r.some(x=>x.id===id));
+    const legacy=r.find(x=>x.id==="projectMetadata"),profile=r.find(x=>x.id===profileId),state=r.find(x=>x.id===stateId);
+    if(legacy){
+     const legacyState={...legacy};delete legacyState.id;delete legacyState.profile;
+     const legacyProfile=legacy.profile;
+     const normalizedState=state&&state.value&&typeof state.value==="object"?state.value:{};
+     const legacyKeys=Object.keys(legacyState).sort(),normalizedKeys=Object.keys(normalizedState).sort();
+     o.legacyMetadataAudit={
+      found:true,legacyKeys:Object.keys(legacy).sort(),
+      legacyProfilePresent:legacyProfile!==undefined,
+      normalizedProfilePresent:!!profile,
+      legacyProfileMatchesNormalized:!!profile&&sameValue(legacyProfile,profile.value),
+      legacyWorkspaceStateMatchesNormalized:!!state&&sameValue(legacyState,normalizedState),
+      legacyStateOnlyKeys:legacyKeys.filter(k=>!normalizedKeys.includes(k)),
+      normalizedStateOnlyKeys:normalizedKeys.filter(k=>!legacyKeys.includes(k)),
+      differingStateKeys:[...new Set([...legacyKeys,...normalizedKeys])].filter(k=>!sameValue(legacyState[k],normalizedState[k]))
+     };
+    }else o.legacyMetadataAudit={found:false};
+   }
+  }
+  const projects=await a.getAllRecords("projects");
+  o.subprojects=projects.reduce((n,x)=>n+(Array.isArray(x.subprojects)?x.subprojects.length:0),0);
+  o.incomeAudit=projects.map(project=>({projectId:project.id,subprojects:(Array.isArray(project.subprojects)?project.subprojects:[]).map(sub=>{const income=Array.isArray(sub.income)?sub.income:[];return {subprojectId:sub.id||null,incomeCount:income.length,incomeIds:income.map(item=>item&&item.id!==undefined?String(item.id):null),incomeAmountTotal:income.reduce((sum,item)=>{const n=Number(item&&item.amount);return sum+(Number.isFinite(n)?n:0);},0)};})}));
+  o.totalIncomeRecords=o.incomeAudit.reduce((n,p)=>n+p.subprojects.reduce((m,s)=>m+s.incomeCount,0),0);
+  o.manifest=o.stores.projectMetadata.ids.includes(manifestId);
+  return o;
+ }
  async function selfTest(){
   const suffix=Date.now()+"_"+Math.random().toString(36).slice(2),projectId="__tha_idb_project_test__"+suffix,workerId="__tha_idb_worker_test__"+suffix;
   const metaId="__tha_idb_meta_test__"+suffix,collisionProjectId="__tha_idb_collision_project__"+suffix,collisionWorkerId="__tha_idb_collision_worker__"+suffix,photo="data:image/jpeg;base64,"+"A".repeat(6*1024*1024);
