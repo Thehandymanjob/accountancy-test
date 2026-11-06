@@ -543,7 +543,7 @@
       const subprojects = [];
       const projectRows = projects.map(project => {
         const children = findArray(project, ["subProjects","subprojects","sub_projects","jobs"]);
-        children.forEach(child => subprojects.push({ id: child && (child.id ?? child._id) ?? null, parentId: project && (project.id ?? project._id) ?? null }));
+        children.forEach(child => subprojects.push({ id: (child ? (child.id ?? child._id) : null), parentId: (project ? (project.id ?? project._id) : null) }));
         return { id: project && (project.id ?? project._id) ?? null, subprojectCount: children.length,
           subprojectIds: children.map(child => child && (child.id ?? child._id) ?? null) };
       });
