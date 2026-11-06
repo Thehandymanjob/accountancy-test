@@ -108,7 +108,7 @@
   const metaId="__tha_idb_meta_test__"+suffix,collisionProjectId="__tha_idb_collision_project__"+suffix,collisionWorkerId="__tha_idb_collision_worker__"+suffix,photo="data:image/jpeg;base64,"+"A".repeat(6*1024*1024);
   const fixture={projects:[{id:projectId,name:"Synthetic IndexedDB test",photo,subprojects:[{id:"sub-300",name:"Extra Job",price:300}]}],
    workers:[{id:workerId,name:"Synthetic worker"}],partners:[],contractors:[],companies:[],companyJobs:[],current:projectId,currentSubproject:"sub-300",guide:"fa"};
-  const rows=prepare(fixture);rows.projectMetadata=rows.projectMetadata.filter(x=>x.id!==manifestId&&x.id!==stateId);
+  const rows=prepare(fixture);rows.projectMetadata=rows.projectMetadata.filter(x=>x.id!==manifestId);
   rows.projectMetadata.push({id:metaId,kind:"test-fixture"});
   let committed=false;
   try{
@@ -125,7 +125,7 @@
    if(!checks.duplicateCollisionRejected||!checks.atomicRollbackOnCollision)throw Error("Atomic collision rollback test failed");
    return {ok:true,checks,legacyLocalStorageChanged:false,liveDataChanged:false,appCutover:false,bytes:new Blob([JSON.stringify(fixture)]).size};
   }finally{
-   if(committed){for(const [store,ids] of [["projects",[projectId]],["workers",[workerId]],["projectMetadata",[metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
+   if(committed){for(const [store,ids] of [["projects",[projectId]],["workers",[workerId]],["projectMetadata",[stateId,metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
   }
  }
  root.HandymanProjectsIDBRepository=Object.freeze({prepare,importWorkspace,importBackupFile,readSummary,selfTest,stores:Object.values(map)});
