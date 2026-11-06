@@ -416,10 +416,8 @@
       if (!item.present) continue;
       const raw = localStorage.getItem(item.legacyKey);
       if (raw === null) throw new Error("Legacy value changed during migration: " + item.legacyKey);
-      if (!item.validJson) {
-        invalid.push({ key: item.legacyKey, byteLength: item.byteLength });
-        continue;
-      }
+      // KV is a raw-string archival layer, so valid JSON and plain-string
+      // values are both eligible. JSON validity is retained as metadata only.
       // Never overwrite an existing IndexedDB value during migration. A mismatch
       // is a recovery conflict and must be resolved explicitly, not guessed.
       const existing = await get(item.legacyKey);
@@ -437,8 +435,8 @@
       if (copied !== raw) throw new Error("Migration verification failed for " + item.legacyKey);
       migrated.push({ key: item.legacyKey, byteLength: item.byteLength, validJson: item.validJson });
     }
-    return { ok: conflicts.length === 0 && invalid.length === 0, nonDestructive: true,
-      migratedCount: migrated.length, migrated, alreadyMatched, conflicts, invalid };
+    return { ok: conflicts.length === 0, nonDestructive: true,
+      rawStringArchive: true, migratedCount: migrated.length, migrated, alreadyMatched, conflicts, invalid };
   }
 
   async function verifyMigration() {
