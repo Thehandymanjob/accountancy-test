@@ -103,6 +103,9 @@
  async function inspectBackupFile(file){
   if(!file)throw Error("Select a backup JSON file");
   const b=JSON.parse(await file.text());
+  const stable=v=>Array.isArray(v)?v.map(stable):(v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])):v);
+  const equal=(a,b)=>JSON.stringify(stable(a))===JSON.stringify(stable(b));
+  const fieldInfo=v=>{if(v===undefined)return {type:"missing"};if(v===null||typeof v==="number"||typeof v==="boolean")return {type:v===null?"null":typeof v,value:v};if(typeof v==="string")return {type:"string",length:v.length,value:v.length<=120?v:undefined};if(Array.isArray(v))return {type:"array",count:v.length,bytes:new TextEncoder().encode(JSON.stringify(v)).length};return {type:"object",keys:Object.keys(v).sort(),bytes:new TextEncoder().encode(JSON.stringify(v)).length};};
   if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");
   if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");
   if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");
@@ -115,15 +118,16 @@
     bytes+=new TextEncoder().encode(JSON.stringify(record)).length;
    }
    const identical=[],conflicting=[];
-   for(const record of records){const prior=await a.getRecord(store,record.id);if(prior){if(JSON.stringify(prior)===JSON.stringify(record))identical.push(String(record.id));else{conflicting.push(String(record.id));if(store==="projects"){
-    const keys=[...new Set([...Object.keys(record),...Object.keys(prior)])],changedFields=keys.filter(k=>JSON.stringify(record[k])!==JSON.stringify(prior[k]));
+   for(const record of records){const prior=await a.getRecord(store,record.id);if(prior){if(equal(prior,record))identical.push(String(record.id));else{conflicting.push(String(record.id));if(store==="projects"){
+    const keys=[...new Set([...Object.keys(record),...Object.keys(prior)])],changedFields=keys.filter(k=>!equal(record[k],prior[k]));
     const sub=(v)=>Array.isArray(v)?v.map(x=>String(x&&x.id!==undefined?x.id:"<no-id>")):[];
     const incomingSubs=Array.isArray(record.subprojects)?record.subprojects:[],existingSubs=Array.isArray(prior.subprojects)?prior.subprojects:[];
     const byId=(arr)=>new Map(arr.map((x,i)=>[String(x&&x.id!==undefined?x.id:"<index-"+i+">"),x]));
     const im=byId(incomingSubs),em=byId(existingSubs),all=[...new Set([...im.keys(),...em.keys()])];
-    const subChanges=all.filter(id=>!im.has(id)||!em.has(id)||JSON.stringify(im.get(id))!==JSON.stringify(em.get(id)));
+    const subChanges=all.filter(id=>!im.has(id)||!em.has(id)||!equal(im.get(id),em.get(id)));
     const valueInfo=(v)=>({type:v===null?"null":Array.isArray(v)?"array":typeof v,bytes:v===undefined?0:new TextEncoder().encode(JSON.stringify(v)).length,arrayCount:Array.isArray(v)?v.length:undefined});
-    conflictDetails.push({store,id:String(record.id),changedFields,incomingFieldSummary:Object.fromEntries(changedFields.map(k=>[k,valueInfo(record[k])])),existingFieldSummary:Object.fromEntries(changedFields.map(k=>[k,valueInfo(prior[k])])),incomingSubprojectIds:sub(record.subprojects),existingSubprojectIds:sub(prior.subprojects),changedSubprojectIds:subChanges});
+    const subprojectDetails=subChanges.filter(sid=>im.has(sid)&&em.has(sid)).map(sid=>{const x=im.get(sid),y=em.get(sid),ks=[...new Set([...Object.keys(x||{}),...Object.keys(y||{})])],diff=ks.filter(k=>!equal(x&&x[k],y&&y[k]));return {id:sid,changedFields:diff,incoming:Object.fromEntries(diff.map(k=>[k,fieldInfo(x&&x[k])])),existing:Object.fromEntries(diff.map(k=>[k,fieldInfo(y&&y[k])]))};});
+    conflictDetails.push({store,id:String(record.id),changedFields,incomingFieldSummary:Object.fromEntries(changedFields.map(k=>[k,valueInfo(record[k])])),existingFieldSummary:Object.fromEntries(changedFields.map(k=>[k,valueInfo(prior[k])])),incomingSubprojectIds:sub(record.subprojects),existingSubprojectIds:sub(prior.subprojects),changedSubprojectIds:subChanges,subprojectDetails});
    }}}}
    if(identical.length||conflicting.length)existing.push({store,identicalCount:identical.length,identicalIds:identical.slice(0,10),conflictingCount:conflicting.length,conflictingIds:conflicting.slice(0,10)});
    stores[store]={records:records.length,approxBytes:bytes,identicalExisting:identical.length,conflictingExisting:conflicting.length,missing:records.length-identical.length-conflicting.length};
