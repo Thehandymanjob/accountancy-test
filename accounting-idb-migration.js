@@ -117,7 +117,14 @@
         if (canonical(prior) === canonical(incoming)) identical++;
         else conflicts.push({ store, id: String(incoming.id), reason: "IndexedDB already contains a different record with this ID." });
       }
-      stores[store] = { sourceCount: group.records.length, existingCount: existing.length, identical, toAdd };
+      stores[store] = {
+        sourceCount: group.records.length, existingCount: existing.length, identical, toAdd,
+        existingRecords: existing.map(record => ({
+          id: String(record.id),
+          fields: Object.keys(record).sort(),
+          migrationMarker: record.migrationSource || record.snapshotKind || null
+        }))
+      };
     }
     return {
       ok: invalid.length === 0 && conflicts.length === 0,
@@ -203,7 +210,12 @@
     }
     const writeSet = Object.fromEntries(Object.entries(operations).filter(([, rows]) => rows.length));
     let writeResult = { ok: true, atomic: true, added: 0, stores: [], verification: {} };
-    if (Object.keys(writeSet).length) writeResult = await api().bulkAddAcrossStores(writeSet);
+    if (Object.keys(writeSet).length) {
+      if (typeof api().bulkAddAcrossStoresVerified !== "function") {
+        throw new Error("Safe atomic verification API is unavailable. Import is disabled.");
+      }
+      writeResult = await api().bulkAddAcrossStoresVerified(writeSet);
+    }
     const verified = {};
     for (const [store, group] of Object.entries(plan)) {
       verified[store] = [];
@@ -218,7 +230,7 @@
       if (before.raw[key] !== after.raw[key]) throw new Error("Safety check failed: LocalStorage changed during import: " + key);
     }
     return {
-      ok: true, atomic: writeResult.atomic !== false, snapshot,
+      ok: true, atomic: writeResult.atomic === true && writeResult.verifiedInsideTransaction === true, snapshot,
       added: writeResult.written || 0, stores: Object.keys(plan),
       verifiedCounts: Object.fromEntries(Object.entries(plan).map(([store, group]) => [store, group.records.length])),
       verification: verified, localStorageChanged: false, backupChanged: false,
