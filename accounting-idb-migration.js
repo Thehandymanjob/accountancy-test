@@ -103,6 +103,36 @@
     });
     return byStore;
   }
+  function safeRecordSummary(store, record) {
+    const fields = store === "accountingEntries"
+      ? ["type", "date", "amount", "category", "reference", "number", "invoiceId", "method"]
+      : store === "invoices"
+        ? ["number", "date", "amount", "total", "status", "paymentStatus", "paymentDate", "paymentMethod", "customerName", "historical"]
+        : store === "customers"
+          ? ["name"]
+          : store === "customExpenseCategories"
+            ? ["name", "value", "position"]
+            : [];
+    const summary = {};
+    for (const field of fields) {
+      const value = record[field];
+      if (value === null || ["string", "number", "boolean"].includes(typeof value)) {
+        if (value !== undefined) summary[field] = value;
+      } else if (field === "total" && value && typeof value === "object") {
+        summary[field] = "[structured value]";
+      }
+    }
+    if (store === "invoices" && summary.amount === undefined && summary.total === undefined &&
+        Array.isArray(record.items)) {
+      summary.itemCount = record.items.length;
+      summary.calculatedLineTotal = record.items.reduce((sum, item) => {
+        const qty = Number(item && (item.qty ?? item.quantity));
+        const price = Number(item && (item.unitPrice ?? item.price));
+        return sum + (Number.isFinite(qty) && Number.isFinite(price) ? qty * price : 0);
+      }, 0);
+    }
+    return summary;
+  }
   async function inspectCurrent() {
     const source = readSource(), plan = buildPlan(source), a = api();
     const stores = {}, conflicts = [], invalid = [];
@@ -122,6 +152,7 @@
         existingRecords: existing.map(record => ({
           id: String(record.id),
           fields: Object.keys(record).sort(),
+          summary: safeRecordSummary(store, record),
           migrationMarker: record.migrationSource || record.snapshotKind || null
         }))
       };
