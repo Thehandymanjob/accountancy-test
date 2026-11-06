@@ -117,6 +117,119 @@
     } finally { db.close(); }
   }
 
+
+  function assertRecordStore(name) {
+    if (!STORES.includes(name) || name === "legacySnapshots") {
+      throw new Error("Unsupported operational IndexedDB store: " + name);
+    }
+    return name;
+  }
+
+  function validateRecord(record) {
+    if (!record || typeof record !== "object" || Array.isArray(record)) {
+      throw new Error("IndexedDB record must be an object.");
+    }
+    if (typeof record.id !== "string" && !(typeof record.id === "number" && Number.isFinite(record.id))) {
+      throw new Error("IndexedDB record requires a non-empty string or finite numeric id.");
+    }
+    if (String(record.id).trim() === "") throw new Error("IndexedDB record id cannot be empty.");
+    return record;
+  }
+
+  async function putRecord(storeName, record) {
+    assertRecordStore(storeName);
+    validateRecord(record);
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([storeName], "readwrite");
+      const done = transactionDone(tx);
+      tx.objectStore(storeName).put(record);
+      await done;
+      const saved = await getRecord(storeName, record.id);
+      if (!saved || saved.id !== record.id || JSON.stringify(saved) !== JSON.stringify(record)) {
+        throw new Error("IndexedDB record write verification failed for " + storeName + "/" + record.id);
+      }
+      return { ok: true, store: storeName, id: record.id };
+    } finally { db.close(); }
+  }
+
+  async function getRecord(storeName, id) {
+    assertRecordStore(storeName);
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([storeName], "readonly");
+      const done = transactionDone(tx);
+      const result = await requestResult(tx.objectStore(storeName).get(id));
+      await done;
+      return result || null;
+    } finally { db.close(); }
+  }
+
+  async function getAllRecords(storeName) {
+    assertRecordStore(storeName);
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([storeName], "readonly");
+      const done = transactionDone(tx);
+      const result = await requestResult(tx.objectStore(storeName).getAll());
+      await done;
+      return result;
+    } finally { db.close(); }
+  }
+
+  async function countRecords(storeName) {
+    assertRecordStore(storeName);
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([storeName], "readonly");
+      const done = transactionDone(tx);
+      const count = await requestResult(tx.objectStore(storeName).count());
+      await done;
+      return count;
+    } finally { db.close(); }
+  }
+
+  async function deleteRecord(storeName, id) {
+    assertRecordStore(storeName);
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([storeName], "readwrite");
+      const done = transactionDone(tx);
+      tx.objectStore(storeName).delete(id);
+      await done;
+      const remaining = await getRecord(storeName, id);
+      if (remaining !== null) throw new Error("IndexedDB record delete verification failed for " + storeName + "/" + id);
+      return { ok: true, store: storeName, id };
+    } finally { db.close(); }
+  }
+
+  async function bulkPutRecords(storeName, records) {
+    assertRecordStore(storeName);
+    if (!Array.isArray(records)) throw new Error("Bulk IndexedDB write requires an array.");
+    const ids = new Set();
+    for (const record of records) {
+      validateRecord(record);
+      const id = String(record.id);
+      if (ids.has(id)) throw new Error("Duplicate record id in bulk write: " + id);
+      ids.add(id);
+    }
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([storeName], "readwrite");
+      const done = transactionDone(tx);
+      const store = tx.objectStore(storeName);
+      for (const record of records) store.put(record);
+      await done;
+      const verified = await Promise.all(records.map(record => getRecord(storeName, record.id)));
+      for (let i = 0; i < records.length; i++) {
+        if (!verified[i] || JSON.stringify(verified[i]) !== JSON.stringify(records[i])) {
+          throw new Error("IndexedDB bulk write verification failed for " + storeName + "/" + records[i].id);
+        }
+      }
+      return { ok: true, store: storeName, written: records.length };
+    } finally { db.close(); }
+  }
+
   async function snapshotLegacyData() {
     const db = await openDatabase();
     const snapshots = [];
@@ -200,26 +313,50 @@
 
 
   async function selfTest() {
-    const testKey = "__tha_idb_self_test__:" + Date.now() + ":" + Math.random().toString(36).slice(2);
+    const suffix = Date.now() + ":" + Math.random().toString(36).slice(2);
+    const testKey = "__tha_idb_self_test__:" + suffix;
     const testValue = JSON.stringify({ marker: "THA-IDB-SELF-TEST", createdAt: new Date().toISOString(), payload: "read-write-verify-delete" });
+    const recordId = "__tha_idb_self_test__:" + suffix;
     let writeVerified = false, readVerified = false, listed = false, deleteVerified = false;
+    let typedPutVerified = false, typedReadVerified = false, typedListVerified = false, typedDeleteVerified = false;
+    let kvSaved = false, recordSaved = false;
     try {
       await set(testKey, testValue);
+      kvSaved = true;
       writeVerified = true;
       readVerified = (await get(testKey)) === testValue;
       listed = (await keys()).includes(testKey);
-      if (!readVerified || !listed) throw new Error("IndexedDB read/list verification failed");
+      if (!readVerified || !listed) throw new Error("IndexedDB key/value read/list verification failed");
+
+      const fixture = { id: recordId, marker: "THA-IDB-RECORD-SELF-TEST", nested: { amount: 300 }, createdAt: new Date().toISOString() };
+      await putRecord("projectMetadata", fixture);
+      recordSaved = true;
+      typedPutVerified = true;
+      const loaded = await getRecord("projectMetadata", recordId);
+      typedReadVerified = !!loaded && JSON.stringify(loaded) === JSON.stringify(fixture);
+      const all = await getAllRecords("projectMetadata");
+      typedListVerified = all.some(item => item.id === recordId) && (await countRecords("projectMetadata")) >= 1;
+      if (!typedReadVerified || !typedListVerified) throw new Error("Typed IndexedDB record read/list verification failed");
+
+      await deleteRecord("projectMetadata", recordId);
+      recordSaved = false;
+      typedDeleteVerified = (await getRecord("projectMetadata", recordId)) === null;
+
       await remove(testKey);
+      kvSaved = false;
       deleteVerified = (await get(testKey)) === null && !(await keys()).includes(testKey);
-      if (!deleteVerified) throw new Error("IndexedDB delete verification failed");
-      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION,
-        checks: { writeVerified, readVerified, listed, deleteVerified },
-        legacyDataChanged: false };
+      if (!typedDeleteVerified || !deleteVerified) throw new Error("IndexedDB delete verification failed");
+
+      const checks = { writeVerified, readVerified, listed, deleteVerified, typedPutVerified, typedReadVerified, typedListVerified, typedDeleteVerified };
+      return { ok: Object.values(checks).every(Boolean), database: DB_NAME, schemaVersion: DB_VERSION,
+        checks, legacyDataChanged: false, operationalDataChanged: false };
     } catch (error) {
-      try { await remove(testKey); } catch (_) {}
+      if (recordSaved) { try { await deleteRecord("projectMetadata", recordId); } catch (_) {} }
+      if (kvSaved) { try { await remove(testKey); } catch (_) {} }
+      const checks = { writeVerified, readVerified, listed, deleteVerified, typedPutVerified, typedReadVerified, typedListVerified, typedDeleteVerified };
       return { ok: false, database: DB_NAME, schemaVersion: DB_VERSION,
-        checks: { writeVerified, readVerified, listed, deleteVerified },
-        legacyDataChanged: false, error: String(error && error.message || error) };
+        checks, legacyDataChanged: false, operationalDataChanged: false,
+        error: String(error && error.message || error) };
     }
   }
 
@@ -236,8 +373,10 @@
   }
 
   window.HandymanStorageFoundation = Object.freeze({
-    openDatabase, get, set, remove, keys, snapshotLegacyData, migrateLegacyData,
-    verifyMigration, selfTest, status, legacyKeys: LEGACY_KEYS.slice(),
+    openDatabase, get, set, remove, keys,
+    putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords,
+    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, status,
+    legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
 })();
