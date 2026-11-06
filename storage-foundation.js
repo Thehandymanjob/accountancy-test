@@ -469,6 +469,54 @@
     }
   }
 
+
+  async function inspectStorageInventory() {
+    const localKeys = [];
+    const groups = {
+      accounting: /accounting|invoice_sequence|empty_invoice_sequence|sequence_cleanup/i,
+      projects: /projects_v1/i,
+      contracts: /contracts_v1/i,
+      language: /language/i,
+      reports: /report_/i,
+      diagnostics: /monitor_log|isolation_test/i,
+      recovery: /factory_reset|help_contact/i
+    };
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(PREFIX)) continue;
+      const raw = localStorage.getItem(key);
+      let jsonValid = true, parsedType = "string";
+      try {
+        const parsed = JSON.parse(raw);
+        parsedType = parsed === null ? "null" : Array.isArray(parsed) ? "array" : typeof parsed;
+      } catch (_) { jsonValid = false; }
+      const group = Object.entries(groups).find(([, re]) => re.test(key));
+      localKeys.push({ key, bytes: new Blob([raw]).size, jsonValid, parsedType, domain: group ? group[0] : "unclassified" });
+    }
+    localKeys.sort((a,b) => a.key.localeCompare(b.key));
+    const db = await openDatabase();
+    try {
+      const txNames = [...STORES, KV_STORE];
+      const tx = db.transaction(txNames, "readonly");
+      const counts = {};
+      for (const name of txNames) counts[name] = await requestResult(tx.objectStore(name).count());
+      const kvRows = await requestResult(tx.objectStore(KV_STORE).getAll());
+      const kv = kvRows.map(row => ({ key: row.key, bytes: new Blob([String(row.value ?? "")]).size, present: true }));
+      const typed = {};
+      for (const name of STORES) {
+        const rows = await requestResult(tx.objectStore(name).getAll());
+        typed[name] = rows.map(row => ({ id: String(row.id), fields: Object.keys(row).sort(), migrationSource: row.migrationSource || row.snapshotKind || null }));
+      }
+      return {
+        ok: true, readOnly: true, willWrite: false, localStorageChanged: false, indexedDBChanged: false,
+        database: DB_NAME, schemaVersion: DB_VERSION,
+        localStorage: { prefix: PREFIX, keyCount: localKeys.length, totalBytes: localKeys.reduce((n,x)=>n+x.bytes,0), keys: localKeys },
+        indexedDB: { counts, kv, typedRecords: typed },
+        note: "Metadata-only inventory. Record values, private notes, contact details and raw payloads are not exposed."
+      };
+    } finally { db.close(); }
+  }
+
   async function status() {
     const db = await openDatabase();
     try {
@@ -484,7 +532,7 @@
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
     putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkAddAcrossStoresVerified, bulkWriteAcrossStores,
-    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, status,
+    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
