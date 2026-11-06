@@ -106,7 +106,7 @@
   if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");
   if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");
   if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");
-  const rows=prepare(b.projects),a=api(),stores={},duplicates=[],existing=[];
+  const rows=prepare(b.projects),a=api(),stores={},duplicates=[],existing=[],conflictDetails=[];
   let totalRecords=0,totalBytes=0;
   for(const [store,records] of Object.entries(rows)){
    const seen=new Set();let bytes=0;
@@ -114,7 +114,7 @@
     const id=String(record.id);if(seen.has(id))duplicates.push({store,id});seen.add(id);
     bytes+=new TextEncoder().encode(JSON.stringify(record)).length;
    }
-   const identical=[],conflicting=[],conflictDetails=[];
+   const identical=[],conflicting=[];
    for(const record of records){const prior=await a.getRecord(store,record.id);if(prior){if(JSON.stringify(prior)===JSON.stringify(record))identical.push(String(record.id));else{conflicting.push(String(record.id));if(store==="projects"){
     const keys=[...new Set([...Object.keys(record),...Object.keys(prior)])],changedFields=keys.filter(k=>JSON.stringify(record[k])!==JSON.stringify(prior[k]));
     const sub=(v)=>Array.isArray(v)?v.map(x=>String(x&&x.id!==undefined?x.id:"<no-id>")):[];
