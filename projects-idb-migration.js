@@ -101,5 +101,23 @@
  async function importWorkspace(x){const rows=prepare(x),r=await api().bulkAddAcrossStores(rows);return {ok:true,atomic:r.atomic,appCutover:false,localStorageChanged:false,backupChanged:false,written:r.written,verification:r.verification,subprojects:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0)};}
  async function importBackupFile(file){if(!file)throw Error("Select a backup JSON file");const b=JSON.parse(await file.text());if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");return importWorkspace(b.projects);}
  async function readSummary(){const a=api(),o={ok:true,appCutover:false,stores:{}};for(const s of [...Object.values(map),"projectMetadata"]){const r=await a.getAllRecords(s);o.stores[s]={count:r.length,ids:r.map(x=>x.id)};}const p=await a.getAllRecords("projects");o.subprojects=p.reduce((n,x)=>n+(Array.isArray(x.subprojects)?x.subprojects.length:0),0);o.manifest=o.stores.projectMetadata.ids.includes(manifestId);return o;}
- root.HandymanProjectsIDBRepository=Object.freeze({prepare,importWorkspace,importBackupFile,readSummary,stores:Object.values(map)});
+ async function selfTest(){
+  const suffix=Date.now()+"_"+Math.random().toString(36).slice(2),projectId="__tha_idb_project_test__"+suffix,workerId="__tha_idb_worker_test__"+suffix;
+  const metaId="__tha_idb_meta_test__"+suffix,photo="data:image/jpeg;base64,"+"A".repeat(6*1024*1024);
+  const fixture={projects:[{id:projectId,name:"Synthetic IndexedDB test",photo,subprojects:[{id:"sub-300",name:"Extra Job",price:300}]}],
+   workers:[{id:workerId,name:"Synthetic worker"}],partners:[],contractors:[],companies:[],companyJobs:[]};
+  const rows=prepare(fixture);rows.projectMetadata=rows.projectMetadata.filter(x=>x.id!==manifestId);
+  rows.projectMetadata.push({id:metaId,kind:"test-fixture"});
+  let committed=false;
+  try{
+   const result=await api().bulkAddAcrossStores(rows);committed=true;
+   const p=await api().getRecord("projects",projectId);
+   const checks={atomicWrite:result.atomic,photoPreserved:!!p&&p.photo===photo,subprojectAmountPreserved:!!p&&p.subprojects[0].price===300,workerPreserved:!!(await api().getRecord("workers",workerId))};
+   if(!checks.photoPreserved||!checks.subprojectAmountPreserved||!checks.workerPreserved)throw Error("Normalized Projects self-test failed");
+   return {ok:true,checks,legacyLocalStorageChanged:false,liveDataChanged:false,appCutover:false,bytes:new Blob([JSON.stringify(fixture)]).size};
+  }finally{
+   if(committed){for(const [store,ids] of [["projects",[projectId]],["workers",[workerId]],["projectMetadata",[metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
+  }
+ }
+ root.HandymanProjectsIDBRepository=Object.freeze({prepare,importWorkspace,importBackupFile,readSummary,selfTest,stores:Object.values(map)});
 })(window);
