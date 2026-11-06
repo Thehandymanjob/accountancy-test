@@ -271,6 +271,25 @@
     } finally { db.close(); }
   }
 
+  async function bulkWriteAcrossStores(operationsByStore) {
+    if (!operationsByStore || typeof operationsByStore !== "object" || Array.isArray(operationsByStore)) throw new Error("Cross-store merge requires an operations object.");
+    const names = Object.keys(operationsByStore);
+    if (!names.length) throw new Error("Cross-store merge contains no operations.");
+    for (const name of names) {
+      assertRecordStore(name); const group = operationsByStore[name];
+      if (!group || !Array.isArray(group.add) || !Array.isArray(group.put)) throw new Error("Each store requires add and put arrays: " + name);
+      const ids = new Set();
+      for (const record of [...group.add, ...group.put]) { validateRecord(record); const id = String(record.id); if (ids.has(id)) throw new Error("Duplicate operation id in " + name + ": " + id); ids.add(id); }
+    }
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(names, "readwrite"); const done = transactionDone(tx);
+      for (const name of names) { const store = tx.objectStore(name); const group = operationsByStore[name]; for (const record of group.add) store.add(record); for (const record of group.put) store.put(record); }
+      await done; const verification = {};
+      for (const name of names) { verification[name] = []; for (const record of [...operationsByStore[name].add, ...operationsByStore[name].put]) { const saved = await getRecord(name, record.id); if (!saved || JSON.stringify(saved) !== JSON.stringify(record)) throw new Error("Cross-store merge verification failed for " + name + "/" + record.id); verification[name].push(record.id); } }
+      return { ok: true, atomic: true, stores: names, added: names.reduce((n,k)=>n+operationsByStore[k].add.length,0), updated: names.reduce((n,k)=>n+operationsByStore[k].put.length,0), verification };
+    } finally { db.close(); }
+  }
   async function snapshotLegacyData() {
     const db = await openDatabase();
     const snapshots = [];
@@ -415,7 +434,7 @@
 
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
-    putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores,
+    putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkWriteAcrossStores,
     snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
