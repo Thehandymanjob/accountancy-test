@@ -118,7 +118,7 @@
     bytes+=new TextEncoder().encode(JSON.stringify(record)).length;
    }
    const identical=[],conflicting=[];
-   for(const record of records){const prior=await a.getRecord(store,record.id);if(prior){if(equal(prior,record))identical.push(String(record.id));else{conflicting.push(String(record.id));if(store==="projects"){
+   for(const record of records){const prior=await a.getRecord(store,record.id);if(prior){if(recordsEqual(store,prior,record))identical.push(String(record.id));else{conflicting.push(String(record.id));if(store==="projects"){
     const keys=[...new Set([...Object.keys(record),...Object.keys(prior)])],changedFields=keys.filter(k=>!equal(record[k],prior[k]));
     const sub=(v)=>Array.isArray(v)?v.map(x=>String(x&&x.id!==undefined?x.id:"<no-id>")):[];
     const incomingSubs=Array.isArray(record.subprojects)?record.subprojects:[],existingSubs=Array.isArray(prior.subprojects)?prior.subprojects:[];
@@ -140,6 +140,7 @@
  }
  function stableValue(v){return Array.isArray(v)?v.map(stableValue):(v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stableValue(v[k])])):v);}
  function sameValue(a,b){return JSON.stringify(stableValue(a))===JSON.stringify(stableValue(b));}
+ function recordsEqual(store,a,b){if(store!=="projectMetadata"||!a||!b||a.kind!=="projects-workspace-manifest"||b.kind!=="projects-workspace-manifest")return sameValue(a,b);const x={...a},y={...b};delete x.createdAt;delete y.createdAt;return sameValue(x,y);}
  function mergeProjectIncome(existing,incoming){
   if(!existing||!incoming||String(existing.id)!==String(incoming.id))throw Error("Project/subproject identity mismatch.");
   const topChanged=[...new Set([...Object.keys(existing),...Object.keys(incoming)])].filter(k=>!sameValue(existing[k],incoming[k]));
@@ -176,7 +177,7 @@
    for(const incoming of records){
     const prior=await a.getRecord(store,incoming.id);
     if(!prior){ops[store].add.push(incoming);continue;}
-    if(sameValue(prior,incoming)){skipped.push({store,id:String(incoming.id),reason:"identical"});continue;}
+    if(recordsEqual(store,prior,incoming)){skipped.push({store,id:String(incoming.id),reason:store==="projectMetadata"&&incoming.kind==="projects-workspace-manifest"?"manifest matches; createdAt ignored":"identical"});continue;}
     if(store==="projects"){
      try{
       const merged=mergeProjectIncome(prior,incoming);
@@ -208,8 +209,9 @@
    const result=await api().bulkAddAcrossStores(rows);committed=true;
    const p=await api().getRecord("projects",projectId);
    const state=await api().getRecord("projectMetadata",stateId);
-   const checks={atomicWrite:result.atomic,photoPreserved:!!p&&p.photo===photo,subprojectAmountPreserved:!!p&&p.subprojects[0].price===300,workerPreserved:!!(await api().getRecord("workers",workerId)),workspaceStatePreserved:!!state&&state.value.current===projectId&&state.value.currentSubproject==="sub-300"&&state.value.guide==="fa"};
-   if(!checks.photoPreserved||!checks.subprojectAmountPreserved||!checks.workerPreserved||!checks.workspaceStatePreserved)throw Error("Normalized Projects self-test failed");
+   const manifestA={id:manifestId,kind:"projects-workspace-manifest",schema:1,counts:{projects:1},subprojectCount:1,createdAt:"2026-11-05T10:00:00.000Z"},manifestB={...manifestA,createdAt:"2026-11-06T10:00:00.000Z"},manifestC={...manifestB,subprojectCount:2};
+   const checks={atomicWrite:result.atomic,photoPreserved:!!p&&p.photo===photo,subprojectAmountPreserved:!!p&&p.subprojects[0].price===300,workerPreserved:!!(await api().getRecord("workers",workerId)),workspaceStatePreserved:!!state&&state.value.current===projectId&&state.value.currentSubproject==="sub-300"&&state.value.guide==="fa",manifestIgnoresCreatedAt:recordsEqual("projectMetadata",manifestA,manifestB),manifestStillRejectsStructuralDifference:!recordsEqual("projectMetadata",manifestA,manifestC)};
+   if(!checks.photoPreserved||!checks.subprojectAmountPreserved||!checks.workerPreserved||!checks.workspaceStatePreserved||!checks.manifestIgnoresCreatedAt||!checks.manifestStillRejectsStructuralDifference)throw Error("Normalized Projects self-test failed");
    const sentinel={id:collisionProjectId,marker:"existing-record-must-survive"};await api().putRecord("projects",sentinel);
    let collisionRejected=false;try{await api().bulkAddAcrossStores({projects:[{id:collisionProjectId,marker:"overwrite-attempt"}],workers:[{id:collisionWorkerId,name:"must-not-commit"}]});}catch(_){collisionRejected=true;}
    const afterCollision=await api().getRecord("projects",collisionProjectId),partial=await api().getRecord("workers",collisionWorkerId);
