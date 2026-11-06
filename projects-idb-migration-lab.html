@@ -9,13 +9,14 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:#174d83;co
 button:disabled{opacity:.5}input{width:100%;padding:12px;box-sizing:border-box}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb;padding:14px;border-radius:10px;font-size:12px;min-height:90px}
 label{font-weight:700;display:block;margin:14px 0 7px}
 </style>
-<script src="storage-foundation.js?v=c8308554713addbe66cee2ef01ed6afe0a001197"></script><script src="projects-idb-migration.js?v=86ad8e375fd18254c85f7bcc13c4ae4f0f47c26d"></script></head>
+<script src="storage-foundation.js?v=c8308554713addbe66cee2ef01ed6afe0a001197"></script><script src="projects-idb-migration.js?v=7b921fab6d7f794d44ce59bfddf641938f9a6efd"></script></head>
 <body><main>
 <h1>Projects IndexedDB Migration Lab</h1>
 <p>Preparation and capacity test for moving Projects data away from LocalStorage.</p>
 <div class="notice"><strong>Safety boundary:</strong> This is an isolated test. It writes to separate IndexedDB stores in one atomic transaction. Existing records are never overwritten. It does not change live app data, Accounting, Contracts, LocalStorage, or the selected backup file. It does not activate IndexedDB as the app's storage.</div>
 <button id="test">Run normalized 6 MB photo round-trip test</button>
 <label for="backup">Select the complete JSON backup</label><input id="backup" type="file" accept=".json,application/json">
+<button id="inspect">Inspect backup (read-only, no writing)</button>
 <button id="import">Import Projects workspace into separate IndexedDB stores</button>
 <button id="read">Read back and verify normalized IndexedDB stores</button>
 <pre id="result">Ready. No operation has run.</pre>
@@ -24,6 +25,7 @@ label{font-weight:700;display:block;margin:14px 0 7px}
 (()=>{const out=document.getElementById("result"),buttons=[...document.querySelectorAll("button")];
 function busy(v){buttons.forEach(b=>b.disabled=v)}function show(v){out.textContent=JSON.stringify(v,null,2)}
 document.getElementById("test").onclick=async()=>{busy(true);try{show(await HandymanProjectsIDBRepository.selfTest())}catch(e){show({ok:false,error:e.message,liveDataChanged:false})}finally{busy(false)}};
+document.getElementById("inspect").onclick=async()=>{const f=document.getElementById("backup").files[0];if(!f){show({ok:false,error:"Choose a backup file first.",readOnly:true});return}busy(true);try{show(await HandymanProjectsIDBRepository.inspectBackupFile(f))}catch(e){show({ok:false,error:e.message,readOnly:true,willWrite:false})}finally{busy(false)}};
 document.getElementById("import").onclick=async()=>{const f=document.getElementById("backup").files[0];if(!f){show({ok:false,error:"Choose a backup file first."});return}if(!confirm("Copy only the Projects section into the isolated IndexedDB test area? The live app data and LocalStorage will not be changed."))return;busy(true);try{show(await HandymanProjectsIDBRepository.importBackupFile(f))}catch(e){show({ok:false,error:e.message,liveDataChanged:false})}finally{busy(false)}};
 document.getElementById("read").onclick=async()=>{busy(true);try{show(await HandymanProjectsIDBRepository.readSummary())}catch(e){show({ok:false,error:e.message})}finally{busy(false)}};
 })();
