@@ -9,7 +9,7 @@ button{width:100%;padding:14px;border:0;border-radius:10px;background:#174d83;co
 button:disabled{opacity:.5}input{width:100%;padding:12px;box-sizing:border-box}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb;padding:14px;border-radius:10px;font-size:12px;min-height:90px}
 label{font-weight:700;display:block;margin:14px 0 7px}
 </style>
-<script src="storage-foundation.js?v=9b8b3254028e381ec6117f8f8935d501582dce24"></script><script src="projects-idb-migration.js?v=6700f91794ed0c2cb3a90b007fa63604341e249e"></script><script src="accounting-idb-migration.js?v=a8ff3035e9db8e4c624aafbd03d7c0a99671aeaa"></script></head>
+<script src="storage-foundation.js?v=9b8b3254028e381ec6117f8f8935d501582dce24"></script><script src="projects-idb-migration.js?v=6700f91794ed0c2cb3a90b007fa63604341e249e"></script><script src="accounting-idb-migration.js?v=da2cfc225a4d86121a6ad7ec6a9d1e2566782acf"></script></head>
 <body><main>
 <h1>Projects IndexedDB Migration Lab</h1>
 <p>Preparation and capacity test for moving Projects data away from LocalStorage.</p>
@@ -18,7 +18,12 @@ label{font-weight:700;display:block;margin:14px 0 7px}
 <label for="backup">Select the complete JSON backup</label><input id="backup" type="file" accept=".json,application/json">
 <button id="inspect">Inspect backup (read-only, no writing)</button>
 <button id="import">Import Projects workspace into separate IndexedDB stores</button>
-<button id="read">Read back and verify normalized Projects IndexedDB stores</button>\n<hr>\n<h2>Accounting migration — v250</h2>\n<p>Reads the current test app Accounting data directly from this browser. Inspect is read-only. Import first snapshots legacy LocalStorage, then copies Accounting records to IndexedDB without deleting or modifying LocalStorage.</p>\n<button id="accountingInspect">Inspect current Accounting data (read-only)</button>\n<button id="accountingImport">Copy Accounting data into IndexedDB</button>
+<button id="read">Read back and verify normalized Projects IndexedDB stores</button>
+<hr>
+<h2>Accounting migration — v250</h2>
+<p>Reads the current test app Accounting data directly from this browser. Inspect is read-only. Import first snapshots legacy LocalStorage, then copies Accounting records to IndexedDB without deleting or modifying LocalStorage.</p>
+<button id="accountingInspect">Inspect current Accounting data (read-only)</button>
+<button id="accountingImport">Copy Accounting data into IndexedDB</button>
 <pre id="result">Ready. No operation has run.</pre>
 </main>
 <script>
