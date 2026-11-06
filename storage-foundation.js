@@ -153,16 +153,36 @@
   async function migrateLegacyData() {
     const snapshot = await snapshotLegacyData();
     const migrated = [];
+    const alreadyMatched = [];
+    const conflicts = [];
+    const invalid = [];
     for (const item of snapshot.snapshots) {
       if (!item.present) continue;
       const raw = localStorage.getItem(item.legacyKey);
       if (raw === null) throw new Error("Legacy value changed during migration: " + item.legacyKey);
+      if (!item.validJson) {
+        invalid.push({ key: item.legacyKey, byteLength: item.byteLength });
+        continue;
+      }
+      // Never overwrite an existing IndexedDB value during migration. A mismatch
+      // is a recovery conflict and must be resolved explicitly, not guessed.
+      const existing = await get(item.legacyKey);
+      if (existing !== null) {
+        if (existing === raw) {
+          alreadyMatched.push({ key: item.legacyKey, byteLength: item.byteLength });
+          continue;
+        }
+        conflicts.push({ key: item.legacyKey, legacyBytes: item.byteLength,
+          indexedDbBytes: new Blob([existing]).size });
+        continue;
+      }
       await set(item.legacyKey, raw);
       const copied = await get(item.legacyKey);
       if (copied !== raw) throw new Error("Migration verification failed for " + item.legacyKey);
       migrated.push({ key: item.legacyKey, byteLength: item.byteLength, validJson: item.validJson });
     }
-    return { ok: true, nonDestructive: true, migratedCount: migrated.length, migrated };
+    return { ok: conflicts.length === 0 && invalid.length === 0, nonDestructive: true,
+      migratedCount: migrated.length, migrated, alreadyMatched, conflicts, invalid };
   }
 
   async function verifyMigration() {
