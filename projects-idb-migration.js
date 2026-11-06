@@ -105,17 +105,24 @@
  async function readSummary(){const a=api(),o={ok:true,appCutover:false,stores:{}};for(const s of [...Object.values(map),"projectMetadata"]){const r=await a.getAllRecords(s);o.stores[s]={count:r.length,ids:r.map(x=>x.id)};}const p=await a.getAllRecords("projects");o.subprojects=p.reduce((n,x)=>n+(Array.isArray(x.subprojects)?x.subprojects.length:0),0);o.manifest=o.stores.projectMetadata.ids.includes(manifestId);return o;}
  async function selfTest(){
   const suffix=Date.now()+"_"+Math.random().toString(36).slice(2),projectId="__tha_idb_project_test__"+suffix,workerId="__tha_idb_worker_test__"+suffix;
-  const metaId="__tha_idb_meta_test__"+suffix,photo="data:image/jpeg;base64,"+"A".repeat(6*1024*1024);
+  const metaId="__tha_idb_meta_test__"+suffix,collisionProjectId="__tha_idb_collision_project__"+suffix,collisionWorkerId="__tha_idb_collision_worker__"+suffix,photo="data:image/jpeg;base64,"+"A".repeat(6*1024*1024);
   const fixture={projects:[{id:projectId,name:"Synthetic IndexedDB test",photo,subprojects:[{id:"sub-300",name:"Extra Job",price:300}]}],
-   workers:[{id:workerId,name:"Synthetic worker"}],partners:[],contractors:[],companies:[],companyJobs:[]};
+   workers:[{id:workerId,name:"Synthetic worker"}],partners:[],contractors:[],companies:[],companyJobs:[],current:projectId,currentSubproject:"sub-300",guide:"fa"};
   const rows=prepare(fixture);rows.projectMetadata=rows.projectMetadata.filter(x=>x.id!==manifestId&&x.id!==stateId);
   rows.projectMetadata.push({id:metaId,kind:"test-fixture"});
   let committed=false;
   try{
    const result=await api().bulkAddAcrossStores(rows);committed=true;
    const p=await api().getRecord("projects",projectId);
-   const checks={atomicWrite:result.atomic,photoPreserved:!!p&&p.photo===photo,subprojectAmountPreserved:!!p&&p.subprojects[0].price===300,workerPreserved:!!(await api().getRecord("workers",workerId))};
-   if(!checks.photoPreserved||!checks.subprojectAmountPreserved||!checks.workerPreserved)throw Error("Normalized Projects self-test failed");
+   const state=await api().getRecord("projectMetadata",stateId);
+   const checks={atomicWrite:result.atomic,photoPreserved:!!p&&p.photo===photo,subprojectAmountPreserved:!!p&&p.subprojects[0].price===300,workerPreserved:!!(await api().getRecord("workers",workerId)),workspaceStatePreserved:!!state&&state.value.current===projectId&&state.value.currentSubproject==="sub-300"&&state.value.guide==="fa"};
+   if(!checks.photoPreserved||!checks.subprojectAmountPreserved||!checks.workerPreserved||!checks.workspaceStatePreserved)throw Error("Normalized Projects self-test failed");
+   const sentinel={id:collisionProjectId,marker:"existing-record-must-survive"};await api().putRecord("projects",sentinel);
+   let collisionRejected=false;try{await api().bulkAddAcrossStores({projects:[{id:collisionProjectId,marker:"overwrite-attempt"}],workers:[{id:collisionWorkerId,name:"must-not-commit"}]});}catch(_){collisionRejected=true;}
+   const afterCollision=await api().getRecord("projects",collisionProjectId),partial=await api().getRecord("workers",collisionWorkerId);
+   checks.duplicateCollisionRejected=collisionRejected;checks.atomicRollbackOnCollision=!!afterCollision&&afterCollision.marker===sentinel.marker&&partial===null;
+   await api().deleteRecord("projects",collisionProjectId);
+   if(!checks.duplicateCollisionRejected||!checks.atomicRollbackOnCollision)throw Error("Atomic collision rollback test failed");
    return {ok:true,checks,legacyLocalStorageChanged:false,liveDataChanged:false,appCutover:false,bytes:new Blob([JSON.stringify(fixture)]).size};
   }finally{
    if(committed){for(const [store,ids] of [["projects",[projectId]],["workers",[workerId]],["projectMetadata",[metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
