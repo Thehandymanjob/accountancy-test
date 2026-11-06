@@ -134,7 +134,7 @@
     return summary;
   }
   function comparisonKey(store, record) {
-    const norm = value => String(value == null ? "" : value).trim().toLowerCase().replace(/\\s+/g, " ");
+    const norm = value => String(value == null ? "" : value).trim().toLowerCase().replace(/\s+/g, " ");
     if (store === "accountingEntries") {
       const parts = [record.type, record.date, Number(record.amount), record.category];
       if (record.number !== undefined) parts.push("invoice-number", record.number);
