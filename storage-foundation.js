@@ -598,11 +598,6 @@
       const packageSubIds=new Set(packageSubs.map(x=>String(x&&x.id)));
       const extraSubprojects=packageSubs.filter(x=>!typedSubIds.has(String(x&&x.id))).map(x=>({id:String(x&&x.id),fieldNames:Object.keys(x||{}).sort(),hasIncome:Array.isArray(x&&x.income),incomeCount:Array.isArray(x&&x.income)?x.income.length:0}));
       const packageRootFields=packageValue&&typeof packageValue==="object"?Object.keys(packageValue).sort():[];
-      const projectFieldComparison={packageRootFields,packageProjectFields:Object.keys(packageProject||{}).sort(),typedProjectFields:Object.keys(typedProject||{}).sort(),
-        packageSubprojectCount:packageSubs.length,typedSubprojectCount:typedSubs.length,subprojectIdsOnlyInPackage:[...packageSubIds].filter(x=>!typedSubIds.has(x)),
-        subprojectIdsOnlyInTyped:[...typedSubIds].filter(x=>!packageSubIds.has(x)),packageOnlySubprojectDetails:extraSubprojects,extraSubprojectAudit};
-      const canonical=value=>{if(Array.isArray(value))return "["+value.map(canonical).join(",")+"]";if(value&&typeof value==="object")return "{"+Object.keys(value).sort().map(k=>JSON.stringify(k)+":"+canonical(value[k])).join(",")+"}";return JSON.stringify(value);};
-      const settingsEquality=settings.length<2?null:canonical(settings[0].value)===canonical(settings[1].value);
       const numericSummary = rows => {
         const list=Array.isArray(rows)?rows:[];
         let amountTotal=0,amountCount=0;
@@ -616,6 +611,11 @@
           tools:numericSummary(row.tools),food:numericSummary(row.food),wages:numericSummary(row.wages),
           photoPresent:!!row.photo,photoBytes:typeof row.photo==="string"?byteLength(row.photo):0};
       });
+      const projectFieldComparison={packageRootFields,packageProjectFields:Object.keys(packageProject||{}).sort(),typedProjectFields:Object.keys(typedProject||{}).sort(),
+        packageSubprojectCount:packageSubs.length,typedSubprojectCount:typedSubs.length,subprojectIdsOnlyInPackage:[...packageSubIds].filter(x=>!typedSubIds.has(x)),
+        subprojectIdsOnlyInTyped:[...typedSubIds].filter(x=>!packageSubIds.has(x)),packageOnlySubprojectDetails:extraSubprojects,extraSubprojectAudit};
+      const canonical=value=>{if(Array.isArray(value))return "["+value.map(canonical).join(",")+"]";if(value&&typeof value==="object")return "{"+Object.keys(value).sort().map(k=>JSON.stringify(k)+":"+canonical(value[k])).join(",")+"}";return JSON.stringify(value);};
+      const settingsEquality=settings.length<2?null:canonical(settings[0].value)===canonical(settings[1].value);
       const settingsValueAudit=settings.map(row=>{
         const value=row&&row.value&&typeof row.value==="object"?row.value:{};
         return {id:String(row.id),fields:Object.keys(value).sort(),
