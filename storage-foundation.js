@@ -589,6 +589,21 @@
       const packageValue=parsedPackage&&parsedPackage.valid?parsedPackage.value:null;
       const packageSummary=packageValue===null?null:summarizeTree(packageValue);
       const typedProjectRows=typedProjects.map(p=>({id:String(p.id),subprojectIds:(Array.isArray(p.subProjects)?p.subProjects:Array.isArray(p.subprojects)?p.subprojects:[]).map(x=>String(x&&x.id!==undefined?x.id:"")).filter(Boolean)}));
+      const packageProjects=packageSummary&&packageValue?((Array.isArray(packageValue)?packageValue:packageValue.projects)||[]):[];
+      const packageProject=packageProjects.find(x=>String(x&& (x.id??x._id))===String(typedProjects[0]&&typedProjects[0].id))||packageProjects[0]||null;
+      const typedProject=typedProjects[0]||null;
+      const packageSubs=packageProject?(Array.isArray(packageProject.subprojects)?packageProject.subprojects:Array.isArray(packageProject.subProjects)?packageProject.subProjects:[]):[];
+      const typedSubs=typedProject?(Array.isArray(typedProject.subprojects)?typedProject.subprojects:Array.isArray(typedProject.subProjects)?typedProject.subProjects:[]):[];
+      const typedSubIds=new Set(typedSubs.map(x=>String(x&&x.id)));
+      const packageSubIds=new Set(packageSubs.map(x=>String(x&&x.id)));
+      const extraSubprojects=packageSubs.filter(x=>!typedSubIds.has(String(x&&x.id))).map(x=>({id:String(x&&x.id),fieldNames:Object.keys(x||{}).sort(),hasIncome:Array.isArray(x&&x.income),incomeCount:Array.isArray(x&&x.income)?x.income.length:0}));
+      const packageRootFields=packageValue&&typeof packageValue==="object"?Object.keys(packageValue).sort():[];
+      const projectFieldComparison={packageRootFields,packageProjectFields:Object.keys(packageProject||{}).sort(),typedProjectFields:Object.keys(typedProject||{}).sort(),
+        packageSubprojectCount:packageSubs.length,typedSubprojectCount:typedSubs.length,subprojectIdsOnlyInPackage:[...packageSubIds].filter(x=>!typedSubIds.has(x)),
+        subprojectIdsOnlyInTyped:[...typedSubIds].filter(x=>!packageSubIds.has(x)),packageOnlySubprojectDetails:extraSubprojects};
+      const canonical=value=>{if(Array.isArray(value))return "["+value.map(canonical).join(",")+"]";if(value&&typeof value==="object")return "{"+Object.keys(value).sort().map(k=>JSON.stringify(k)+":"+canonical(value[k])).join(",")+"}";return JSON.stringify(value);};
+      const settingsEquality=settings.length<2?null:canonical(settings[0].value)===canonical(settings[1].value);
+
       const typedProjectIds=new Set(typedProjectRows.map(x=>x.id));
       const packageProjectIds=new Set(packageSummary?packageSummary.projectRows.map(x=>x.id).filter(x=>x!==null).map(String):[]);
       const projectComparison={package:packageSummary,typed:{projectCount:typedProjects.length,projectRows:typedProjectRows},
@@ -616,14 +631,14 @@
         database:DB_NAME,schemaVersion:DB_VERSION,
         localStorageSources:{projects:safeLocalSummary(projectsLocal),contracts:safeLocalSummary(contractsLocal),
           monitorLog:safeLocalSummary(local[PREFIX+"monitor_log_v1"]??null)},
-        projects:projectComparison,
+        projects:projectComparison,projectFieldComparison,
         projectsPackage:{present:kvProjects!==null,bytes:kvProjects===null?0:byteLength(kvProjects),digest:kvProjects===null?null:digest(kvProjects),
           jsonValid:parsedPackage?parsedPackage.valid:null,summary:packageSummary},
         contracts:{typedCount:typedContracts.length,typedIds:typedContracts.map(x=>String(x.id)),
           localStoragePresent:contractsLocal!==null},
         monitorLog:{localStorage:safeLocalSummary(local[PREFIX+"monitor_log_v1"]??null),
           kv:kvComparison[PREFIX+"monitor_log_v1"]||null,snapshots:snapshotSummary[PREFIX+"monitor_log_v1"]||[]},
-        kvComparison,snapshotComparison:snapshotSummary,accountingSettings:settingsSummary,
+        kvComparison,snapshotComparison:snapshotSummary,accountingSettings:{records:settingsSummary,valuesEqual:settingsEquality},
         note:"Read-only structural comparison. Digests are non-cryptographic diagnostics; no raw values, names, addresses, contacts or private notes are returned."};
     } finally { db.close(); }
   }
