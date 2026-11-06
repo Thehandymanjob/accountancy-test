@@ -496,15 +496,22 @@
     localKeys.sort((a,b) => a.key.localeCompare(b.key));
     const db = await openDatabase();
     try {
-      const txNames = [...STORES, KV_STORE];
-      const tx = db.transaction(txNames, "readonly");
+      const readAll = async name => {
+        const tx = db.transaction([name], "readonly");
+        return await requestResult(tx.objectStore(name).getAll());
+      };
+      const readCount = async name => {
+        const tx = db.transaction([name], "readonly");
+        return await requestResult(tx.objectStore(name).count());
+      };
+      const names = [...STORES, KV_STORE];
       const counts = {};
-      for (const name of txNames) counts[name] = await requestResult(tx.objectStore(name).count());
-      const kvRows = await requestResult(tx.objectStore(KV_STORE).getAll());
+      for (const name of names) counts[name] = await readCount(name);
+      const kvRows = await readAll(KV_STORE);
       const kv = kvRows.map(row => ({ key: row.key, bytes: new Blob([String(row.value ?? "")]).size, present: true }));
       const typed = {};
       for (const name of STORES) {
-        const rows = await requestResult(tx.objectStore(name).getAll());
+        const rows = await readAll(name);
         typed[name] = rows.map(row => ({ id: String(row.id), fields: Object.keys(row).sort(), migrationSource: row.migrationSource || row.snapshotKind || null }));
       }
       return {
@@ -516,7 +523,6 @@
       };
     } finally { db.close(); }
   }
-
   async function status() {
     const db = await openDatabase();
     try {
