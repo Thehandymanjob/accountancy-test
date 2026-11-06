@@ -597,9 +597,12 @@
         photoLikeFields:photos.length, photoLikeBytes:photos.reduce((n,x)=>n+x.bytes,0) };
     };
     const local = {};
+    // Source comparison must use the same all-origin scope as inventory,
+    // snapshots, migration and verification. Values remain internal to this
+    // diagnostic and are never returned in its report.
     for (let i=0;i<localStorage.length;i++) {
       const key=localStorage.key(i);
-      if (key && key.startsWith(PREFIX)) local[key]=localStorage.getItem(key);
+      if (key) local[key]=localStorage.getItem(key);
     }
     const db=await openDatabase();
     try {
