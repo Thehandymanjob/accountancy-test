@@ -6,7 +6,8 @@
   "use strict";
   const ACCOUNTING_KEY = "tha_test226_accounting_v1";
   const SEQUENCE_KEY = "tha_test226_invoice_sequence_v1";
-  const SEQUENCE_CLEANUP_KEY = "tha_test226_invoice_sequence_cleanup_v1";\n  const EMPTY_SEQUENCE_RESET_KEY = "tha_test226_empty_invoice_sequence_reset_v229";
+  const SEQUENCE_CLEANUP_KEY = "tha_test226_invoice_sequence_cleanup_v1";
+  const EMPTY_SEQUENCE_RESET_KEY = "tha_test226_empty_invoice_sequence_reset_v229";
   const STORE_MAP = Object.freeze({
     entries: "accountingEntries",
     customers: "customers",
