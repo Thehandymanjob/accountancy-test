@@ -230,6 +230,47 @@
     } finally { db.close(); }
   }
 
+  async function bulkAddAcrossStores(recordsByStore) {
+    if (!recordsByStore || typeof recordsByStore !== "object" || Array.isArray(recordsByStore)) {
+      throw new Error("Cross-store write requires a store-to-records object.");
+    }
+    const storeNames = Object.keys(recordsByStore);
+    if (!storeNames.length) throw new Error("Cross-store write contains no stores.");
+    for (const name of storeNames) {
+      assertRecordStore(name);
+      if (!Array.isArray(recordsByStore[name])) throw new Error("Records for " + name + " must be an array.");
+      const ids = new Set();
+      for (const record of recordsByStore[name]) {
+        validateRecord(record);
+        const id = String(record.id);
+        if (ids.has(id)) throw new Error("Duplicate record id in " + name + ": " + id);
+        ids.add(id);
+      }
+    }
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(storeNames, "readwrite");
+      const done = transactionDone(tx);
+      for (const name of storeNames) {
+        const store = tx.objectStore(name);
+        for (const record of recordsByStore[name]) store.add(record);
+      }
+      await done;
+      const verification = {};
+      for (const name of storeNames) {
+        verification[name] = [];
+        for (const record of recordsByStore[name]) {
+          const saved = await getRecord(name, record.id);
+          if (!saved || JSON.stringify(saved) !== JSON.stringify(record)) {
+            throw new Error("Cross-store write verification failed for " + name + "/" + record.id);
+          }
+          verification[name].push(record.id);
+        }
+      }
+      return { ok: true, atomic: true, stores: storeNames, written: Object.values(recordsByStore).reduce((n, rows) => n + rows.length, 0), verification };
+    } finally { db.close(); }
+  }
+
   async function snapshotLegacyData() {
     const db = await openDatabase();
     const snapshots = [];
