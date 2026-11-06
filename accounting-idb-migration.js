@@ -97,6 +97,10 @@
       id: "invoice-sequence-cleanup", legacyKey: SEQUENCE_CLEANUP_KEY,
       rawValue: source.raw[SEQUENCE_CLEANUP_KEY], value: source.sequenceCleanup
     });
+    if (source.raw[EMPTY_SEQUENCE_RESET_KEY] !== null) byStore.recordOrder.records.push({
+      id: "empty-invoice-sequence-reset-v229", legacyKey: EMPTY_SEQUENCE_RESET_KEY,
+      rawValue: source.raw[EMPTY_SEQUENCE_RESET_KEY], value: source.emptySequenceReset
+    });
     return byStore;
   }
   async function inspectCurrent() {
