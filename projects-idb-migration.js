@@ -86,7 +86,7 @@
 (function(root){
  "use strict";
  const map={projects:"projects",workers:"workers",partners:"partners",contractors:"contractors",companies:"companies",companyJobs:"companyJobs"};
- const profileId="__tha_projects_profile_v1__",manifestId="__tha_projects_workspace_manifest_v1__";
+ const profileId="__tha_projects_profile_v1__",stateId="__tha_projects_workspace_state_v1__",manifestId="__tha_projects_workspace_manifest_v1__";
  function api(){const a=root.HandymanStorageFoundation;if(!a||!a.bulkAddAcrossStores||!a.getAllRecords)throw Error("IndexedDB repository API unavailable");return a;}
  function prepare(x){
   if(!x||typeof x!=="object"||Array.isArray(x)||!Array.isArray(x.projects)||!Array.isArray(x.workers))throw Error("Projects and workers arrays are required.");
@@ -94,6 +94,8 @@
   const out={};
   for(const k of Object.keys(map)){out[map[k]]=(x[k]||[]).map((r,i)=>{if(!r||typeof r!=="object"||Array.isArray(r)||(typeof r.id!=="string"&&!(typeof r.id==="number"&&Number.isFinite(r.id)))||String(r.id).trim()==="")throw Error(k+" record "+i+" has no valid id");return JSON.parse(JSON.stringify(r));});}
   const meta=[];if(x.profile!==undefined){if(!x.profile||typeof x.profile!=="object"||Array.isArray(x.profile))throw Error("Invalid profile");meta.push({id:profileId,kind:"projects-profile",value:JSON.parse(JSON.stringify(x.profile))});}
+  const workspaceState={};for(const [k,v] of Object.entries(x))if(!Object.prototype.hasOwnProperty.call(map,k)&&k!=="profile")workspaceState[k]=JSON.parse(JSON.stringify(v));
+  meta.push({id:stateId,kind:"projects-workspace-state",value:workspaceState});
   const counts={};for(const k of Object.keys(map))counts[map[k]]=out[map[k]].length;
   meta.push({id:manifestId,kind:"projects-workspace-manifest",schema:1,counts,subprojectCount:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),createdAt:new Date().toISOString()});
   out.projectMetadata=meta;return out;
@@ -106,7 +108,7 @@
   const metaId="__tha_idb_meta_test__"+suffix,photo="data:image/jpeg;base64,"+"A".repeat(6*1024*1024);
   const fixture={projects:[{id:projectId,name:"Synthetic IndexedDB test",photo,subprojects:[{id:"sub-300",name:"Extra Job",price:300}]}],
    workers:[{id:workerId,name:"Synthetic worker"}],partners:[],contractors:[],companies:[],companyJobs:[]};
-  const rows=prepare(fixture);rows.projectMetadata=rows.projectMetadata.filter(x=>x.id!==manifestId);
+  const rows=prepare(fixture);rows.projectMetadata=rows.projectMetadata.filter(x=>x.id!==manifestId&&x.id!==stateId);
   rows.projectMetadata.push({id:metaId,kind:"test-fixture"});
   let committed=false;
   try{
