@@ -36,7 +36,8 @@
   function readSource() {
     const rawAccounting = root.localStorage.getItem(ACCOUNTING_KEY);
     const rawSequence = root.localStorage.getItem(SEQUENCE_KEY);
-    const rawSequenceCleanup = root.localStorage.getItem(SEQUENCE_CLEANUP_KEY);\n    const rawEmptySequenceReset = root.localStorage.getItem(EMPTY_SEQUENCE_RESET_KEY);
+    const rawSequenceCleanup = root.localStorage.getItem(SEQUENCE_CLEANUP_KEY);
+    const rawEmptySequenceReset = root.localStorage.getItem(EMPTY_SEQUENCE_RESET_KEY);
     if (rawAccounting === null) throw new Error("Accounting LocalStorage key was not found. Open the v250 test app in this browser first.");
     const data = parseJson(rawAccounting, ACCOUNTING_KEY);
     if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("Accounting data must be an object.");
@@ -53,7 +54,8 @@
       raw: { [ACCOUNTING_KEY]: rawAccounting, [SEQUENCE_KEY]: rawSequence, [SEQUENCE_CLEANUP_KEY]: rawSequenceCleanup, [EMPTY_SEQUENCE_RESET_KEY]: rawEmptySequenceReset },
       data,
       sequence: rawSequence === null ? null : parseJson(rawSequence, SEQUENCE_KEY),
-      sequenceCleanup: rawSequenceCleanup === null ? null : parseJson(rawSequenceCleanup, SEQUENCE_CLEANUP_KEY),\n      emptySequenceReset: rawEmptySequenceReset === null ? null : parseJson(rawEmptySequenceReset, EMPTY_SEQUENCE_RESET_KEY)
+      sequenceCleanup: rawSequenceCleanup === null ? null : parseJson(rawSequenceCleanup, SEQUENCE_CLEANUP_KEY),
+      emptySequenceReset: rawEmptySequenceReset === null ? null : parseJson(rawEmptySequenceReset, EMPTY_SEQUENCE_RESET_KEY)
     };
   }
   function rowsFor(name, list) {
