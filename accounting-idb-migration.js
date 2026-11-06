@@ -133,6 +133,29 @@
     }
     return summary;
   }
+  function comparisonKey(store, record) {
+    const norm = value => String(value == null ? "" : value).trim().toLowerCase().replace(/\\s+/g, " ");
+    if (store === "accountingEntries") {
+      const parts = [record.type, record.date, Number(record.amount), record.category];
+      if (record.number !== undefined) parts.push("invoice-number", record.number);
+      if (record.invoiceId) parts.push("invoice-id", record.invoiceId);
+      if (!record.type || !record.date || !Number.isFinite(Number(record.amount)) || !record.category) return null;
+      return parts.map(norm).join("|");
+    }
+    if (store === "invoices") {
+      if (record.number == null || !record.date || !record.customerName) return null;
+      return [record.number, record.date, record.customerName].map(norm).join("|");
+    }
+    if (store === "customers") {
+      if (!record.name) return null;
+      return norm(record.name);
+    }
+    if (store === "customExpenseCategories") {
+      const name = record.name ?? record.value;
+      return name ? norm(name) : null;
+    }
+    return null;
+  }
   async function inspectCurrent() {
     const source = readSource(), plan = buildPlan(source), a = api();
     const stores = {}, conflicts = [], invalid = [];
@@ -141,20 +164,49 @@
       const existing = await a.getAllRecords(store);
       const existingById = new Map(existing.map(record => [String(record.id), record]));
       let identical = 0, toAdd = 0;
+      const sourceRecords = group.records.map(record => ({
+        id: String(record.id), fields: Object.keys(record).sort(),
+        summary: safeRecordSummary(store, record)
+      }));
+      const existingRecords = existing.map(record => ({
+        id: String(record.id), fields: Object.keys(record).sort(),
+        summary: safeRecordSummary(store, record),
+        migrationMarker: record.migrationSource || record.snapshotKind || null
+      }));
+      const existingByComparison = new Map();
+      for (const record of existing) {
+        const key = comparisonKey(store, record);
+        if (key) {
+          if (!existingByComparison.has(key)) existingByComparison.set(key, []);
+          existingByComparison.get(key).push(record);
+        }
+      }
+      const possibleMatches = [];
       for (const incoming of group.records) {
         const prior = existingById.get(String(incoming.id));
-        if (!prior) { toAdd++; continue; }
-        if (canonical(prior) === canonical(incoming)) identical++;
+        if (!prior) toAdd++;
+        else if (canonical(prior) === canonical(incoming)) identical++;
         else conflicts.push({ store, id: String(incoming.id), reason: "IndexedDB already contains a different record with this ID." });
+        if (!prior) {
+          const key = comparisonKey(store, incoming);
+          const matches = key ? (existingByComparison.get(key) || []) : [];
+          if (matches.length) possibleMatches.push({
+            sourceId: String(incoming.id),
+            sourceSummary: safeRecordSummary(store, incoming),
+            existingIds: matches.map(record => String(record.id)),
+            existingSummaries: matches.map(record => safeRecordSummary(store, record)),
+            matchBasis: store === "accountingEntries"
+              ? "type + date + amount + category (+ invoice identifiers when present)"
+              : store === "invoices" ? "invoice number + date + customer"
+              : store === "customers" ? "normalized customer name"
+              : "normalized category name",
+            classification: "possible-match-only; no automatic merge or deletion"
+          });
+        }
       }
       stores[store] = {
         sourceCount: group.records.length, existingCount: existing.length, identical, toAdd,
-        existingRecords: existing.map(record => ({
-          id: String(record.id),
-          fields: Object.keys(record).sort(),
-          summary: safeRecordSummary(store, record),
-          migrationMarker: record.migrationSource || record.snapshotKind || null
-        }))
+        sourceRecords, existingRecords, possibleMatches
       };
     }
     return {
