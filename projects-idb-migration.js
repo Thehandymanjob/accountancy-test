@@ -137,7 +137,28 @@
    totalRecords+=records.length;totalBytes+=bytes;
   }
   const metadataConflictDetails=[];for(const record of (rows.projectMetadata||[])){const prior=await a.getRecord("projectMetadata",record.id);if(prior&&!recordsEqual("projectMetadata",prior,record)){const changedFields=[...new Set([...Object.keys(record),...Object.keys(prior)])].filter(k=>!equal(record[k],prior[k]));metadataConflictDetails.push({id:String(record.id),kind:record.kind||null,changedFields,incomingFieldSummary:Object.fromEntries(changedFields.map(k=>[k,fieldInfo(record[k])])),existingFieldSummary:Object.fromEntries(changedFields.map(k=>[k,fieldInfo(prior[k])]))});}}
-  const conflictingTotal=existing.reduce((n,x)=>n+x.conflictingCount,0),identicalTotal=existing.reduce((n,x)=>n+x.identicalCount,0);return {ok:duplicates.length===0&&conflictingTotal===0,readOnly:true,willWrite:false,appCutover:false,localStorageChanged:false,backupChanged:false,fileName:file.name,fileBytes:file.size,stores,totalRecords,totalSubprojects:b.projects.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),approxIndexedDBBytes:totalBytes,duplicateIncomingIds:duplicates,identicalExistingRecords:identicalTotal,conflictingExistingRecords:conflictingTotal,existingRecordComparisons:existing,conflictDetails,metadataConflictDetails};
+  const incomeComparison=[];
+  const backupProjects=Array.isArray(b.projects.projects)?b.projects.projects:[];
+  for(const bp of backupProjects){
+   const live=await a.getRecord("projects",bp.id);
+   const backupSubs=Array.isArray(bp.subprojects)?bp.subprojects:[],liveSubs=Array.isArray(live&&live.subprojects)?live.subprojects:[];
+   const liveMap=new Map(liveSubs.filter(x=>x&&x.id!==undefined).map(x=>[String(x.id),x]));
+   for(const bs of backupSubs){
+    const ls=liveMap.get(String(bs&&bs.id));
+    const bi=Array.isArray(bs&&bs.income)?bs.income:[],li=Array.isArray(ls&&ls.income)?ls.income:[];
+    const bm=new Map(bi.filter(x=>x&&x.id!==undefined).map(x=>[String(x.id),x]));
+    const lm=new Map(li.filter(x=>x&&x.id!==undefined).map(x=>[String(x.id),x]));
+    const ids=[...new Set([...bm.keys(),...lm.keys()])];
+    const missing=ids.filter(id=>bm.has(id)&&!lm.has(id));
+    const extra=ids.filter(id=>!bm.has(id)&&lm.has(id));
+    const changed=ids.filter(id=>bm.has(id)&&lm.has(id)&&!equal(bm.get(id),lm.get(id)));
+    const amountTotal=arr=>arr.reduce((n,x)=>{const v=Number(x&&x.amount);return n+(Number.isFinite(v)?v:0);},0);
+    incomeComparison.push({subprojectId:bs&&bs.id!==undefined?String(bs.id):null,backupCount:bi.length,indexedDBCount:li.length,backupAmountTotal:amountTotal(bi),indexedDBAmountTotal:amountTotal(li),identicalCount:ids.length-missing.length-extra.length-changed.length,missingInIndexedDB:missing,extraInIndexedDB:extra,changedIncomeIds:changed});
+   }
+  }
+  const incomeMismatchCount=incomeComparison.reduce((n,x)=>n+x.missingInIndexedDB.length+x.extraInIndexedDB.length+x.changedIncomeIds.length,0);
+  const conflictingTotal=existing.reduce((n,x)=>n+x.conflictingCount,0),identicalTotal=existing.reduce((n,x)=>n+x.identicalCount,0);
+  return {ok:duplicates.length===0&&conflictingTotal===0&&incomeMismatchCount===0,readOnly:true,willWrite:false,appCutover:false,localStorageChanged:false,backupChanged:false,fileName:file.name,fileBytes:file.size,stores,totalRecords,totalSubprojects:b.projects.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),approxIndexedDBBytes:totalBytes,duplicateIncomingIds:duplicates,identicalExistingRecords:identicalTotal,conflictingExistingRecords:conflictingTotal,existingRecordComparisons:existing,conflictDetails,metadataConflictDetails,incomeComparison,incomeMismatchCount};
  }
  function stableValue(v){return Array.isArray(v)?v.map(stableValue):(v&&typeof v==="object"?Object.fromEntries(Object.keys(v).sort().map(k=>[k,stableValue(v[k])])):v);}
  function sameValue(a,b){return JSON.stringify(stableValue(a))===JSON.stringify(stableValue(b));}
