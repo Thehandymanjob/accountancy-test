@@ -80,3 +80,26 @@
  }
  root.HandymanProjectsIDBMigration={key:KEY,load,save,restoreBackupObject,importFile,selfTest};
 })(window);
+
+
+// Normalized workspace repository: one add-only transaction across all stores.
+(function(root){
+ "use strict";
+ const map={projects:"projects",workers:"workers",partners:"partners",contractors:"contractors",companies:"companies",companyJobs:"companyJobs"};
+ const profileId="__tha_projects_profile_v1__",manifestId="__tha_projects_workspace_manifest_v1__";
+ function api(){const a=root.HandymanStorageFoundation;if(!a||!a.bulkAddAcrossStores||!a.getAllRecords)throw Error("IndexedDB repository API unavailable");return a;}
+ function prepare(x){
+  if(!x||typeof x!=="object"||Array.isArray(x)||!Array.isArray(x.projects)||!Array.isArray(x.workers))throw Error("Projects and workers arrays are required.");
+  for(const k of ["partners","contractors","companies","companyJobs"])if(x[k]!==undefined&&!Array.isArray(x[k]))throw Error(k+" must be an array.");
+  const out={};
+  for(const k of Object.keys(map)){out[map[k]]=(x[k]||[]).map((r,i)=>{if(!r||typeof r!=="object"||Array.isArray(r)||(typeof r.id!=="string"&&!(typeof r.id==="number"&&Number.isFinite(r.id)))||String(r.id).trim()==="")throw Error(k+" record "+i+" has no valid id");return JSON.parse(JSON.stringify(r));});}
+  const meta=[];if(x.profile!==undefined){if(!x.profile||typeof x.profile!=="object"||Array.isArray(x.profile))throw Error("Invalid profile");meta.push({id:profileId,kind:"projects-profile",value:JSON.parse(JSON.stringify(x.profile))});}
+  const counts={};for(const k of Object.keys(map))counts[map[k]]=out[map[k]].length;
+  meta.push({id:manifestId,kind:"projects-workspace-manifest",schema:1,counts,subprojectCount:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),createdAt:new Date().toISOString()});
+  out.projectMetadata=meta;return out;
+ }
+ async function importWorkspace(x){const rows=prepare(x),r=await api().bulkAddAcrossStores(rows);return {ok:true,atomic:r.atomic,appCutover:false,localStorageChanged:false,backupChanged:false,written:r.written,verification:r.verification,subprojects:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0)};}
+ async function importBackupFile(file){if(!file)throw Error("Select a backup JSON file");const b=JSON.parse(await file.text());if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");return importWorkspace(b.projects);}
+ async function readSummary(){const a=api(),o={ok:true,appCutover:false,stores:{}};for(const s of [...Object.values(map),"projectMetadata"]){const r=await a.getAllRecords(s);o.stores[s]={count:r.length,ids:r.map(x=>x.id)};}const p=await a.getAllRecords("projects");o.subprojects=p.reduce((n,x)=>n+(Array.isArray(x.subprojects)?x.subprojects.length:0),0);o.manifest=o.stores.projectMetadata.ids.includes(manifestId);return o;}
+ root.HandymanProjectsIDBRepository=Object.freeze({prepare,importWorkspace,importBackupFile,readSummary,stores:Object.values(map)});
+})(window);
