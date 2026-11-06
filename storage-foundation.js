@@ -271,6 +271,55 @@
     } finally { db.close(); }
   }
 
+  async function bulkAddAcrossStoresVerified(recordsByStore) {
+    if (!recordsByStore || typeof recordsByStore !== "object" || Array.isArray(recordsByStore)) {
+      throw new Error("Verified cross-store write requires a store-to-records object.");
+    }
+    const storeNames = Object.keys(recordsByStore);
+    if (!storeNames.length) throw new Error("Verified cross-store write contains no stores.");
+    for (const name of storeNames) {
+      assertRecordStore(name);
+      if (!Array.isArray(recordsByStore[name])) throw new Error("Records for " + name + " must be an array.");
+      const ids = new Set();
+      for (const record of recordsByStore[name]) {
+        validateRecord(record);
+        const id = String(record.id);
+        if (ids.has(id)) throw new Error("Duplicate record id in " + name + ": " + id);
+        ids.add(id);
+      }
+    }
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(storeNames, "readwrite");
+      const done = transactionDone(tx);
+      const verification = {};
+      for (const name of storeNames) {
+        verification[name] = [];
+        const store = tx.objectStore(name);
+        for (const record of recordsByStore[name]) {
+          const addRequest = store.add(record);
+          addRequest.onsuccess = () => {
+            const readRequest = store.get(record.id);
+            readRequest.onsuccess = () => {
+              if (!readRequest.result || JSON.stringify(readRequest.result) !== JSON.stringify(record)) {
+                try { tx.abort(); } catch (_) {}
+                return;
+              }
+              verification[name].push(record.id);
+            };
+            readRequest.onerror = () => { try { tx.abort(); } catch (_) {} };
+          };
+          addRequest.onerror = () => { try { tx.abort(); } catch (_) {} };
+        }
+      }
+      await done;
+      const written = Object.values(recordsByStore).reduce((n, rows) => n + rows.length, 0);
+      const verified = Object.values(verification).reduce((n, ids) => n + ids.length, 0);
+      if (verified !== written) throw new Error("Atomic in-transaction verification count mismatch.");
+      return { ok: true, atomic: true, verifiedInsideTransaction: true, stores: storeNames, written, verification };
+    } finally { db.close(); }
+  }
+
   async function bulkWriteAcrossStores(operationsByStore) {
     if (!operationsByStore || typeof operationsByStore !== "object" || Array.isArray(operationsByStore)) throw new Error("Cross-store merge requires an operations object.");
     const names = Object.keys(operationsByStore);
@@ -434,7 +483,7 @@
 
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
-    putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkWriteAcrossStores,
+    putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkAddAcrossStoresVerified, bulkWriteAcrossStores,
     snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
