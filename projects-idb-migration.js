@@ -100,6 +100,28 @@
   meta.push({id:manifestId,kind:"projects-workspace-manifest",schema:1,counts,subprojectCount:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),createdAt:new Date().toISOString()});
   out.projectMetadata=meta;return out;
  }
+ async function inspectBackupFile(file){
+  if(!file)throw Error("Select a backup JSON file");
+  const b=JSON.parse(await file.text());
+  if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");
+  if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");
+  if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");
+  const rows=prepare(b.projects),a=api(),stores={},duplicates=[],existing=[];
+  let totalRecords=0,totalBytes=0;
+  for(const [store,records] of Object.entries(rows)){
+   const seen=new Set();let bytes=0;
+   for(const record of records){
+    const id=String(record.id);if(seen.has(id))duplicates.push({store,id});seen.add(id);
+    bytes+=new TextEncoder().encode(JSON.stringify(record)).length;
+   }
+   const collisions=[];
+   for(const record of records)if(await a.getRecord(store,record.id))collisions.push(String(record.id));
+   if(collisions.length)existing.push({store,count:collisions.length,ids:collisions.slice(0,10)});
+   stores[store]={records:records.length,approxBytes:bytes,existingCollisions:collisions.length};
+   totalRecords+=records.length;totalBytes+=bytes;
+  }
+  return {ok:duplicates.length===0&&existing.length===0,readOnly:true,willWrite:false,appCutover:false,localStorageChanged:false,backupChanged:false,fileName:file.name,fileBytes:file.size,stores,totalRecords,totalSubprojects:b.projects.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0),approxIndexedDBBytes:totalBytes,duplicateIncomingIds:duplicates,existingRecordCollisions:existing};
+ }
  async function importWorkspace(x){const rows=prepare(x),a=api(),collisions=[];for(const [store,records] of Object.entries(rows)){for(const record of records){const existing=await a.getRecord(store,record.id);if(existing)collisions.push({store,id:String(record.id)});}}if(collisions.length)throw new Error("Import blocked before writing: "+collisions.slice(0,12).map(c=>c.store+"/"+c.id).join(", ")+(collisions.length>12?" (+"+(collisions.length-12)+" more)":"")+". Existing IndexedDB records were not overwritten.");const r=await a.bulkAddAcrossStores(rows);return {ok:true,atomic:r.atomic,appCutover:false,localStorageChanged:false,backupChanged:false,written:r.written,verification:r.verification,subprojects:x.projects.reduce((n,p)=>n+(Array.isArray(p.subprojects)?p.subprojects.length:0),0)};}
  async function importBackupFile(file){if(!file)throw Error("Select a backup JSON file");const b=JSON.parse(await file.text());if(!b||typeof b!=="object"||Array.isArray(b))throw Error("Invalid backup root");if(b.app!==undefined&&b.app!=="The Handyman Accountancy")throw Error("Backup belongs to another app");if(b.backupType!==undefined&&b.backupType!=="complete-user-data")throw Error("Unsupported backup type");return importWorkspace(b.projects);}
  async function readSummary(){const a=api(),o={ok:true,appCutover:false,stores:{}};for(const s of [...Object.values(map),"projectMetadata"]){const r=await a.getAllRecords(s);o.stores[s]={count:r.length,ids:r.map(x=>x.id)};}const p=await a.getAllRecords("projects");o.subprojects=p.reduce((n,x)=>n+(Array.isArray(x.subprojects)?x.subprojects.length:0),0);o.manifest=o.stores.projectMetadata.ids.includes(manifestId);return o;}
@@ -128,5 +150,5 @@
    if(committed){for(const [store,ids] of [["projects",[projectId,collisionProjectId]],["workers",[workerId,collisionWorkerId]],["projectMetadata",[stateId,metaId]]])for(const id of ids)await api().deleteRecord(store,id);}
   }
  }
- root.HandymanProjectsIDBRepository=Object.freeze({prepare,importWorkspace,importBackupFile,readSummary,selfTest,stores:Object.values(map)});
+ root.HandymanProjectsIDBRepository=Object.freeze({prepare,inspectBackupFile,importWorkspace,importBackupFile,readSummary,selfTest,stores:Object.values(map)});
 })(window);
