@@ -124,12 +124,59 @@
       totalToAdd: Object.values(stores).reduce((n, x) => n + x.toAdd, 0)
     };
   }
+  async function snapshotLegacyDataAppendOnly() {
+    const db = await api().openDatabase();
+    const prefix = "tha_test226_";
+    const stamp = Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+    const sourceRows = [];
+    for (let i = 0; i < root.localStorage.length; i++) {
+      const key = root.localStorage.key(i);
+      if (!key || !key.startsWith(prefix)) continue;
+      const raw = root.localStorage.getItem(key);
+      let validJson = true;
+      try { JSON.parse(raw); } catch (_) { validJson = false; }
+      sourceRows.push({
+        id: "snapshot:" + key + ":" + stamp,
+        legacyKey: key, present: true, raw,
+        byteLength: new Blob([raw]).size, validJson,
+        capturedAt: new Date().toISOString(), snapshotKind: "append-only"
+      });
+    }
+    sourceRows.sort((a, b) => a.legacyKey.localeCompare(b.legacyKey));
+    try {
+      const tx = db.transaction(["legacySnapshots"], "readwrite");
+      const done = new Promise((resolve, reject) => {
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error || new Error("Legacy snapshot transaction failed."));
+        tx.onabort = () => reject(tx.error || new Error("Legacy snapshot transaction aborted."));
+      });
+      const store = tx.objectStore("legacySnapshots");
+      for (const row of sourceRows) store.add(row);
+      await done;
+      const verifyTx = db.transaction(["legacySnapshots"], "readonly");
+      const verifyDone = new Promise((resolve, reject) => {
+        verifyTx.oncomplete = resolve;
+        verifyTx.onerror = () => reject(verifyTx.error || new Error("Legacy snapshot verification failed."));
+        verifyTx.onabort = () => reject(verifyTx.error || new Error("Legacy snapshot verification aborted."));
+      });
+      const checks = sourceRows.map(row => new Promise((resolve, reject) => {
+        const request = verifyTx.objectStore("legacySnapshots").get(row.id);
+        request.onsuccess = () => resolve(!!request.result && request.result.raw === row.raw);
+        request.onerror = () => reject(request.error || new Error("Snapshot read-back failed."));
+      }));
+      const verified = await Promise.all(checks);
+      await verifyDone;
+      if (verified.some(value => !value)) throw new Error("Append-only legacy snapshot read-back did not match.");
+      return { ok: true, mode: "append-only", count: sourceRows.length,
+        keys: sourceRows.map(row => ({ key: row.legacyKey, bytes: row.byteLength, validJson: row.validJson })) };
+    } finally { db.close(); }
+  }
   async function migrateCurrent() {
     const before = readSource();
     const preview = await inspectCurrent();
     if (!preview.ok) throw new Error("Accounting migration stopped: resolve source validation errors or IndexedDB conflicts before importing.");
-    // Preserve an exact raw snapshot before any operational records are copied.
-    const snapshot = await api().snapshotLegacyData();
+    // Append a new immutable snapshot; never overwrite an earlier recovery snapshot.
+    const snapshot = await snapshotLegacyDataAppendOnly();
     if (!snapshot || !snapshot.ok) throw new Error("Legacy snapshot could not be completed; no Accounting records were imported.");
     const current = readSource();
     for (const key of Object.keys(before.raw)) {
