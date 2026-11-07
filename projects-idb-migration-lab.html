@@ -22,7 +22,7 @@ label{font-weight:700;display:block;margin:14px 0 7px}
 <hr>
 <h2>Accounting migration — v250</h2>
 <p>Reads the current test app Accounting data directly from this browser. Inspect is read-only. Import first snapshots legacy LocalStorage, then copies Accounting records to IndexedDB without deleting or modifying LocalStorage.</p>
-<button id="coverageAudit">Audit complete data coverage (read-only)</button>\n<button id="reconcile">Compare LocalStorage records with IndexedDB (read-only)</button>
+<button id="coverageAudit">Audit complete data coverage (read-only)</button><button id="reconcile">Compare LocalStorage records with IndexedDB (read-only)</button>
 <button id="inventoryInspect">Inspect all LocalStorage and IndexedDB data (read-only)</button>
 <button id="sourceCompare">Compare migration sources (read-only, no writing)</button>
 <button id="accountingInspect">Inspect current Accounting data (read-only)</button>
@@ -37,7 +37,8 @@ document.getElementById("test").onclick=async()=>{busy(true);try{show(await Hand
 document.getElementById("inspect").onclick=async()=>{const f=document.getElementById("backup").files[0];if(!f){show({ok:false,error:"Choose a backup file first.",readOnly:true});return}busy(true);try{show(await HandymanProjectsIDBRepository.inspectBackupFile(f))}catch(e){show({ok:false,error:e.message,readOnly:true,willWrite:false})}finally{busy(false)}};
 document.getElementById("import").onclick=async()=>{const f=document.getElementById("backup").files[0];if(!f){show({ok:false,error:"Choose a backup file first."});return}if(!confirm("Copy only the Projects section into the isolated IndexedDB test area? The live app data and LocalStorage will not be changed."))return;busy(true);try{show(await HandymanProjectsIDBRepository.importBackupFile(f))}catch(e){show({ok:false,error:e.message,liveDataChanged:false})}finally{busy(false)}};
 document.getElementById("read").onclick=async()=>{busy(true);try{show(await HandymanProjectsIDBRepository.readSummary())}catch(e){show({ok:false,error:e.message})}finally{busy(false)}};
-document.getElementById("reconcile").onclick=async()=>{busy(true);try{show(await HandymanSourceIDBReconciliation.inspect())}catch(e){show({ok:false,readOnly:true,willWrite:false,error:e.message})}finally{busy(false)}};\ndocument.getElementById("coverageAudit").onclick=async()=>{busy(true);try{show(await HandymanCompleteDataAudit.inspect())}catch(e){show({ok:false,readOnly:true,willWrite:false,error:e.message})}finally{busy(false)}};
+document.getElementById("reconcile").onclick=async()=>{busy(true);try{show(await HandymanSourceIDBReconciliation.inspect())}catch(e){show({ok:false,readOnly:true,willWrite:false,error:e.message})}finally{busy(false)}};
+document.getElementById("coverageAudit").onclick=async()=>{busy(true);try{show(await HandymanCompleteDataAudit.inspect())}catch(e){show({ok:false,readOnly:true,willWrite:false,error:e.message})}finally{busy(false)}};
 document.getElementById("inventoryInspect").onclick=async()=>{busy(true);try{show(await HandymanStorageFoundation.inspectStorageInventory())}catch(e){show({ok:false,readOnly:true,willWrite:false,error:e.message})}finally{busy(false)}};
 document.getElementById("sourceCompare").onclick=async()=>{busy(true);try{show(await HandymanStorageFoundation.inspectMigrationSources())}catch(e){show({ok:false,readOnly:true,willWrite:false,error:e.message})}finally{busy(false)}};
 document.getElementById("accountingInspect").onclick=async()=>{busy(true);try{show(await HandymanAccountingIDBMigration.inspectCurrent())}catch(e){show({ok:false,readOnly:true,willWrite:false,error:e.message})}finally{busy(false)}};
