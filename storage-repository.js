@@ -225,7 +225,7 @@
  async function selfTest(){
   const runToken=Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,10);
   const domain="test_"+runToken,otherDomain="other_"+runToken,key="roundtrip";
-  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"concurrent-a"},{domain,key:"concurrent-b"},{domain,key:"stale-record"},{domain:otherDomain,key:"keep"}];
+  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"concurrent-a"},{domain,key:"concurrent-b"},{domain,key:"stale-record"},{domain,key:"domain-accounting"},{domain,key:"domain-projects"},{domain,key:"abort-a"},{domain,key:"abort-b"},{domain,key:"invoice-counter"},{domain:otherDomain,key:"keep"},{domain:otherDomain,key:"domain-contracts"}];
   for(const item of reserved){
    if(await get(item.domain,item.key)!==null)
     throw new Error("Generated self-test namespace is unexpectedly occupied ("+recordId(item.domain,item.key)+"); refusing to overwrite existing data.");
@@ -294,7 +294,7 @@
    await remove(domain,"domain-accounting");await remove(domain,"domain-projects");await remove(otherDomain,"domain-contracts");
    await remove(domain,"abort-a");await remove(domain,"abort-b");
    await remove(otherDomain,"keep");
-   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get(otherDomain,"keep"))===null;
+   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get(domain,"domain-accounting"))===null&&(await get(domain,"domain-projects"))===null&&(await get(domain,"abort-a"))===null&&(await get(domain,"abort-b"))===null&&(await get(domain,"invoice-counter"))===null&&(await get(otherDomain,"keep"))===null&&(await get(otherDomain,"domain-contracts"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
    return {ok:true,database:DB_NAME,schemaVersion:DB_VERSION,checks,localStorageAccessed:false,appCutover:false};
   }catch(error){
