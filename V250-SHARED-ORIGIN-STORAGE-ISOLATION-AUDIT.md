@@ -120,3 +120,29 @@ It does **not** identify the exact browser action or script that changed the key
 ### Required next step
 
 Preserve the uploaded 40-record snapshot unchanged. Before importing the authoritative `New_new(1).json` backup, obtain a fresh read-only export of the current 29 legacy records (including raw values), then compare it with this 40-record snapshot. Keep all 40 historical records and all 29 current records available as separate evidence; do not merge them into business domains or remove duplicates until the user explicitly approves a record-by-record mapping.
+
+
+## Follow-up: current legacy export captured at 18:30 UTC
+
+A second user-provided export was received from the newly added read-only export button.
+
+- File: `1(1).json`
+- Snapshot timestamp: `2026-11-07T18:30:13.159Z`
+- File size: 4,384,242 bytes
+- Records: 40; unique keys: 40
+- Database: `the_handyman_accountancy_v250_idb`
+- Domain: `legacy` only
+
+It was compared programmatically against the earlier 14:52 snapshot (`THA-v250-legacy-snapshot.json`):
+
+- Earlier snapshot: 40 records.
+- 18:30 snapshot: 40 records.
+- Key-set difference: **none** (all 40 keys match exactly).
+- Raw-value difference: **none** (all 40 raw strings match byte-for-byte).
+- Thus all 40 legacy records and their raw values persisted unchanged between these two IndexedDB snapshots.
+
+This new evidence supersedes the earlier tentative comparison that treated the 29-key Inspect/Compare output as the current IndexedDB inventory. The 18:30 export directly reads the IndexedDB `legacy` domain and shows 40 records. The earlier 29-key report remains an observed diagnostic output, but it is not evidence that the current IndexedDB legacy domain permanently lost 11 records. Its discrepancy remains unexplained; do not infer that a restore/factory-reset occurred.
+
+Important limitation: this export contains only IndexedDB legacy records. It does **not** inspect or compare current LocalStorage raw values. Therefore it confirms IndexedDB legacy preservation, not LocalStorage parity.
+
+Next safe step: retain both exports and the exact 40 raw values. Re-run the read-only LocalStorage key-name comparison separately, then if needed add a read-only value-level comparator. Do not alter the guarded importer, do not relax the 40-key condition, do not import yet, and do not cut over the app.
