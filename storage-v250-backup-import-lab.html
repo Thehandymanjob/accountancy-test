@@ -25,6 +25,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <div class="notice"><strong>Safety:</strong> Preparation does not write business records. Before import, it snapshots the existing typed domains and requires you to download that snapshot. The import writes three records atomically, verifies their canonical SHA-256 hashes, and confirms all 40 legacy keys remain unchanged. LocalStorage is never accessed. The app is not cut over.</div>
 <p><strong>Step 1 — Select the authoritative backup</strong></p>
 <input id="file" type="file" accept=".json,application/json">
+<button id="inspectLegacy" class="secondary" type="button">Inspect legacy records (read-only)</button>
 <button id="prepare">Prepare migration (read-only)</button>
 <button id="snapshot" class="secondary" disabled>Download pre-import IndexedDB snapshot</button>
 <p id="preview" class="small" aria-live="polite"></p>
@@ -40,7 +41,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <button id="copyOutput" class="secondary" type="button">Copy JSON result</button>
 <p class="small">Destination records: accounting/main, projects/main, contracts/main. Existing target records cause the import to stop rather than overwrite. Existing 40 legacy keys are retained. Production accountancy/main is not modified.</p>
 </main>
-<script src="storage-repository.js?v=v250"></script>
+<script src="storage-repository.js?v=v250-legacy-snapshot-check-20261107"></script>
 <script src="storage-v250-backup-audit.js?v=new-backup-20261107"></script>
 <script src="storage-v250-backup-import.js?v=guarded-import-v1"></script>
 <script>
@@ -68,6 +69,28 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
  $("copyLink").onclick=()=>copyText(window.location.href,"Page link");
  $("copyOutput").onclick=()=>copyText($("out").textContent,"JSON result");
  const updateApply=()=>{$("apply").disabled=!state||!$("saved").checked||$("phraseInput").value!==state.confirmationPhrase};
+ $("inspectLegacy").onclick=async()=>{
+  $("inspectLegacy").disabled=true;
+  try{
+   await HandymanStorageRepository.ready();
+   const [health,snapshot]=await Promise.all([
+    HandymanStorageRepository.health(),
+    HandymanStorageRepository.snapshot(["legacy"])
+   ]);
+   const keys=snapshot.records.map(row=>row.key).sort();
+   show({
+    ok:true,database:health.database,
+    healthLegacyCount:health.counts&&health.counts.legacy||0,
+    snapshotLegacyCount:snapshot.records.length,
+    difference:(health.counts&&health.counts.legacy||0)-snapshot.records.length,
+    snapshotKeys:keys,
+    localStorageAccessed:false,businessDataWritten:false,appCutover:false
+   });
+   $("preview").textContent="Read-only legacy inspection completed. No business records were changed.";
+  }catch(error){
+   show({ok:false,error:String(error&&error.message||error),localStorageAccessed:false,businessDataWritten:false,appCutover:false});
+  }finally{$("inspectLegacy").disabled=false;}
+ };
  $("prepare").onclick=async()=>{
   $("prepare").disabled=true;$("snapshot").disabled=true;$("confirmArea").hidden=true;
   $("preview").textContent="Checking backup and current v250 records…";
