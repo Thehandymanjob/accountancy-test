@@ -288,6 +288,28 @@
    return {accountingSource:pair.accounting,sequenceSource:pair.sequence,invoiceCount:invoices.length,numberedInvoiceCount:invoiceNumbers.length,numberedEntryCount:entryNumbers.length,observedMax,sequenceValue:sequence,sequenceBelowObservedMax:sequence===null?null:sequence<observedMax};
   });
  }
+ function candidateMigrationGate(sequenceAudit){
+  const rows=Array.isArray(sequenceAudit)?sequenceAudit:[];
+  const maxObserved=Math.max(0,...rows.map(x=>Number(x.observedMax)||0));
+  const maxSequence=Math.max(0,...rows.map(x=>Number(x.sequenceValue)||0));
+  const selected=rows.find(x=>x.accountingSource==="tha_v212_migration_accounting_v1");
+  const test226=rows.find(x=>x.accountingSource==="tha_test226_accounting_v1");
+  const reasons=[
+   "The active source of truth has not been proven from the candidate snapshots.",
+   "The current typed-domain mapping points to test226, which contains a lower invoice-number range than the v212 and restore candidates.",
+   "The handyman accounting candidate has no matching sequence key in the audited candidate set."
+  ];
+  return {
+   readyForTypedMigration:false,
+   sourceOfTruthConfirmed:false,
+   globalObservedMax:maxObserved,
+   globalSequenceHighWaterMark:maxSequence,
+   conservativeNextNumber:maxObserved+1,
+   v212Candidate:selected?{observedMax:selected.observedMax,sequenceValue:selected.sequenceValue}:null,
+   test226Candidate:test226?{observedMax:test226.observedMax,sequenceValue:test226.sequenceValue}:null,
+   reasons
+  };
+ }
  function compareCandidateVersions(rows){
   const values=parsedRows(rows);
   const specs=[
@@ -336,6 +358,8 @@
   const invoice=invoiceAudit(accounting,sequence);
   const candidates=await candidateAudit(snap.records.map(row=>({sourceKey:row.key,value:row.value,status:MAP[row.key]?"MAPPED":"RETAIN_LEGACY"})));
   const sourceComparisons=compareCandidateVersions(snap.records);
+  const sequenceAudit=candidateSequenceAudit(snap.records);
+  const migrationGate=candidateMigrationGate(sequenceAudit);
   const issues=rows.flatMap(x=>x.issues.map(issue=>({...issue,sourceKey:x.sourceKey}))).concat(invoice.issues);
   const blockers=issues.filter(x=>x.severity==="blocker").length;
   const warnings=issues.filter(x=>x.severity==="warning").length;
@@ -353,11 +377,12 @@
    reviewCount:review,
    blockedCount:blocked,
    unmappedCount:unmapped,
-   invoiceReconciliation:invoice,
+   invoiceReconciliation:{...invoice,scope:"tha_test226_accounting_v1 only; not a reconciliation of all candidate sources"},
+   candidateMigrationGate:migrationGate,
    candidateAudit:candidates.candidates,
    exactDuplicateGroups:candidates.exactDuplicateGroups,
    sourceComparisons,
-   candidateSequenceAudit:candidateSequenceAudit(snap.records),
+   candidateSequenceAudit:sequenceAudit,
    issues,
    records:rows,
    writesPerformed:false,
