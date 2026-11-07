@@ -8,7 +8,7 @@
  const DB_NAME="the_handyman_accountancy_v250_idb";
  const DB_VERSION=1;
  const STORE="records";
- const SELF_TEST_BUILD="repo-selftest-20261107-04";
+ const SELF_TEST_BUILD="repo-selftest-20261107-05";
  const EXPECTED_CHECKS=["ready","roundTrip","atomicBatch","atomicMultiDomainMutation","abortRollback","concurrentWrites","concurrentCounterReservation","snapshotRestore","restoreRemovesStaleRecords","restorePreservesOtherDomains","emptySnapshotRestore","cleanup"];
  const META="metadata";
  const SCHEMA_KEY="schema";
@@ -190,13 +190,35 @@
     throw new Error("Invalid multi-record mutation descriptor.");
    return {domain:item.domain,key:item.key,id:recordId(item.domain,item.key),initialValue:item.initialValue};
   });
-  const ids=new Set();for(const item of prepared){if(ids.has(item.id))throw new Error("Duplicate key in multi-record mutation: "+item.id);ids.add(item.id);}
+  const ids=new Set();
+  for(const item of prepared){if(ids.has(item.id))throw new Error("Duplicate key in multi-record mutation: "+item.id);ids.add(item.id);}
   const db=await open(),stamp=new Date().toISOString();
   try{
    const tx=db.transaction([STORE],"readwrite"),done=txDone(tx),store=tx.objectStore(STORE);
-   let remaining=prepared.length,callbackError=null,committedValues=null;
-   const fail=error=>{if(callbackError)return;callbackError=error;try{tx.abort()}catch(_){}};
-   prepared.forEach((item,index)=>{
+   let remaining=prepared.length,callbackError=null,committedValues=null,verificationRemaining=0,verified=false;
+   const fail=error=>{
+    if(callbackError)return;
+    callbackError=error instanceof Error?error:new Error(String(error));
+    try{tx.abort()}catch(_){}
+   };
+   const verifyInsideTransaction=()=>{
+    verificationRemaining=prepared.length;
+    prepared.forEach((item,index)=>{
+     const req=store.get(item.id);
+     req.onsuccess=()=>{
+      if(callbackError)return;
+      try{
+       const row=req.result;
+       if(!row||row.raw!==validateValue(committedValues[index]))
+        throw new Error("Multi-record in-transaction verification failed for "+item.id);
+       verificationRemaining--;
+       if(verificationRemaining===0)verified=true;
+      }catch(error){fail(error)}
+     };
+     req.onerror=()=>fail(req.error||new Error("Multi-record verification read failed for "+item.id));
+    });
+   };
+   prepared.forEach(item=>{
     const req=store.get(item.id);
     req.onsuccess=()=>{
      if(callbackError)return;
@@ -206,25 +228,22 @@
       if(remaining!==0)return;
       const current=prepared.map(x=>({domain:x.domain,key:x.key,value:clone(x.current)}));
       const next=updater(current);
-      if(next&&typeof next.then==="function")throw new Error("Multi-record updater must be synchronous; Promise results are not supported.");
-      if(!Array.isArray(next)||next.length!==prepared.length)throw new Error("Multi-record updater must return one replacement value per descriptor, in descriptor order.");
+      if(next&&typeof next.then==="function")
+       throw new Error("Multi-record updater must be synchronous; Promise results are not supported.");
+      if(!Array.isArray(next)||next.length!==prepared.length)
+       throw new Error("Multi-record updater must return one replacement value per descriptor, in descriptor order.");
       const encoded=next.map((value,i)=>({item:prepared[i],raw:validateValue(value)}));
       committedValues=encoded.map(x=>JSON.parse(x.raw));
-      for(const entry of encoded)store.put({id:entry.item.id,domain:entry.item.domain,key:entry.item.key,raw:entry.raw,updatedAt:stamp,byteLength:new Blob([entry.raw]).size});
+      for(const entry of encoded)
+       store.put({id:entry.item.id,domain:entry.item.domain,key:entry.item.key,raw:entry.raw,updatedAt:stamp,byteLength:new Blob([entry.raw]).size});
+      verifyInsideTransaction();
      }catch(error){fail(error)}
     };
     req.onerror=()=>fail(req.error||new Error("Multi-record read failed for "+item.id));
    });
-   if(!committedValues)throw new Error("Multi-record transaction completed without executing its updater.");
-   // Queue read-back requests in the SAME readwrite transaction. This verifies
-   // this transaction's own writes before another queued writer can commit.
-   const verifyRequests=prepared.map(item=>requestResult(store.get(item.id)));
-   const verifiedRows=await Promise.all(verifyRequests);
-   for(let i=0;i<prepared.length;i++){
-    if(!verifiedRows[i]||verifiedRows[i].raw!==validateValue(committedValues[i]))
-     throw new Error("Multi-record in-transaction verification failed for "+prepared[i].id);
-   }
-   await done;
+   try{await done}catch(error){throw callbackError||error;}
+   if(!committedValues||!verified)
+    throw new Error("Multi-record transaction completed without successful in-transaction verification.");
    return {ok:true,updated:prepared.length,records:prepared.map((item,i)=>({domain:item.domain,key:item.key,value:clone(committedValues[i])})),updatedAt:stamp};
   }finally{db.close();}
  }
