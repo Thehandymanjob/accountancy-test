@@ -757,3 +757,30 @@ This was a verification race, not evidence that IndexedDB allowed two read-write
 ### Retest status
 
 Build 04 is a code correction only. It has not passed browser testing yet. Do not treat Pass 11 as passed until a fresh build-04 browser report confirms all 12 checks, complete report, matching builds, and no LocalStorage access. The prior failed synthetic namespace `test_mw6e6s2k_rtexou4y` is not automatically cleaned by this code correction; do not perform a broad database clear.
+
+## 22. mutateMany request-lifecycle correction — build 05
+
+### Build 04 browser evidence
+
+The user ran the matching build-04 lab and received:
+
+`Multi-record transaction completed without executing its updater.`
+
+All checks through `atomicBatch` passed; `atomicMultiDomainMutation` and all later checks did not. The browser output confirmed matching lab/repository build 04.
+
+### Root cause
+
+The build-04 correction queued the verification reads but checked `committedValues` immediately, before IndexedDB had dispatched the queued `get()` request success events. The transaction could therefore finish without the updater ever being reached. This was a request-lifecycle sequencing defect in the test repository implementation.
+
+### Build 05 correction
+
+- Reworked `mutateMany` to coordinate all reads, updater execution, writes and verification through IndexedDB request event callbacks within one active read-write transaction.
+- The updater runs only after every requested record read has succeeded.
+- All replacement values are validated before writes are queued.
+- Verification `get()` requests are queued after the writes in the same transaction; their success handlers compare each stored row with the value produced by this transaction.
+- The public Promise resolves only after the transaction completes and all in-transaction verification has succeeded. Any request, updater, serialization or verification error aborts the transaction.
+- Repository and lab identifiers are now `repo-selftest-20261107-05` and `lab-selftest-20261107-05`.
+
+### Status and safety
+
+Build 05 is a code correction only and has not yet passed browser testing. Do not mark Pass 11 complete until the full 12-check browser report passes. The build-03 and build-04 failed test namespaces may remain in the dedicated test database because both reports showed `cleanupAttempted: false`; no broad cleanup or database deletion is authorized. Application wiring, LocalStorage, user backup v6 and production remain untouched.
