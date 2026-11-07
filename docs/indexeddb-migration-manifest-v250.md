@@ -349,3 +349,96 @@ The foundation's legacy LocalStorage reads are not ordinary app persistence, but
 - Any retained legacy snapshot utility must be read-only, explicitly scoped, and unavailable to normal save/load flows.
 
 No other external JavaScript files are referenced directly by the current `index.html`. This audit does not yet cover scripts dynamically injected at runtime, browser extensions, or hosting-level service worker behavior; those are separate deployment checks.
+
+
+## 14. Central Storage Repository design (v250)
+
+### Design objective
+
+Introduce one asynchronous persistence boundary for the application. UI/business modules must not call `localStorage` or IndexedDB directly. They call repository methods, and the repository owns transactions, serialization, integrity checks, schema versioning and error reporting.
+
+### Architecture layers
+
+1. **UI / business logic** — forms, project calculations, invoice numbering, report screens. No direct browser-storage API.
+2. **Domain repositories** — Accounting, Projects, Contracts, Reports, Preferences, Diagnostics, Recovery. These preserve the existing domain payload shapes initially.
+3. **Central Storage Repository** — asynchronous `read`, `write`, `remove`, `transaction`, `snapshot`, `restore` methods. It is the only module allowed to open the application IndexedDB.
+4. **IndexedDB adapter** — database lifecycle, schema upgrades, transaction completion/abort, request handling and quota/error normalization.
+5. **Migration adapter (temporary, isolated)** — imports the approved v6 backup only. It must not be called by ordinary app startup or save flows.
+
+### Canonical storage model for first cutover
+
+To minimize schema conversion risk, first cutover preserves the complete current application payload shapes as canonical records:
+- Accounting: one canonical payload envelope retaining `entries`, `customers`, `invoices`, `settings`, `customExpenseCategories`, `thirdPartyTransactions` and any future fields.
+- Projects: one canonical workspace envelope retaining `projects`, nested subprojects/ledgers, `workers`, `partners`, `contractors`, `companies`, `companyJobs`, `profile`, selected project/subproject and other workspace state.
+- Contracts: one canonical list/payload envelope.
+- Report state: separate envelopes for archive, settings, workflow, email settings and notifications.
+- Preferences: language, preference version and invoice-sequence metadata in explicit namespaced records.
+- Diagnostics: monitor events in a dedicated store/envelope with bounded retention.
+- Recovery: immutable recovery snapshots with timestamps, reason, schema version and content hash.
+- Support drafts: separate list/envelope; continue to state clearly that drafts are local and not transmitted.
+
+Do not normalize projects or accounting into row-per-entity stores in the first cutover. That is a later optimization, only after behavior parity and an explicit schema migration plan. The original payload is the source of truth.
+
+### Proposed repository contract
+
+All methods are asynchronous and return explicit success/error results; no method reports success before transaction completion.
+
+- `ready()`: open/validate database and schema.
+- `get(domain, key)`: read one namespaced record; return a deep JSON value or null.
+- `put(domain, key, value, options)`: serialize, commit, read back and verify exact canonical equality.
+- `remove(domain, key, options)`: delete one record and verify absence.
+- `transact(domains, callback)`: atomic multi-store transaction for cross-domain operations. Callback must only use transaction-scoped requests; no unrelated awaits or network calls.
+- `snapshot(domains)`: return a consistent snapshot from one readonly transaction.
+- `restore(snapshot, options)`: stage and verify all records, then commit atomically; preserve pre-restore snapshot until success.
+- `health()`: return database name, schema version, store counts, quota/error state if available, and migration status without exposing personal payloads.
+
+Namespacing prevents collisions: records are keyed by stable strings such as `accounting/main`, `projects/workspace`, `contracts/main`, `reports/archive`, `preferences/language`, `preferences/invoice-sequence`, `diagnostics/monitor-log`, `recovery/latest`, and `support/drafts`.
+
+### Transaction boundaries
+
+The following operations must be atomic across the related records:
+- Invoice creation plus invoice-number reservation.
+- Invoice payment/status change plus corresponding accounting income entry.
+- Invoice deletion/cleanup plus removal or reconciliation of linked income entries.
+- Project save plus any required project metadata updates.
+- Contract restore/merge plus its canonical contract payload.
+- Full backup restore across Accounting, Projects and Contracts.
+- Factory reset recovery snapshot plus reset marker/state.
+
+Monitor logging is best-effort and must not be allowed to abort a successful business-data transaction. If monitor logging fails, preserve the original operation result and surface a separate diagnostics warning.
+
+### Async conversion requirement
+
+Existing functions such as `persist()`, `prPersist()` and `ctWrite()` are synchronous. They cannot simply be redirected to IndexedDB while keeping their current return contract. Every caller that depends on immediate boolean success must be converted to `async/await` and must wait for transaction completion. UI buttons should prevent duplicate submissions while writes are in flight, show saving state, and only display success after commit and verification.
+
+A compatibility shim that returns `true` before IndexedDB commits is prohibited. A LocalStorage fallback after an IndexedDB failure is also prohibited after cutover because it creates split-brain storage and hides data loss risk.
+
+### Schema and upgrade policy
+
+- New isolated DB name: `the_handyman_accountancy_v250_idb`.
+- Keep the existing experimental `the_handyman_accountancy_test226` database and completed `the_handyman_accountancy_roundtrip_v6` database untouched.
+- Use a dedicated versioned schema and explicit object-store creation. Do not modify the existing foundation's DB name or version in place.
+- Include stores for canonical domain envelopes, immutable backup snapshots, migration audit and schema metadata. Add typed projection stores only when justified.
+- Every schema upgrade must be additive or have a verified transform and rollback plan. Never delete a store containing user data as part of an upgrade.
+- Record schema version and app data schema version separately.
+
+### Migration / startup state machine
+
+The app must not silently migrate on first page load. Use explicit states:
+`not-started` → `backup-verified` → `staged` → `validated` → `cutover-approved` → `idb-active`.
+
+If any validation fails, stop and leave the old source untouched. The app must clearly show which store is active and which version is loaded. Do not auto-promote a staged database.
+
+### Acceptance gate before app integration
+
+Before changing `index.html`:
+1. Repository unit tests pass against synthetic data in the isolated DB.
+2. Exact round-trip preserves null, empty string, zero, booleans, nested arrays, unknown fields and image data.
+3. Atomic transaction tests prove all-or-nothing behavior across Accounting, Projects and Contracts.
+4. Concurrency test proves two simultaneous invoice reservations cannot return the same number.
+5. Quota/abort/blocked-upgrade tests fail safely without reporting success.
+6. Reload test proves committed data persists and incomplete staging is not mistaken for active data.
+7. Backup export and restore round-trip exactly.
+8. App adapter contract is documented for every current synchronous caller before converting UI flows.
+
+**Current status:** design is recorded; no repository module has yet been connected to the app, no new browser database has been created by this work, and no app data has been written or moved.
