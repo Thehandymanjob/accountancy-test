@@ -314,7 +314,8 @@
     };
     let projectWritten = false;
     let auditWritten = false;
-    let counterWritten = false;
+    let counterMayExist = false;
+    let result = null;
     try {
       await ready();
       checks.ready = true;
@@ -347,7 +348,7 @@
       const rollbackRecord = await get("auditLog", rollbackAuditId);
       checks.transactionRollback = rollbackRejected && rollbackRecord === null;
 
-      counterWritten = true;
+      counterMayExist = true;
       const values = await Promise.all([
         reserveCounter(counterName), reserveCounter(counterName),
         reserveCounter(counterName), reserveCounter(counterName)
@@ -355,43 +356,36 @@
       const unique = new Set(values);
       checks.concurrentCounterReservation = unique.size === 4 &&
         Math.max(...values) - Math.min(...values) === 3;
-      counterWritten = true;
 
-      if (!Object.values(checks).every(Boolean)) {
+      if (!Object.entries(checks).filter(([key]) => key !== "cleanup").every(([, value]) => value)) {
         throw new Error("One or more Storage Adapter self-tests failed.");
       }
-      return {
-        ok: true,
-        database: EXPECTED_DATABASE,
-        checks,
-        reservedCounterValues: values.slice().sort((a, b) => a - b),
-        localStorageChanged: false,
-        appCutover: false
-      };
+      result = { ok: true, reservedCounterValues: values.slice().sort((a, b) => a - b) };
     } catch (error) {
-      return {
-        ok: false,
-        checks,
-        error: String(error && error.message || error),
-        localStorageChanged: false,
-        appCutover: false
-      };
+      result = { ok: false, error: String(error && error.message || error) };
     } finally {
       const cleanup = {};
-      if (projectWritten) cleanup.projectMetadata = { add: [], put: [], delete: [projectId] };
-      if (auditWritten) cleanup.auditLog = { add: [], put: [], delete: [auditId, rollbackAuditId] };
-      if (counterWritten) cleanup.recordOrder = { add: [], put: [], delete: [counterId] };
-      if (Object.keys(cleanup).length) {
-        try {
-          await commit(cleanup);
-          checks.cleanup = true;
-        } catch (_) {
-          checks.cleanup = false;
-        }
-      } else {
+      if (projectWritten) cleanup.projectMetadata = { delete: [projectId] };
+      if (auditWritten) cleanup.auditLog = { delete: [auditId, rollbackAuditId] };
+      if (counterMayExist) cleanup.recordOrder = { delete: [counterId] };
+      try {
+        if (Object.keys(cleanup).length) await commit(cleanup);
         checks.cleanup = true;
+      } catch (_) {
+        checks.cleanup = false;
       }
     }
+    const ok = !!result && result.ok === true && checks.cleanup === true &&
+      Object.entries(checks).every(([, value]) => value === true);
+    return {
+      ok,
+      database: EXPECTED_DATABASE,
+      checks,
+      reservedCounterValues: result && result.reservedCounterValues || [],
+      ...(result && result.error ? { error: result.error } : {}),
+      localStorageChanged: false,
+      appCutover: false
+    };
   }
 
   root.HandymanStorageAdapterV250 = Object.freeze({
