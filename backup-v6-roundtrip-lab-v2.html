@@ -16,8 +16,12 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
 (async()=>{
  const out=document.getElementById('out'),$=id=>document.getElementById(id);
  try{
-  const r=await fetch('backup-v6-roundtrip.js.gz?v=1');if(!r.ok)throw Error('Adapter download failed: '+r.status);
-  const source=await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text();
+  const r=await fetch('backup-v6-roundtrip.js.gz?v=2');if(!r.ok)throw Error('Adapter download failed: '+r.status);
+  let source=await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text();
+  const oldDbContract='const DB_NAME = "the_handyman_accountancy_test226";';
+  const newDbContract='const DB_NAME = "the_handyman_accountancy_roundtrip_v6";';
+  if(source.split(oldDbContract).length!==2)throw Error('Adapter DB contract did not match the single expected legacy constant; refusing to patch.');
+  source=source.replace(oldDbContract,newDbContract);
   (0,eval)(source);
  }catch(e){out.textContent='Adapter load error: '+e.message;return;}
  let raw=null,inspected=false,staged=false;
