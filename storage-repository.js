@@ -8,7 +8,7 @@
  const DB_NAME="the_handyman_accountancy_v250_idb";
  const DB_VERSION=1;
  const STORE="records";
- const SELF_TEST_BUILD="repo-selftest-20261107-01";
+ const SELF_TEST_BUILD="repo-selftest-20261107-02";
  const EXPECTED_CHECKS=["ready","roundTrip","atomicBatch","atomicMultiDomainMutation","abortRollback","concurrentWrites","concurrentCounterReservation","snapshotRestore","restoreRemovesStaleRecords","restorePreservesOtherDomains","emptySnapshotRestore","cleanup"];
  const META="metadata";
  const SCHEMA_KEY="schema";
@@ -156,7 +156,12 @@
    const verify=db.transaction([STORE],"readonly"),verifyDone=txDone(verify),read=verify.objectStore(STORE);
    for(const item of prepared){
     const row=await requestResult(read.get(item.id));
-    if(!row||canonical(JSON.parse(row.raw))!==canonical(values[item.id]))throw new Error("Mutation read-back verification failed for "+item.id);
+    // A later serialized write may commit before this verification read executes.
+    // Transaction completion is the commit guarantee; verify identity and valid JSON,
+    // while operation-specific tests verify the value returned by this transaction.
+    if(!row||row.id!==item.id||row.domain!==item.domain||row.key!==item.key)
+     throw new Error("Mutation read-back verification failed for "+item.id);
+    try{JSON.parse(row.raw)}catch(_){throw new Error("Mutation read-back contains invalid JSON for "+item.id)}
    }
    await verifyDone;
    return {ok:true,updated:prepared.length,values:clone(values),updatedAt:stamp};
@@ -276,8 +281,9 @@
    if(!checks.concurrentWrites)throw new Error("Concurrent independent writes test failed.");
    const counters=await Promise.all(Array.from({length:8},()=>reserveCounter(domain,"invoice-counter",0)));
    const counterValues=counters.map(x=>x.value).sort((a,b)=>a-b);
-   checks.concurrentCounterReservation=counterValues.length===8&&new Set(counterValues).size===8&&counterValues.every((v,i)=>v===i+1);
-   if(!checks.concurrentCounterReservation)throw new Error("Concurrent counter reservation produced duplicate or non-monotonic values.");
+   const finalCounter=await get(domain,"invoice-counter");
+   checks.concurrentCounterReservation=counterValues.length===8&&new Set(counterValues).size===8&&counterValues.every((v,i)=>v===i+1)&&finalCounter===8;
+   if(!checks.concurrentCounterReservation)throw new Error("Concurrent counter reservation produced duplicate, non-monotonic, or incorrectly persisted values.");
    await remove(domain,"invoice-counter");
    await remove(domain,"concurrent-a");await remove(domain,"concurrent-b");
    await put(otherDomain,"keep",{untouched:true});
