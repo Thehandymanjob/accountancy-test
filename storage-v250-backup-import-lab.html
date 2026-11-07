@@ -26,6 +26,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <p><strong>Step 1 — Select the authoritative backup</strong></p>
 <input id="file" type="file" accept=".json,application/json">
 <button id="inspectLegacy" class="secondary" type="button">Inspect legacy records (read-only)</button>
+<button id="compareSource" class="secondary" type="button">Compare LocalStorage key names (read-only)</button>
 <button id="prepare">Prepare migration (read-only)</button>
 <button id="snapshot" class="secondary" disabled>Download pre-import IndexedDB snapshot</button>
 <p id="preview" class="small" aria-live="polite"></p>
@@ -90,6 +91,39 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
   }catch(error){
    show({ok:false,error:String(error&&error.message||error),localStorageAccessed:false,businessDataWritten:false,appCutover:false});
   }finally{$("inspectLegacy").disabled=false;}
+ };
+ $("compareSource").onclick=async()=>{
+  $("compareSource").disabled=true;
+  try{
+   await HandymanStorageRepository.ready();
+   const snapshot=await HandymanStorageRepository.snapshot(["legacy"]);
+   const legacyKeys=snapshot.records.map(row=>row.key).sort();
+   const sourceKeys=[];
+   for(let i=0;i<window.localStorage.length;i++){
+    const key=window.localStorage.key(i);
+    if(key!==null)sourceKeys.push(key);
+   }
+   sourceKeys.sort();
+   const legacySet=new Set(legacyKeys),sourceSet=new Set(sourceKeys);
+   show({
+    ok:true,
+    database:HandymanStorageRepository.databaseName,
+    currentLocalStorageKeyCount:sourceKeys.length,
+    currentLegacyKeyCount:legacyKeys.length,
+    sourceKeys,
+    legacyKeys,
+    sourceMissingFromLegacy:sourceKeys.filter(key=>!legacySet.has(key)),
+    legacyNotInCurrentSource:legacyKeys.filter(key=>!sourceSet.has(key)),
+    localStorageValuesRead:false,
+    localStorageWritten:false,
+    indexedDBWritten:false,
+    businessDataWritten:false,
+    appCutover:false
+   });
+   $("preview").textContent="Read-only key-name comparison completed. LocalStorage values were not read.";
+  }catch(error){
+   show({ok:false,error:String(error&&error.message||error),localStorageValuesRead:false,localStorageWritten:false,indexedDBWritten:false,appCutover:false});
+  }finally{$("compareSource").disabled=false;}
  };
  $("prepare").onclick=async()=>{
   $("prepare").disabled=true;$("snapshot").disabled=true;$("confirmArea").hidden=true;
