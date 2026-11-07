@@ -19,6 +19,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 </style></head>
 <body><main>
 <h1>THA v250 — Guarded Backup Import</h1>
+<button id="copyLink" class="secondary" type="button">Copy this page link</button>
+<p id="copyStatus" class="small" aria-live="polite">You can copy the page link or the JSON result below.</p>
 <p>This page prepares and, only after explicit confirmation, imports the exact <strong>New_new(1).json</strong> backup into the v250 IndexedDB typed domains.</p>
 <div class="notice"><strong>Safety:</strong> Preparation does not write business records. Before import, it snapshots the existing typed domains and requires you to download that snapshot. The import writes three records atomically, verifies their canonical SHA-256 hashes, and confirms all 40 legacy keys remain unchanged. LocalStorage is never accessed. The app is not cut over.</div>
 <p><strong>Step 1 — Select the authoritative backup</strong></p>
@@ -35,6 +37,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <button id="apply" class="danger" disabled>Apply migration to IndexedDB</button>
 </div>
 <pre id="out">Ready. No data has been imported.</pre>
+<button id="copyOutput" class="secondary" type="button">Copy JSON result</button>
 <p class="small">Destination records: accounting/main, projects/main, contracts/main. Existing target records cause the import to stop rather than overwrite. Existing 40 legacy keys are retained. Production accountancy/main is not modified.</p>
 </main>
 <script src="storage-repository.js?v=v250"></script>
@@ -45,6 +48,25 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
  const $=id=>document.getElementById(id);
  let state=null;
  const show=value=>{$("out").textContent=JSON.stringify(value,null,2)};
+ const copyText=async(value,label)=>{
+  try{
+   if(navigator.clipboard&&window.isSecureContext){
+    await navigator.clipboard.writeText(value);
+   }else{
+    const field=document.createElement("textarea");
+    field.value=value;field.setAttribute("readonly","");
+    field.style.position="fixed";field.style.opacity="0";
+    document.body.appendChild(field);field.select();
+    const copied=document.execCommand("copy");field.remove();
+    if(!copied)throw new Error("Clipboard copy is not available in this browser.");
+   }
+   $("copyStatus").textContent=label+" copied to clipboard.";
+  }catch(error){
+   $("copyStatus").textContent="Could not copy automatically. Please select and copy manually. "+String(error&&error.message||error);
+  }
+ };
+ $("copyLink").onclick=()=>copyText(window.location.href,"Page link");
+ $("copyOutput").onclick=()=>copyText($("out").textContent,"JSON result");
  const updateApply=()=>{$("apply").disabled=!state||!$("saved").checked||$("phraseInput").value!==state.confirmationPhrase};
  $("prepare").onclick=async()=>{
   $("prepare").disabled=true;$("snapshot").disabled=true;$("confirmArea").hidden=true;
