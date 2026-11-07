@@ -95,10 +95,13 @@
   let writeStarted=false;
   try{
    writeStarted=true;
-   const write=await repo.mutateMany(TARGETS.map(x=>({domain:x.domain,key:x.key,initialValue:null})),()=>[
-    clone(plan.backup.data),clone(plan.backup.projects),clone(plan.backup.contracts)
-   ]);
+   const write=await repo.mutateMany(TARGETS.map(x=>({domain:x.domain,key:x.key,initialValue:null})),current=>{
+    if(current.some(x=>x.value!==null))
+     throw new Error("A target record appeared immediately before commit; refusing to overwrite.");
+    return [clone(plan.backup.data),clone(plan.backup.projects),clone(plan.backup.contracts)];
+   });
    if(!write.ok)throw new Error("Atomic typed-domain write did not report success.");
+   writeStarted=true;
    const readback=await repo.readMany(TARGETS.map(({domain,key})=>({domain,key})));
    const actual=[];
    for(let i=0;i<TARGETS.length;i++){
@@ -129,14 +132,14 @@
   }catch(error){
    if(writeStarted){
     try{
-     await repo.restore(plan.preSnapshot);
-     const restored=await repo.snapshot(DB_DOMAINS);
-     if(canonical(restored.records)!==canonical(plan.preSnapshot.records))
-      throw new Error("Rollback snapshot verification failed.");
+     for(const target of TARGETS)await repo.remove(target.domain,target.key);
+     const removed=await repo.readMany(TARGETS.map(({domain,key})=>({domain,key})));
+     if(removed.records.some(x=>x.value!==null))
+      throw new Error("Target-record rollback verification failed.");
      const legacyAfterRollback=await repo.snapshot(["legacy"]);
      if(canonical(legacyAfterRollback.records)!==canonical(plan.legacyBefore))
       throw new Error("Legacy preservation check failed during rollback.");
-     return {ok:false,error:String(error&&error.message||error),rollbackPerformed:true,rollbackVerified:true,typedDomainWritesRetained:false,localStorageChanged:false,appCutover:false};
+     return {ok:false,error:String(error&&error.message||error),rollbackPerformed:true,rollbackVerified:true,onlyNewTargetRecordsRemoved:true,localStorageChanged:false,appCutover:false};
     }catch(rollbackError){
      return {ok:false,error:String(error&&error.message||error),rollbackPerformed:true,rollbackVerified:false,rollbackError:String(rollbackError&&rollbackError.message||rollbackError),manualInspectionRequired:true,localStorageChanged:false,appCutover:false};
     }
