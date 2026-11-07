@@ -5,7 +5,7 @@
 (function () {
   "use strict";
   const DB_NAME = "the_handyman_accountancy_test226";
-  const DB_VERSION = 4;
+  const DB_VERSION = 5;
   const PREFIX = "tha_test226_";
   const LEGACY_KEYS = [
     "tha_test226_accounting_v1",
@@ -16,7 +16,7 @@
   const STORES = ["legacySnapshots", "customers", "projects", "invoices", "contracts",
     "accountingEntries", "projectReceipts", "projectExpenses", "workers", "partners",
     "contractors", "companies", "companyJobs", "customExpenseCategories",
-    "thirdPartyTransactions", "accountingSettings", "projectMetadata", "auditLog", "recordOrder"];
+    "thirdPartyTransactions", "accountingSettings", "projectMetadata", "auditLog", "recordOrder", "appState"];
   const KV_STORE = "kv";
 
   function openDatabase() {
@@ -825,6 +825,60 @@
     } finally { db.close(); }
   }
 
+  // Whole-domain snapshots used during the controlled transition from
+  // synchronous LocalStorage persistence to IndexedDB. Values use IndexedDB's
+  // structured-clone algorithm, preserving nested objects, arrays, Blob and File.
+  async function readAppState(domain) {
+    const allowed = ["accounting", "projects", "contracts", "assets", "reports"];
+    if (!allowed.includes(String(domain))) throw new Error("Unknown application state domain.");
+    const record = await getRecord("appState", String(domain));
+    return record ? record.value : null;
+  }
+
+  async function writeAppState(domain, value) {
+    const allowed = ["accounting", "projects", "contracts", "assets", "reports"];
+    if (!allowed.includes(String(domain))) throw new Error("Unknown application state domain.");
+    if (value === undefined) throw new Error("Application state value cannot be undefined.");
+    await putRecord("appState", { id: String(domain), value, updatedAt: new Date().toISOString() });
+    const check = await getRecord("appState", String(domain));
+    if (!check || !("value" in check)) throw new Error("Application state read-back verification failed.");
+    return { ok: true, domain: String(domain), verified: true };
+  }
+
+  async function writeAppStatesAtomically(states) {
+    if (!states || typeof states !== "object" || Array.isArray(states)) {
+      throw new Error("Application state batch must be an object.");
+    }
+    const allowed = new Set(["accounting", "projects", "contracts", "assets", "reports"]);
+    const entries = Object.entries(states);
+    if (!entries.length || entries.some(([key, value]) => !allowed.has(key) || value === undefined)) {
+      throw new Error("Application state batch contains an unsupported domain or undefined value.");
+    }
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(["appState"], "readwrite");
+      const done = transactionDone(tx);
+      const store = tx.objectStore("appState");
+      for (const [id, value] of entries) {
+        store.put({ id, value, updatedAt: new Date().toISOString() });
+      }
+      await done;
+      const verifyTx = db.transaction(["appState"], "readonly");
+      const verifyDone = transactionDone(verifyTx);
+      const verifyStore = verifyTx.objectStore("appState");
+      const verified = {};
+      for (const [id] of entries) {
+        const row = await requestResult(verifyStore.get(id));
+        verified[id] = !!row && Object.prototype.hasOwnProperty.call(row, "value");
+      }
+      await verifyDone;
+      if (Object.values(verified).some(ok => !ok)) {
+        throw new Error("One or more application state domains failed verification.");
+      }
+      return { ok: true, atomic: true, verified };
+    } finally { db.close(); }
+  }
+
   async function status() {
     const db = await openDatabase();
     try {
@@ -840,7 +894,7 @@
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
     putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkAddAcrossStoresVerified, bulkWriteAcrossStores,
-    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, exportCompleteBackup, restoreCompleteBackup, clearIndexedDBData, status,
+    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, exportCompleteBackup, restoreCompleteBackup, clearIndexedDBData, readAppState, writeAppState, writeAppStatesAtomically, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
