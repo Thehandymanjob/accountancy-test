@@ -4,14 +4,14 @@ Date: 2026-11-07
 
 ## Authority and safety decision
 
-The user has explicitly designated the uploaded `Last_backup.json` as the source of truth for migration. This audit is based on that file only.
+The user has explicitly designated the uploaded `New_new(1).json` as the source of truth for migration. This audit is based on that file only.
 
-- Backup: `Last_backup.json`
-- Exported at: `2026-11-06T18:25:04.936Z`
+- Backup: `New_new(1).json`
+- Exported at: `2026-11-07T08:35:24.557Z`
 - Backup type: `complete-user-data`
 - Format version: 6
 - Size: 1,900,029 bytes
-- SHA-256: `75e3a19b348739ac0efe11f019dc1a6d634d60ba56566a21e3b5bdd3dda11d41`
+- SHA-256: `07b6170db9169e3b59d0b4527b88e26d589bd18c178ec9a1b1975b55f403db90`
 
 Do not select or merge business records from `handyman_accounting_v2`, `handyman_projects_workspace_v1`, `tha_restore_test_v1_*`, or `tha_v212_migration_*`. Those are candidate snapshots/test data, not the user's designated authority. They may be used only for diagnostic comparison, never as migration inputs unless the user explicitly changes this instruction.
 
