@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>THA v250 Storage Adapter Lab</title>
+<script src="storage-foundation.js"></script>
+<script src="storage-adapter-v250.js"></script>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172b45;background:#f3f6fa}
+body{margin:0;padding:18px;max-width:780px;margin-inline:auto}
+main{background:#fff;border:1px solid #dce4ee;border-radius:15px;padding:20px}
+h1{font-size:22px;margin:0 0 10px}
+p{line-height:1.5;color:#53657a}
+.notice{padding:13px;border-radius:10px;background:#fff5dc;border:1px solid #e6cb87;color:#624d1d;margin:14px 0}
+button{width:100%;padding:14px;border:0;border-radius:10px;background:#174d83;color:white;font-weight:800;margin:8px 0}
+button:disabled{opacity:.5}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb;padding:14px;border-radius:10px;font-size:12px;min-height:130px}
+.small{font-size:13px;color:#63748a}
+</style>
+</head>
+<body>
+<main>
+<h1>THA v250 — Storage Adapter Lab</h1>
+<p>Isolated runtime checks for the central IndexedDB adapter.</p>
+<div class="notice"><strong>Safety boundary:</strong> This lab uses the existing test IndexedDB database only. It writes temporary synthetic records to dedicated test IDs and removes them after the test. It does not access or modify LocalStorage, the live application data, backups, the production repository, or app cutover settings.</div>
+<button id="ready">Check adapter and database readiness</button>
+<button id="test">Run adapter self-test</button>
+<pre id="out">Ready. No operation has run.</pre>
+<p class="small">A successful result here validates the adapter layer only. It does not prove that the main application has migrated or that app cutover is safe.</p>
+</main>
+<script>
+(() => {
+  const out = document.getElementById("out");
+  const buttons = [...document.querySelectorAll("button")];
+  const show = value => { out.textContent = JSON.stringify(value, null, 2); };
+  const busy = value => buttons.forEach(button => button.disabled = value);
+
+  document.getElementById("ready").onclick = async () => {
+    busy(true);
+    try {
+      if (!window.HandymanStorageFoundation || !window.HandymanStorageAdapterV250) {
+        throw new Error("Storage Foundation or Storage Adapter failed to load.");
+      }
+      show({
+        ok: true,
+        adapterVersion: HandymanStorageAdapterV250.version,
+        ...(await HandymanStorageAdapterV250.ready()),
+        adapterMethods: Object.keys(HandymanStorageAdapterV250)
+      });
+    } catch (error) {
+      show({ok:false,error:String(error && error.message || error),appCutover:false});
+    } finally { busy(false); }
+  };
+
+  document.getElementById("test").onclick = async () => {
+    busy(true);
+    try {
+      if (!window.HandymanStorageAdapterV250) throw new Error("Storage Adapter failed to load.");
+      show(await HandymanStorageAdapterV250.selfTest());
+    } catch (error) {
+      show({ok:false,error:String(error && error.message || error),appCutover:false});
+    } finally { busy(false); }
+  };
+})();
+</script>
+</body>
+</html>
