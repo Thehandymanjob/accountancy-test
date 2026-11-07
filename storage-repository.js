@@ -8,6 +8,8 @@
  const DB_NAME="the_handyman_accountancy_v250_idb";
  const DB_VERSION=1;
  const STORE="records";
+ const SELF_TEST_BUILD="repo-selftest-20261107-01";
+ const EXPECTED_CHECKS=["ready","roundTrip","atomicBatch","atomicMultiDomainMutation","abortRollback","concurrentWrites","concurrentCounterReservation","snapshotRestore","restoreRemovesStaleRecords","restorePreservesOtherDomains","emptySnapshotRestore","cleanup"];
  const META="metadata";
  const SCHEMA_KEY="schema";
  const canonical=value=>{
@@ -297,11 +299,12 @@
    await remove(otherDomain,"keep");
    checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get(domain,"domain-accounting"))===null&&(await get(domain,"domain-projects"))===null&&(await get(domain,"abort-a"))===null&&(await get(domain,"abort-b"))===null&&(await get(domain,"invoice-counter"))===null&&(await get(otherDomain,"keep"))===null&&(await get(otherDomain,"domain-contracts"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
-   return {ok:true,database:DB_NAME,schemaVersion:DB_VERSION,checks,localStorageAccessed:false,appCutover:false};
+   const missingChecks=EXPECTED_CHECKS.filter(name=>checks[name]!==true);
+   return {ok:missingChecks.length===0,database:DB_NAME,schemaVersion:DB_VERSION,selfTestBuild:SELF_TEST_BUILD,expectedChecks:EXPECTED_CHECKS.slice(),checks,missingChecks,localStorageAccessed:false,appCutover:false};
   }catch(error){
    // Do not silently delete partial test evidence if a check fails.
-   return {ok:false,database:DB_NAME,checks,error:String(error&&error.message||error),cleanupAttempted:false,appCutover:false};
+   return {ok:false,database:DB_NAME,schemaVersion:DB_VERSION,selfTestBuild:SELF_TEST_BUILD,expectedChecks:EXPECTED_CHECKS.slice(),checks,missingChecks:EXPECTED_CHECKS.filter(name=>checks[name]!==true),error:String(error&&error.message||error),cleanupAttempted:false,appCutover:false};
   }
  }
- root.HandymanStorageRepository=Object.freeze({databaseName:DB_NAME,schemaVersion:DB_VERSION,ready,get,put,remove,transact,mutate,reserveCounter,snapshot,restore,health,selfTest});
+ root.HandymanStorageRepository=Object.freeze({databaseName:DB_NAME,schemaVersion:DB_VERSION,selfTestBuild:SELF_TEST_BUILD,expectedChecks:EXPECTED_CHECKS.slice(),ready,get,put,remove,transact,mutate,reserveCounter,snapshot,restore,health,selfTest});
 })(window);
