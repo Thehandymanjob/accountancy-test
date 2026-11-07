@@ -460,6 +460,7 @@
     const recordId = "__tha_idb_self_test__:" + suffix;
     let writeVerified = false, readVerified = false, listed = false, deleteVerified = false;
     let typedPutVerified = false, typedReadVerified = false, typedListVerified = false, typedDeleteVerified = false;
+    let blobRoundTripVerified = false;
     let kvSaved = false, recordSaved = false;
     try {
       await set(testKey, testValue);
@@ -469,15 +470,22 @@
       listed = (await keys()).includes(testKey);
       if (!readVerified || !listed) throw new Error("IndexedDB key/value read/list verification failed");
 
-      const fixture = { id: recordId, marker: "THA-IDB-RECORD-SELF-TEST", nested: { amount: 300 }, createdAt: new Date().toISOString() };
+      const blobFixture = new Blob(["THA-IDB-BLOB-SELF-TEST"], { type: "text/plain" });
+      const fixture = { id: recordId, marker: "THA-IDB-RECORD-SELF-TEST", nested: { amount: 300 }, attachment: blobFixture, createdAt: new Date().toISOString() };
       await putRecord("projectMetadata", fixture);
       recordSaved = true;
       typedPutVerified = true;
       const loaded = await getRecord("projectMetadata", recordId);
-      typedReadVerified = !!loaded && JSON.stringify(loaded) === JSON.stringify(fixture);
+      typedReadVerified = !!loaded && loaded.marker === fixture.marker &&
+        JSON.stringify(loaded.nested) === JSON.stringify(fixture.nested) &&
+        loaded.attachment instanceof Blob && loaded.attachment.type === blobFixture.type;
+      if (typedReadVerified) {
+        const restoredText = await loaded.attachment.text();
+        blobRoundTripVerified = restoredText === "THA-IDB-BLOB-SELF-TEST";
+      }
       const all = await getAllRecords("projectMetadata");
       typedListVerified = all.some(item => item.id === recordId) && (await countRecords("projectMetadata")) >= 1;
-      if (!typedReadVerified || !typedListVerified) throw new Error("Typed IndexedDB record read/list verification failed");
+      if (!typedReadVerified || !typedListVerified || !blobRoundTripVerified) throw new Error("Typed IndexedDB record/Blob read-back verification failed");
 
       await deleteRecord("projectMetadata", recordId);
       recordSaved = false;
@@ -488,7 +496,7 @@
       deleteVerified = (await get(testKey)) === null && !(await keys()).includes(testKey);
       if (!typedDeleteVerified || !deleteVerified) throw new Error("IndexedDB delete verification failed");
 
-      const checks = { writeVerified, readVerified, listed, deleteVerified, typedPutVerified, typedReadVerified, typedListVerified, typedDeleteVerified };
+      const checks = { writeVerified, readVerified, listed, deleteVerified, typedPutVerified, typedReadVerified, blobRoundTripVerified, typedListVerified, typedDeleteVerified };
       return { ok: Object.values(checks).every(Boolean), database: DB_NAME, schemaVersion: DB_VERSION,
         checks, legacyDataChanged: false, operationalDataChanged: false };
     } catch (error) {
