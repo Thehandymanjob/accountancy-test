@@ -25,13 +25,31 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
  $('diagnose').onclick=async()=>{
   let db;
   try{
-   const request=indexedDB.open('the_handyman_accountancy_roundtrip_v6',4);
-   request.onupgradeneeded=()=>{request.transaction.abort();};
+   const dbName='the_handyman_accountancy_roundtrip_v6';
+   if(typeof indexedDB.databases==='function'){
+    const known=await indexedDB.databases();
+    if(!known.some(item=>item.name===dbName)){
+     show({ok:true,readOnly:true,database:dbName,databaseExists:false,allStoresEmpty:true,counts:{},
+      note:'The isolated database does not exist yet. No database was created and no records were changed.'});
+     return;
+    }
+   }
+   let upgradeAttempted=false;
+   const request=indexedDB.open(dbName,4);
+   request.onupgradeneeded=()=>{upgradeAttempted=true;request.transaction.abort();};
    db=await new Promise((resolve,reject)=>{
     request.onsuccess=()=>resolve(request.result);
-    request.onerror=()=>reject(request.error||Error('IndexedDB open failed'));
+    request.onerror=()=>{
+     if(upgradeAttempted){resolve(null);return;}
+     reject(request.error||Error('IndexedDB open failed'));
+    };
     request.onblocked=()=>reject(Error('IndexedDB open blocked'));
    });
+   if(!db){
+    show({ok:true,readOnly:true,database:dbName,databaseExists:false,allStoresEmpty:true,counts:{},
+     note:'The isolated database was not present. The read-only probe aborted its attempted creation; no records were written.'});
+    return;
+   }
    const names=Array.from(db.objectStoreNames);
    const rows={};
    for(const name of names){
