@@ -22,7 +22,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <body>
 <main>
 <h1>THA v250 — Authoritative Backup Audit</h1>
-<p>Select the designated <strong>New_new(1).json</strong> file. This page checks the backup structure, IDs, financial totals, and proposed v250 domain mapping.</p>
+<p>Select the designated <strong>New_new(1).json</strong> file. This page verifies its SHA-256, checks the backup structure and totals, and builds a read-only dry-run manifest with canonical payload hashes for the proposed v250 destination records.</p>
 <div class="notice"><strong>Safety boundary:</strong> This is a read-only file audit. It does not open IndexedDB, read or change LocalStorage, write typed records, or perform app cutover. It checks the exact backup SHA-256 before marking the source as verified.</div>
 <input id="file" type="file" accept=".json,application/json">
 <button id="run">Inspect selected backup (read-only)</button>
@@ -30,7 +30,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <button id="copy" class="secondary" disabled>Copy audit report</button>
 <p id="status" class="small" aria-live="polite"></p>
 <pre id="out">Ready. No file has been inspected.</pre>
-<p class="small">Use the same <code>New_new(1).json</code> that was designated as the migration source. Do not substitute a test snapshot or another backup. All unclassified LocalStorage keys remain preserved in the v250 legacy store.</p>
+<p class="small">Use the same <code>New_new(1).json</code> that was designated as the migration source. Do not substitute a test snapshot or another backup. All unclassified LocalStorage keys remain preserved in the v250 legacy store. The manifest does not write any typed records.</p>
 </main>
 <script src="storage-v250-backup-audit.js?v=1"></script>
 <script>
