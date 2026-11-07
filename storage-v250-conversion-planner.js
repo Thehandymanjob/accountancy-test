@@ -248,17 +248,45 @@
  function compareArrays(a,b){
   if(!array(a)||!array(b))return null;
   const mapA=new Map(),mapB=new Map();
-  for(const item of a)if(object(item)&&typeof item.id==="string"&&item.id.trim())mapA.set(item.id,item);
-  for(const item of b)if(object(item)&&typeof item.id==="string"&&item.id.trim())mapB.set(item.id,item);
+  let missingIdA=0,missingIdB=0;
+  for(const item of a){if(object(item)&&typeof item.id==="string"&&item.id.trim())mapA.set(item.id,item);else missingIdA++;}
+  for(const item of b){if(object(item)&&typeof item.id==="string"&&item.id.trim())mapB.set(item.id,item);else missingIdB++;}
   const common=[...mapA.keys()].filter(id=>mapB.has(id));
   let identical=0,changed=0;
-  for(const id of common)if(stable(mapA.get(id))===stable(mapB.get(id)))identical++;else changed++;
-  return {countA:a.length,countB:b.length,idsA:mapA.size,idsB:mapB.size,commonIds:common.length,identicalRecords:identical,changedRecordsSameId:changed,onlyInA:[...mapA.keys()].filter(id=>!mapB.has(id)).length,onlyInB:[...mapB.keys()].filter(id=>!mapA.has(id)).length,duplicateIdsA:a.length-mapA.size,duplicateIdsB:b.length-mapB.size};
+  const changedFieldCounts={};
+  for(const id of common){
+   const left=mapA.get(id),right=mapB.get(id);
+   if(stable(left)===stable(right)){identical++;continue;}
+   changed++;
+   const keys=new Set([...Object.keys(left),...Object.keys(right)]);
+   for(const key of keys)if(stable(left[key])!==stable(right[key]))changedFieldCounts[key]=(changedFieldCounts[key]||0)+1;
+  }
+  return {countA:a.length,countB:b.length,idsA:mapA.size,idsB:mapB.size,commonIds:common.length,identicalRecords:identical,changedRecordsSameId:changed,changedFieldCounts,onlyInA:[...mapA.keys()].filter(id=>!mapB.has(id)).length,onlyInB:[...mapB.keys()].filter(id=>!mapA.has(id)).length,missingIdA,missingIdB,duplicateIdsA:a.length-mapA.size-missingIdA,duplicateIdsB:b.length-mapB.size-missingIdB};
  }
  function parsedRows(rows){
   const out=new Map();
   for(const row of rows){const env=row.value;if(!env||typeof env.raw!=="string")continue;try{out.set(row.key,JSON.parse(env.raw))}catch(_){}}
   return out;
+ }
+ function candidateSequenceAudit(rows){
+  const byKey=new Map(rows.map(row=>[row.key,row.value&&row.value.raw]));
+  const pairs=[
+   {accounting:"handyman_accounting_v2",sequence:null},
+   {accounting:"tha_restore_test_v1_accounting_v1",sequence:"tha_restore_test_v1_invoice_sequence_v1"},
+   {accounting:"tha_v212_migration_accounting_v1",sequence:"tha_v212_migration_invoice_sequence_v1"},
+   {accounting:"tha_test226_accounting_v1",sequence:"tha_test226_invoice_sequence_v1"}
+  ];
+  return pairs.map(pair=>{
+   let data=null,sequence=null;
+   try{const raw=byKey.get(pair.accounting);if(typeof raw==="string")data=JSON.parse(raw)}catch(_){}
+   try{const raw=pair.sequence?byKey.get(pair.sequence):null;if(typeof raw==="string")sequence=Number(JSON.parse(raw))}catch(_){}
+   const invoices=array(data&&data.invoices)?data.invoices:[];
+   const entries=array(data&&data.entries)?data.entries:[];
+   const invoiceNumbers=invoices.map(x=>Number(x&&x.number)).filter(n=>Number.isFinite(n)&&n>0);
+   const entryNumbers=entries.map(x=>Number(x&&x.number)).filter(n=>Number.isFinite(n)&&n>0);
+   const observedMax=Math.max(0,...invoiceNumbers,...entryNumbers);
+   return {accountingSource:pair.accounting,sequenceSource:pair.sequence,invoiceCount:invoices.length,numberedInvoiceCount:invoiceNumbers.length,numberedEntryCount:entryNumbers.length,observedMax,sequenceValue:sequence,sequenceBelowObservedMax:sequence===null?null:sequence<observedMax};
+  });
  }
  function compareCandidateVersions(rows){
   const values=parsedRows(rows);
@@ -329,6 +357,7 @@
    candidateAudit:candidates.candidates,
    exactDuplicateGroups:candidates.exactDuplicateGroups,
    sourceComparisons,
+   candidateSequenceAudit:candidateSequenceAudit(snap.records),
    issues,
    records:rows,
    writesPerformed:false,
