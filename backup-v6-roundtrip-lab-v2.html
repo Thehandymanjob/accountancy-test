@@ -10,7 +10,7 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
 <p>Select the original complete v6 JSON backup:</p><input id="file" type="file" accept=".json,application/json">
 <p><button id="inspect">Inspect backup (read-only)</button><button id="stage" disabled>Stage into isolated v6 test IndexedDB</button><button id="audit" disabled>Audit persisted data</button><button id="cleanup" disabled>Remove this test copy</button></p>
 <p><button id="copy" type="button">Copy result</button><span id="copyStatus" aria-live="polite"></span></p>
-<button id="diagnose" type="button">Inspect existing test DB (read-only)</button><button id="foundationCheck" type="button">Check Foundation / Adapter (read-only)</button><pre id="out">Ready. No operation has run.</pre>
+<button id="diagnose" type="button">Inspect existing test DB (read-only)</button><button id="foundationCheck" type="button">Check Foundation / Adapter (read-only)</button><button id="adapterSource" type="button">Inspect Adapter DB contract (read-only)</button><pre id="out">Ready. No operation has run.</pre>
 </main>
 <script>
 (async()=>{
@@ -90,6 +90,17 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
    stageSource:source(a&&a.stage),
    note:'Function source inspection only; no database opened, no records changed, LocalStorage untouched.'
   });
+ };
+ $('adapterSource').onclick=async()=>{
+  try{
+   const response=await fetch('backup-v6-roundtrip.js.gz?v=2',{cache:'no-store'});
+   if(!response.ok)throw Error('Adapter download failed: '+response.status);
+   const source=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).text();
+   const patterns=[/function\\s+dbApi\\s*\\([^)]*\\)\\s*\\{[\\s\\S]{0,3000}?\\n\\}/,/const\\s+dbApi\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>[\\s\\S]{0,3000}?;/,/let\\s+dbApi\\s*=\\s*[\\s\\S]{0,3000}?;/];
+   const snippets=patterns.map(re=>{const m=source.match(re);return m?m[0]:null;}).filter(Boolean);
+   const lines=source.split('\\n').map((line,i)=>({line:i+1,text:line})).filter(x=>/DB_NAME|DB_VERSION|DATABASE_NAME|SCHEMA_VERSION|schema-v4|not loaded|dbApi/.test(x.text));
+   show({ok:true,readOnly:true,sourceBytes:source.length,dbApiSnippets:snippets,contractLines:lines.slice(0,100),note:'Adapter source decompressed and inspected only. No database opened or modified; LocalStorage untouched.'});
+  }catch(e){show({ok:false,readOnly:true,error:e.message});}
  };
  $('copy').onclick=async()=>{
   const value=out.textContent;
