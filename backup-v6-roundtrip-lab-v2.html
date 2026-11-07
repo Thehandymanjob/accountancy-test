@@ -78,19 +78,17 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
  $('foundationCheck').onclick=()=>{
   const f=window.HandymanStorageFoundation;
   const a=window.HandymanBackupV6RoundTrip;
+  const source=fn=>{try{return typeof fn==='function'?String(fn).slice(0,12000):null;}catch(e){return 'source unavailable: '+e.message;}};
   show({
-   ok:!!f&&!!a,
-   readOnly:true,
-   foundationLoaded:!!f,
-   foundationType:typeof f,
-   foundationDatabase:f&&f.databaseName||null,
+   ok:!!f&&!!a,readOnly:true,
+   foundationLoaded:!!f,foundationDatabase:f&&f.databaseName||null,
    foundationSchemaVersion:f&&f.schemaVersion||null,
-   foundationStores:f&&Array.isArray(f.stores)?f.stores:null,
-   foundationHasOpenDatabase:!!(f&&typeof f.openDatabase==='function'),
-   adapterLoaded:!!a,
-   adapterType:typeof a,
-   adapterMethods:a?Object.keys(a):[],
-   note:'Read-only runtime compatibility check. No database opened, no records changed, LocalStorage untouched.'
+   foundationStores:f&&f.stores||null,
+   adapterLoaded:!!a,adapterMethods:a?Object.keys(a):[],
+   validateSource:source(a&&a.validate),
+   makePlanSource:source(a&&a.makePlan),
+   stageSource:source(a&&a.stage),
+   note:'Function source inspection only; no database opened, no records changed, LocalStorage untouched.'
   });
  };
  $('copy').onclick=async()=>{
