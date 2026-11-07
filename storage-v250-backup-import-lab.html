@@ -26,6 +26,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <p><strong>Step 1 — Select the authoritative backup</strong></p>
 <input id="file" type="file" accept=".json,application/json">
 <button id="inspectLegacy" class="secondary" type="button">Inspect legacy records (read-only)</button>
+<button id="exportLegacy" class="secondary" type="button">Download current legacy snapshot (read-only)</button>
 <button id="compareSource" class="secondary" type="button">Compare LocalStorage key names (read-only)</button>
 <button id="prepare">Prepare migration (read-only)</button>
 <button id="snapshot" class="secondary" disabled>Download pre-import IndexedDB snapshot</button>
@@ -91,6 +92,25 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
   }catch(error){
    show({ok:false,error:String(error&&error.message||error),localStorageAccessed:false,businessDataWritten:false,appCutover:false});
   }finally{$("inspectLegacy").disabled=false;}
+ };
+ $("exportLegacy").onclick=async()=>{
+  $("exportLegacy").disabled=true;
+  try{
+   await HandymanStorageRepository.ready();
+   const snapshot=await HandymanStorageRepository.snapshot(["legacy"]);
+   const json=JSON.stringify(snapshot,null,2);
+   const blob=new Blob([json],{type:"application/json"});
+   const url=URL.createObjectURL(blob);
+   const link=document.createElement("a");
+   link.href=url;
+   link.download="THA-v250-current-legacy-snapshot.json";
+   document.body.appendChild(link);link.click();link.remove();
+   setTimeout(()=>URL.revokeObjectURL(url),1000);
+   show({ok:true,downloadStarted:true,database:snapshot.database,createdAt:snapshot.createdAt,domainCount:snapshot.domains.length,domains:snapshot.domains,recordCount:snapshot.records.length,rawValuesIncluded:true,localStorageAccessed:false,indexedDBWritten:false,businessDataWritten:false,appCutover:false});
+   $("preview").textContent="Current legacy snapshot download requested. This exports IndexedDB legacy records only; it does not change browser storage.";
+  }catch(error){
+   show({ok:false,error:String(error&&error.message||error),localStorageAccessed:false,indexedDBWritten:false,appCutover:false});
+  }finally{$("exportLegacy").disabled=false;}
  };
  $("compareSource").onclick=async()=>{
   $("compareSource").disabled=true;
