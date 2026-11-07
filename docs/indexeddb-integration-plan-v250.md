@@ -350,3 +350,69 @@ For operations currently mutating shared objects before calling persistence, a s
 ### Audit status
 
 Pass 3 confirms that the main risk is not just the persistence helper implementation: several business functions assume synchronous completion, and at least five paths ignore persistence results (invoice print status, startup orphan cleanup, project open selector persistence, project ledger-row deletion, and worker/partner deletion; the startup legacy sync cleanup is an additional ignored-result path). These must be fixed before the app can use IndexedDB as its sole canonical store. No app source, browser data, IndexedDB records, backup or production branch was changed in this pass.
+
+
+## 13. Report storage and startup/event-order audit — pass 4
+
+### Report module storage inventory
+
+The report module is initialized from an inline module block near the end of `index.html`. It uses five LocalStorage keys:
+
+- `tha_test226_report_archive_v1` — saved report HTML snapshots and metadata.
+- `tha_test226_report_notifications_v1` — notification list/read state.
+- `tha_test226_report_settings_v1` — period mode/configuration.
+- `tha_test226_report_workflow_v1` — period completion and delayed review state.
+- `tha_test226_report_email_settings_v1` — accountant recipient name/email.
+
+Four keys are loaded at module evaluation through `load(key,fallback)`; email settings are loaded lazily when the email view is opened. Invalid JSON silently falls back to the supplied default in `load()`. That behavior is unsafe for authoritative user-owned report archives: malformed data must be surfaced as a protected/recovery state, not treated as an empty archive and later overwritten.
+
+### All 11 report save call sites
+
+| Function / action | Key | Checks save result? | Finding |
+|---|---|---:|---|
+| `report188SaveSettings` | settings | No | UI does not report a failed save. |
+| `report188GenerateAndSave` | archive | Yes | Removes the newly prepended item from memory on failure; notification is created only after archive save. Notification save is deferred/unchecked. |
+| `report188ToggleRead` | notifications | No | Renders after an unchecked save. |
+| `report188OpenNotification` | notifications | No | Marks read, saves unchecked, then navigates. |
+| `report188ToggleReadFromDetail` | notifications | No | Renders after an unchecked save. |
+| `report188Open` | notifications | No | Marks report notification read, saves unchecked, then renders notifications. |
+| `report188RenameStatus` | archive | No | Renders updated status even if persistence fails. |
+| `report188ConfirmComplete` | workflow | No | Displays a successful completion message and creates notification after unchecked workflow save. |
+| `checkDue` — flow update | workflow | No | Startup/manual reminder mutation may be reported complete although write fails. |
+| `checkDue` — notification update | notifications | No | Same issue for generated reminders. |
+| `report188SaveEmailSettings` | email settings | Yes | Success message only follows a true return from the helper. |
+
+The report helper `save()` returns a boolean, but eight of the eleven call sites ignore it. In addition, `report188GenerateAndSave` checks the archive write but `addNotif()` only mutates the in-memory notification array; its durable save is not performed in that same checked sequence. A future repository implementation must save archive and related notification atomically where they form one user action.
+
+### Report initialization and lifecycle ordering
+
+The module schedules `report188Init()` using `setTimeout(...,0)` either from a `DOMContentLoaded` listener or immediately when the document is already parsed. A wrapper around the global `show()` function also schedules `report188Init()` whenever the report panel is opened. This can initialize the same module more than once; the initialization currently resets navigation state and runs `checkDue(false)` each time. It must become idempotent and await repository bootstrap before loading or mutating report state.
+
+The report archive stores `node.outerHTML` snapshots. These are user-visible historical report artifacts and must be retained byte-for-byte/source-preservingly during any approved migration; they must not be regenerated from current accounting data as a substitute.
+
+### Startup ordering and write hazards
+
+The accounting bootstrap currently calls `loadDB()` and then runs multiple cleanup/normalization steps synchronously. It may call `persist()` after orphan cleanup without checking the result, and then performs repeated direct `localStorage.setItem(KEY, JSON.stringify(db))` writes around invoice field/number initialization. The Projects module is loaded later via `prLoad()`, then performs a legacy project-sync cleanup that may mutate Accounting and call `persist()` without checking the result.
+
+This ordering is incompatible with an IndexedDB-only cutover. Required future startup sequence:
+
+1. Open and validate the IndexedDB database/schema.
+2. Load all canonical envelopes and auxiliary domains required by the UI.
+3. Validate envelope shapes and backup/schema versions; do not silently replace corrupt data with defaults.
+4. Run only explicitly approved, deterministic repair operations inside appropriate transactions.
+5. Await commit and verify critical readback.
+6. Publish loaded state to the UI and enable editing only after the bootstrap barrier resolves.
+7. Initialize report module once, after the barrier; do not let timers or UI events race startup.
+
+No startup cleanup may infer that a missing envelope means an empty account. No startup path may rewrite the canonical envelope merely because a field normalizer ran; only a detected, documented repair should produce a transaction.
+
+### Additional direct-write workflows confirmed
+
+- `prToggleProjectCompletion()` writes the Projects LocalStorage key directly rather than calling `prPersist()`; this bypasses the shared persistence helper and its monitoring/error semantics.
+- `submitHelpContact()` stores local-only support drafts in a separate key. Its status correctly says the message was not sent. It needs a defined auxiliary-domain policy and must preserve the pending-local-only status.
+- `prLoad()` performs an in-place legacy materials-to-expenses transformation and writes it back during startup. This is a migration/repair path, not ordinary runtime persistence; it must not execute against an unvalidated or empty IndexedDB workspace.
+- `prRestore()` is a separate Projects-only restore workflow that reads the old LocalStorage value for rollback. It must be reconciled with the approved full backup/restore transaction and not remain a split-brain restore path after cutover.
+
+### Pass 4 conclusion
+
+The report module contains 11 save call sites, of which eight ignore the returned success/failure value. The module has a repeatable initialization path, silently defaults malformed report JSON, and stores historical HTML snapshots. Startup performs multiple unchecked/redundant accounting writes, project cleanup writes and a direct project completion write. These findings are blockers for an IndexedDB-only cutover. This pass was read-only: no application code, browser data, IndexedDB records, backup or production branch was changed.
