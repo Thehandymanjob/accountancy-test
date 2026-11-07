@@ -97,13 +97,14 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
  };
  $('adapterSource').onclick=async()=>{
   try{
-   const response=await fetch('backup-v6-roundtrip.js.gz?v=2',{cache:'no-store'});
+   const response=await fetch('backup-v6-roundtrip.js.gz?v=3',{cache:'no-store'});
    if(!response.ok)throw Error('Adapter download failed: '+response.status);
    const source=await new Response(response.body.pipeThrough(new DecompressionStream('gzip'))).text();
-   const patterns=[/function\\s+dbApi\\s*\\([^)]*\\)\\s*\\{[\\s\\S]{0,3000}?\\n\\}/,/const\\s+dbApi\\s*=\\s*(?:async\\s*)?\\([^)]*\\)\\s*=>[\\s\\S]{0,3000}?;/,/let\\s+dbApi\\s*=\\s*[\\s\\S]{0,3000}?;/];
+   const patterns=[/function\s+dbApi\s*\([^)]*\)\s*\{[\s\S]{0,5000}?\n\s*\}/,/const\s+dbApi\s*=\s*(?:async\s*)?\([^)]*\)\s*=>[\s\S]{0,4000}?;/,/let\s+dbApi\s*=\s*[\s\S]{0,4000}?;/];
    const snippets=patterns.map(re=>{const m=source.match(re);return m?m[0]:null;}).filter(Boolean);
-   const lines=source.split('\\n').map((line,i)=>({line:i+1,text:line})).filter(x=>/DB_NAME|DB_VERSION|DATABASE_NAME|SCHEMA_VERSION|schema-v4|not loaded|dbApi/.test(x.text));
-   show({ok:true,readOnly:true,sourceBytes:source.length,dbApiSnippets:snippets,contractLines:lines.slice(0,100),note:'Adapter source decompressed and inspected only. No database opened or modified; LocalStorage untouched.'});
+   const lines=source.split('\n').map((line,i)=>({line:i+1,text:line})).filter(x=>/DB_NAME|DB_VERSION|DATABASE_NAME|SCHEMA_VERSION|schema-v4|not loaded|dbApi|HandymanStorageFoundation|databaseName/.test(x.text));
+   const foundationRefs=[...source.matchAll(/HandymanStorageFoundation|databaseName|schemaVersion/g)].map(m=>({term:m[0],at:m.index,context:source.slice(Math.max(0,m.index-180),Math.min(source.length,m.index+260))})).slice(0,40);
+   show({ok:true,readOnly:true,sourceBytes:source.length,dbApiSnippets:snippets,contractLines:lines.slice(0,120),foundationRefs,note:'Adapter source decompressed and inspected only. No database opened or modified; LocalStorage untouched.'});
   }catch(e){show({ok:false,readOnly:true,error:e.message});}
  };
  $('copy').onclick=async()=>{
