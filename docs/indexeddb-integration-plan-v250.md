@@ -629,3 +629,66 @@ Use an explicit state machine: `booting` → `repository-ready` → `core-loaded
 ### Pass 9 conclusion
 
 The current source confirms that the application is not structured for an asynchronous storage swap: Accounting initializes and performs cleanup before Projects loads; Projects then performs additional Accounting cleanup; Contracts and Reports load independently later; language and monitoring also initialize independently. The next design step should define the bootstrap coordinator and transaction boundaries before changing executable code. No app source, LocalStorage, IndexedDB database, backup, branch topology or production files were changed in this pass; only this migration-plan document was updated.
+
+
+## 19. Bootstrap coordinator and atomic workflow contract — pass 10
+
+### Repository capability check
+
+The current isolated `storage-repository.js` exposes `get`, `put`, `remove`, `transact`, `mutate`, `reserveCounter`, `snapshot`, `restore`, `health` and `selfTest`. `transact` writes a non-empty list of records in one read-write transaction on the single `records` object store. `mutate` performs synchronous per-record read/modify/write callbacks in one transaction and aborts on callback failure. `reserveCounter` atomically advances one counter record using `max(current, minimum) + 1`.
+
+Important limitation: `mutate` callbacks receive only the current value for their own record. The API does not currently expose a transaction-scoped multi-record view or a cross-record validation callback. Consequently, it cannot by itself atomically derive a new invoice number from both the sequence record and the Accounting envelope, validate uniqueness against current invoices/income, and commit the invoice plus linked income in one logical operation. A dedicated transaction-scoped `mutateMany`/`transactUpdate` API is required before invoice workflow integration. Do not simulate this with separate `get()` and `put()` calls or trust a stale in-memory floor.
+
+### Bootstrap coordinator contract
+
+Create one coordinator (design name: `THAStorageBootstrap`) that owns repository readiness, canonical loading, validation and app activation. It must be the only startup path that loads persisted application state. The coordinator should:
+
+1. Await repository `ready()` and verify expected database/schema identity. Do not create or open the existing polluted `the_handyman_accountancy_test226` database; the v250 repository database remains the isolated target.
+2. Load required canonical envelopes from `accounting/main`, `projects/workspace` and `contracts/main` in a consistent readonly transaction. The current repository has `get()` per record only; add a `readMany()` snapshot API using one readonly transaction so the three core envelopes are observed at one consistent database point.
+3. Validate each envelope without merging `defaultDB()` into the stored source object, silently adding fields, or dropping unknown fields. Runtime adapters may expose safe derived defaults to UI code, but must keep the persisted canonical envelope unchanged until an intentional user mutation.
+4. Load explicitly selected auxiliary records (reports, preferences, diagnostics and support) with per-domain validation and corruption status. Missing optional records may use documented defaults in memory; malformed existing records must be treated as recovery-required and must not be overwritten by defaults.
+5. Construct one in-memory application state object and inject it into Accounting, Projects, Contracts, Reports, language, Monitoring and Support modules. These modules must not independently read LocalStorage or independently bootstrap themselves.
+6. Run no legacy cleanup, sequence reset, orphan removal, project-sync normalization or automatic repair during the first read-only bootstrap. Any repair must be separately named, reviewed, tested, and committed atomically after all relevant envelopes have been validated.
+7. Enable the application only after all required core and configured auxiliary records are loaded and validated. Any required repository failure transitions to `recovery-required`; all mutating UI stays disabled and the original legacy LocalStorage remains untouched.
+
+Suggested coordinator phases: `booting` → `repository-ready` → `core-loaded` → `core-validated` → `auxiliary-loaded` → `ready`. Failure at any phase transitions to `recovery-required`. Migration is a separate gated operation, not an implicit side effect of startup.
+
+### Atomic workflow matrix
+
+| User operation | Canonical records touched | Required single-transaction behavior |
+|---|---|---|
+| Create/edit invoice | `accounting/main`, `accounting/sequence` | Validate chosen invoice number against the current Accounting envelope inside the transaction; update invoice/customer data and monotonic sequence together. If number is auto-assigned, reserve it from the same transaction's current sequence and uniqueness state. |
+| Mark invoice paid | `accounting/main` | Update invoice status/date/method and create or update its linked income entry in the same Accounting envelope commit. Preserve duplicate-payment confirmation as a pre-commit user decision, then revalidate relevant state in transaction. |
+| Mark invoice unpaid/delete invoice | `accounting/main` | Change invoice and remove only its correctly linked generated income in one commit; preserve unrelated/manual income. |
+| Create/edit project workspace | `projects/workspace` | Commit the complete workspace envelope once; update in-memory state and UI only after commit. |
+| Project completion toggle | `projects/workspace` | Persist status only. Preserve current explicit behavior: completion toggle itself does not create, remove or synchronize accounting entries. |
+| Project financial sync | `projects/workspace`, `accounting/main` | Compute candidate generated rows from the candidate Projects envelope; replace only rows explicitly tagged for that project and corresponding generated third-party rows; commit both envelopes atomically. Manual rows remain unchanged. For sync-all, all projects and Accounting commit as one operation, not a loop of independent commits. |
+| Save/delete contract | `contracts/main` | Validate IDs and payload, commit full Contracts envelope, then update UI. |
+| Generate/save report | `reports/archive`, `reports/notifications` | If report generation creates an archive item and a notification, commit both together. Do not show success if either write fails. |
+| Complete report period | `reports/workflow`, `reports/notifications` | Commit workflow status and its associated notification state together where both are changed by the action. |
+| Full backup | Accounting, Projects, Contracts plus explicitly selected auxiliary records | Capture a consistent readonly snapshot in one transaction. The backup format must identify exactly which domains are included; v6 remains the approved core-data backup and is not retroactively reinterpreted as a full device image. |
+| Full restore | All domains explicitly declared by restore mode | Validate and stage all incoming data before opening the transaction; atomically replace only declared domains. Preserve all unspecified domains by documented policy. No data-dependent merge or recalculation unless separately approved and tested. |
+| Factory reset | Core envelopes, sequence, recovery snapshot and reset marker | In one transaction create immutable recovery snapshot and reset marker, then remove/reset only the explicitly confirmed reset scope. Auxiliary retention/deletion must be separately disclosed. Never clear LocalStorage during IndexedDB cutover. |
+| Support draft | `support/drafts` | Insert a draft record; preserve `pending-local-only`; UI says saved locally only after commit. |
+| Monitoring | `diagnostics/monitor-log` | Best-effort append/retention operation outside the business transaction; failure cannot reverse a successful invoice/project save. |
+
+### Transaction API work required before app integration
+
+1. Add `readMany([{domain,key}, ...])` using one readonly transaction and return validated clones plus a consistent snapshot marker.
+2. Add `mutateMany([{domain,key,initialValue}, ...], callback)` where one callback receives all current values and returns the complete set of replacement values. The callback must be synchronous, deterministic, side-effect-free and run inside the active IndexedDB transaction; thrown errors abort all writes. It must support conditional validation (invoice-number uniqueness, linked-record invariants and project-sync ownership) against the transaction's current records.
+3. Add explicit `deleteMany`/domain-replacement semantics for restore and reset, with allow-listed domain scope and transaction abort on any validation error. The existing `restore(snapshot)` already replaces declared domains atomically, but app restore needs a staged/validated application-level wrapper and a policy for auxiliary domains.
+4. Add operation-specific tests: two competing invoice reservations, duplicate invoice-number rejection, invoice+income atomicity, project+Accounting sync atomicity, sync-all rollback, restore across core envelopes, factory-reset snapshot+marker+reset atomicity, and report archive+notification atomicity.
+5. Keep repository callbacks free of network calls, timers, DOM updates and `await` gaps. Update UI state only after transaction completion. Verify readback after commit in a separate readonly transaction; the transaction completion event is the commit boundary.
+
+### Migration and data-preservation guardrails
+
+- Do not modify `index.html` or wire repository scripts into it during this design pass.
+- Do not import v6 or any LocalStorage value in this pass. v6 remains a separate approved input for a later staged import test.
+- Do not run repository `restore()` against the production app or an existing test database. The dedicated v250 repository and prior roundtrip test DBs remain separate; no cleanup or deletion is authorized.
+- Keep LocalStorage read-only and untouched until the final cutover is separately approved. After cutover, do not implement a LocalStorage fallback.
+- Preserve exact core envelopes and unknown fields; do not normalize, recalculate project prices, merge device-specific companies, or add review flags during the migration/import path.
+- The current repository self-test pass validates repository primitives only. It does not validate these application workflows; the new operation-specific tests are still required.
+
+### Pass 10 conclusion
+
+The bootstrap and transaction contract is now defined. A critical repository API gap has been made explicit: the existing per-record `mutate` and `reserveCounter` cannot atomically validate and update invoice numbering against the Accounting envelope without a new multi-record transaction callback. The correct next step is to implement and independently test the repository transaction extensions in the existing isolated test branch, without wiring them into the app. No application source, browser data, LocalStorage, user backup, existing database contents or production branch was changed in this pass; only this design document was updated.
