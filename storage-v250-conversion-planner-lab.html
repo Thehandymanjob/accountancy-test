@@ -26,6 +26,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <button id="selftest" class="secondary">Run planner self-tests (in memory)</button>
 <button id="run">Run read-only validation</button>
 <button id="download" class="secondary" disabled>Export validation manifest JSON</button>
+<button id="copyResult" class="secondary" disabled>Copy Result</button>
+<p id="copyStatus" class="small" aria-live="polite"></p>
 <pre id="out">Ready. No operation has run.</pre>
 <p class="small">Run this page on the same origin as the staged test app. Keep the legacy snapshot export as a separate recovery copy. No application changes are made by this planner.</p>
 </main>
@@ -33,9 +35,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <script src="storage-v250-conversion-planner.js?v=6"></script>
 <script>
 (()=>{
- const out=document.getElementById("out"),run=document.getElementById("run"),download=document.getElementById("download"),selftest=document.getElementById("selftest");
+ const out=document.getElementById("out"),run=document.getElementById("run"),download=document.getElementById("download"),copyResult=document.getElementById("copyResult"),copyStatus=document.getElementById("copyStatus"),selftest=document.getElementById("selftest");
  let last=null;
- const show=v=>{out.textContent=JSON.stringify(v,null,2)};
+ const show=v=>{out.textContent=JSON.stringify(v,null,2);copyResult.disabled=false;copyStatus.textContent="";};
  selftest.onclick=()=>{
   run.disabled=true;selftest.disabled=true;download.disabled=true;
   try{last=null;show(HandymanV250ConversionPlanner.selfTest())}
@@ -50,6 +52,24 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
    download.disabled=false;
   }catch(error){last=null;show({ok:false,error:String(error&&error.message||error),writesPerformed:false,appCutover:false})}
   finally{run.disabled=false}
+ };
+ copyResult.onclick=async()=>{
+  const value=out.textContent||"";
+  try{
+   if(navigator.clipboard&&navigator.clipboard.writeText){
+    await navigator.clipboard.writeText(value);
+   }else{
+    const area=document.createElement("textarea");
+    area.value=value;area.setAttribute("readonly","");
+    area.style.position="fixed";area.style.opacity="0";
+    document.body.appendChild(area);area.select();
+    const copied=document.execCommand("copy");area.remove();
+    if(!copied)throw new Error("Clipboard copy is not supported by this browser");
+   }
+   copyStatus.textContent="Result copied. You can paste it into ChatGPT.";
+  }catch(error){
+   copyStatus.textContent="Copy failed. Please use Export validation manifest JSON instead.";
+  }
  };
  download.onclick=()=>{
   if(!last)return;
