@@ -120,25 +120,50 @@ The adapter uses JSON serialization. This preserves JSON values such as null, fa
 
 This review did not change `index.html`, `storage-repository.js`, the lab, LocalStorage, any browser database, the approved backup, or production. It did not import data or perform cutover. Continue only on existing `release239`; do not create a branch.
 
-## 8. Isolated transaction primitive implementation — browser test pending
+## 8. Isolated transaction primitive implementation — browser validation passed
 
 Implemented on the existing `release239` branch:
 
-- Repository module commit: `d83f62c5a751dabe25a2070a74448be744cf1153`; subsequent fixture-guard hardening: `386cd60ecd4a8862ae9aaa41c7da55a9bf0ce683`.
-- Lab cache-bust update: `2e24d3659f80eab5506e21b9e9fc1e5524359469`.
-- Added `mutate(operations)`: performs synchronous, transaction-scoped read/modify/write callbacks for multiple namespaced records inside one read-write transaction on the existing `records` store. It rejects duplicate record keys, aborts on callback/serialization errors, waits for transaction completion, then verifies every updated value in a separate readonly transaction.
-- Added `reserveCounter(domain,key,minimum)`: reserves the next integer atomically using `mutate`; concurrent read-write transactions are serialized by IndexedDB.
-- Expanded the manual self-test with:
-  - `atomicMultiDomainMutation`: update Accounting-like, Projects-like and Contracts-like envelopes in one transaction.
-  - `abortRollback`: deliberately abort a transaction after scheduling two writes and verify both prior values remain unchanged.
-  - `concurrentCounterReservation`: issue eight simultaneous reservations and verify unique monotonic values 1–8.
-- Added preflight guards for all new synthetic keys and expanded cleanup verification.
-- The lab now loads `storage-repository.js?v=386cd60` to avoid the previous cached module.
+- Repository module latest commit: `15875e80ab799d03f7dd517c293d1f0ebd28aa18`; blob SHA `f5d4c5d8e16361c3f7479840cd28c8aa57a453b4`.
+- Lab latest commit: `07f53817e501a1dda08ed161ca161890a03306f7`; blob SHA `5831e0596e3f83c50ef74f86ec877a2a56d9dea1`.
+- Repository build: `repo-selftest-20261107-02`.
+- Lab build: `lab-selftest-20261107-02`.
+- Added `mutate(operations)`: transaction-scoped read/modify/write callbacks for multiple namespaced records in one read-write transaction on the `records` store.
+- Added `reserveCounter(domain,key,minimum)`: atomically reserves the next integer using `mutate`.
+- The self-test covers multi-domain mutation, deliberate abort/rollback, concurrent writes and counter reservations, snapshot/restore, stale-record removal, preservation of unrelated domains, empty-domain restore, and cleanup.
+- The concurrent mutation verification was hardened to avoid a false failure when a later valid transaction commits before an earlier transaction's post-commit read-back. The test separately verifies the final counter and uniqueness/monotonicity of reservations.
+- The lab enforces exact expected build IDs and refuses to report success if checks are missing or the loaded module does not match the expected build.
+
+### Browser validation evidence
+
+The user ran the lab in iPhone Safari and returned the complete output:
+
+- `ok: true`
+- All 12 expected checks were `true`.
+- `missingChecks: []`
+- `missingOrFailedChecks: []`
+- `unexpectedChecks: []`
+- `localStorageAccessed: false`
+- `buildMatches: true`
+- `reportComplete: true`
+- `appCutover: false`
+
+This closes the isolated repository-primitive validation stage only.
 
 ### Important test boundary
 
-These are synthetic repository tests, not live app workflows. They do not prove the current invoice-number business rules, Accounting/Projects synchronization, app backup/restore, or Safari application integration. No application file is imported or modified. The user must run the updated lab and return its output before these tests can be marked passed.
+These are synthetic repository tests, not live app workflows. They do not prove the current invoice-number business rules, Accounting/Projects synchronization, app backup/restore, app startup, or Safari application integration. No application file is imported or modified by this test. No backup was imported; no LocalStorage key was read or changed; no app cutover occurred.
 
-### Current status
+## 9. Next stage — complete source audit before application integration
 
-Implementation is committed; **browser validation is pending**. Do not proceed to app integration, backup-v6 import, LocalStorage modification, or cutover until the updated lab returns all checks true and the remaining audit gaps are resolved.
+The repository primitive stage is passed. The next permitted work is a read-only, exhaustive audit of the current v250 application source and its dependencies, followed by a revised integration specification.
+
+1. Reconcile all LocalStorage access sites in `index.html`, `storage-foundation.js`, and any dynamically loaded/inline scripts. Include direct calls, aliases, bracket notation, indirect wrappers, reads, writes, deletes and startup side effects.
+2. Classify every access as core business data, preferences, reports, diagnostics, support drafts, migration/backup/restore, recovery, or disposable test instrumentation.
+3. Trace each persistence function to all callers and event handlers. Record which callers currently assume synchronous return values and the async conversion required.
+4. Identify every multi-record business operation and specify its atomic envelope(s), failure handling, user-visible success timing and recovery behavior.
+5. Reconcile the v6 approved backup mapping with the canonical envelope model. Do not infer missing auxiliary data from stale browser storage.
+6. Define the asynchronous bootstrap barrier, schema validation, no-fallback behavior, read/write parity gates and browser test matrix.
+7. Do not edit `index.html`, connect the app to the repository, import v6, modify LocalStorage, or perform cutover during this audit stage.
+
+The application source remains unchanged at blob SHA `f6bdb6a31fd9e424ca0464b5fb725c4ad0fb2315`. The repository module is still not referenced by `index.html`. Work remains limited to the existing `release239` branch; production `main` and all existing user data remain out of scope.
