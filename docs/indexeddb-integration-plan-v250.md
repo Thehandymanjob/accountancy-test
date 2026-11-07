@@ -580,3 +580,52 @@ The key-level inventory is now sufficiently concrete to define the initial v7 au
 ### Pass 8 conclusion
 
 The remaining auxiliary storage call paths are now identified well enough to specify their conversion requirements. Important uncovered paths include direct Projects completion writes, report notification/workflow persistence, language preference writes that are not commit-gated, support-draft corruption fallback, and monitor diagnostics that still inspect LocalStorage. The dynamic script review found PDF-library loading rather than a hidden application storage loader. No app code, user data, LocalStorage, IndexedDB database or production branch was changed; only this plan document was updated.
+
+
+## 18. Application startup, module ordering and async conversion audit — pass 9
+
+### Observed startup sequence in the current v250 source
+
+1. The Accounting script defines `loadDB()` and `persist()` as synchronous LocalStorage functions. `loadDB()` parses the Accounting envelope and merges it with `defaultDB()`; malformed or structurally invalid data sets the Accounting integrity lock and blocks writes.
+2. Immediately after the Accounting function definitions, startup calls `loadDB()`, then runs `removeKnownIsolationTestRecord()`, `cleanupUncommittedInvoiceNumbers()`, `resetStaleSequenceOnlyWhenNoSavedRecords()`, `assignNumbersToExistingIncome()`, `removeOrphanedInvoiceIncome()`, and payment/invoice field normalization. Some of these paths mutate `db` and write it directly or call `persist()`; at least one orphan-cleanup persistence result is not checked.
+3. The same Accounting startup section calls `show('accountancyHome')` and `syncLauncherBrand()` before the Projects module has initialized its in-memory `prDB`. `syncLauncherBrand()` therefore reads the Projects LocalStorage envelope directly.
+4. The Projects script then declares `prDB`, defines `prLoad()`/`prPersist()`, calls `prLoad()` synchronously, and performs a legacy project-sync cleanup that may mutate Accounting entries and call `persist()` without checking the result. This means Accounting startup cleanup and Projects startup cleanup are separate commits, not one atomic cross-domain initialization.
+5. `openProjectsApp()` calls `prLoad()` again on navigation, re-reading LocalStorage instead of using a single validated bootstrap snapshot. Projects completion writes `PR_KEY` directly. Project/accounting synchronization helpers also commit Accounting and Projects separately.
+6. The Contracts IIFE is defined and executed later in the document. Its `ctRead()` and `ctWrite()` are synchronous LocalStorage wrappers; `ctRenderSaved()` reads when the Contracts section is rendered. Contract profile/logo rendering independently reads the Projects LocalStorage envelope.
+7. The Reports module loads ARCH, NOTIFS, CFG and FLOW at script evaluation time, before `report188Init()`. It initializes its UI later through a `setTimeout` from DOMContentLoaded and whenever the report panel is shown. The email settings key is read lazily when the email page opens. Repeated `report188Init()` calls reset its internal navigation state and run due-date checks.
+8. Language initialization runs later in its own script and reads/writes the language preference keys immediately. Monitoring functions are defined in a later script and read LocalStorage when called. The version manager is loaded near the end of the document.
+
+### Startup and consistency risks
+
+- There is no IndexedDB readiness barrier. The current scripts assume synchronous LocalStorage is immediately available and begin normalization, cleanup, UI navigation and report initialization during page evaluation.
+- A future asynchronous repository cannot simply replace `getItem()`/`setItem()`: module-level report loads, synchronous `ctRead()`, synchronous `prLoad()`, event handlers and startup calls all require an explicit async bootstrap/API conversion.
+- The UI currently becomes navigable before all domains have been loaded and validated. With IndexedDB, no edit, invoice, project, contract, report, backup, restore or reset action should be enabled until the bootstrap has completed and the core envelopes plus required auxiliary domains pass validation.
+- Startup cleanup must not run against default/empty objects while IndexedDB reads are pending or failed. In particular, invoice sequence cleanup/reset and orphan removal must not run before Accounting is loaded and validated; legacy project-sync cleanup must not run before both Accounting and Projects envelopes are loaded and validated.
+- The present order allows Projects startup cleanup to mutate Accounting after Accounting's own initialization and persistence. The target design should replace these separate startup mutations with explicit, reviewed migration/repair operations and transaction boundaries. No automatic cleanup should be carried over blindly into the first IndexedDB startup.
+- `syncLauncherBrand()`, financial report/logo rendering, contractor selection, contract profile rendering and diagnostics currently read Projects data independently. They must consume the one canonical in-memory workspace established by bootstrap or await the repository; they must not race a second LocalStorage read.
+- Reports are especially sensitive to eager module-level loads. Convert report initialization into an explicit `await initializeReports(repositorySnapshot)` step after the bootstrap barrier. Make initialization idempotent and do not reset user navigation or perform persistence side effects merely because the panel is reopened.
+
+### Required async conversion map
+
+| Current synchronous boundary | Required target behavior |
+|---|---|
+| `loadDB()` / `persist()` | `await repository.get('accounting','main')` and transaction-backed commit; commit/readback outcome controls UI success |
+| `prLoad()` / `prPersist()` | Async load/commit of the complete `projects/workspace` envelope; no re-read on ordinary navigation |
+| `ctRead()` / `ctWrite()` | Async Contracts repository operations; all save/delete/list callers await and handle failure |
+| Report module `load()` at evaluation | No storage reads at evaluation; inject validated report state during async module initialization |
+| `save()` and report callbacks | Await repository commit; archive/notification/workflow changes use atomic operations where logically coupled |
+| `currentAppLang()` / `setAppLanguage()` | Async preference bootstrap/save; apply selection only after successful commit where persistence is promised |
+| `monitorReadLog()` / `monitorWriteLog()` | Async best-effort diagnostics operations; diagnostic failures do not block business transactions |
+| `submitHelpContact()` | Async support-draft insert; display local-only saved status only after commit |
+| `backup()` / `restore()` | One consistent multi-domain snapshot and one atomic validated restore transaction |
+| `factoryResetFinalConfirm()` | Explicitly scoped atomic reset plus recovery snapshot; no sequential multi-key deletes |
+| `reserveRecordNumber()` and invoice workflows | Reserve counter and commit invoice/income changes in one Accounting transaction; never lower high-water mark |
+| Project/accounting synchronization | One cross-domain transaction for the full logical operation; preserve manual entries and idempotency |
+
+### Proposed bootstrap state machine
+
+Use an explicit state machine: `booting` → `repository-ready` → `core-loaded` → `validated` → `auxiliary-loaded` → `ready`. Any failure transitions to `recovery-required` and leaves all mutating UI disabled. A separate migration state may run only after the source inventory, destination preflight and user-approved migration plan are available. No fallback to empty defaults and no LocalStorage fallback after cutover.
+
+### Pass 9 conclusion
+
+The current source confirms that the application is not structured for an asynchronous storage swap: Accounting initializes and performs cleanup before Projects loads; Projects then performs additional Accounting cleanup; Contracts and Reports load independently later; language and monitoring also initialize independently. The next design step should define the bootstrap coordinator and transaction boundaries before changing executable code. No app source, LocalStorage, IndexedDB database, backup, branch topology or production files were changed in this pass; only this migration-plan document was updated.
