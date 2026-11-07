@@ -291,16 +291,38 @@
  function compactAuditRecord(item){
   if(!object(item))return item;
   const out={};
-  for(const key of ["number","date","createdAt","updatedAt","type","amount","category","method","status","paymentStatus","paymentDate","paymentMethod","income","expenses","wages","price","total"])
+  for(const key of ["number","date","createdAt","updatedAt","type","amount","category","method","status","paymentStatus","paymentDate","paymentMethod","income","expenses","wages","price","total","name","title","label"])
    if(Object.prototype.hasOwnProperty.call(item,key)&&["string","number","boolean"].includes(typeof item[key]))out[key]=item[key];
   if(array(item.items)){
    const prices=item.items.map(x=>Number(x&&x.price)).filter(Number.isFinite);
    out.items={count:item.items.length,pricedItems:prices.length,totalPrice:Math.round(prices.reduce((a,b)=>a+b,0)*100)/100};
   }
   if(array(item.subprojects))out.subprojects={count:item.subprojects.length};
-  if(array(item.expenses))out.expenses={count:item.expenses.length};
+  if(array(item.expenses)){
+   const amounts=item.expenses.map(x=>Number(x&&((x.amount??x.price??x.total)))).filter(Number.isFinite);
+   out.expenses={count:item.expenses.length,amountCount:amounts.length,totalAmount:Math.round(amounts.reduce((a,b)=>a+b,0)*100)/100};
+  }
   if(array(item.materials))out.materials={count:item.materials.length};
   return out;
+ }
+ function projectDetailAudit(rows){
+  const values=parsedRows(rows);
+  const keys=["handyman_projects_workspace_v1","tha_restore_test_v1_projects_v1","tha_v212_migration_projects_v1"];
+  return keys.map(sourceKey=>{
+   const data=values.get(sourceKey);
+   const projects=array(data&&data.projects)?data.projects:[];
+   return {
+    sourceKey,
+    projects:projects.map(project=>({
+     id:project&&project.id,
+     summary:compactAuditRecord(project),
+     subprojects:(array(project&&project.subprojects)?project.subprojects:[]).map(sub=>({
+      id:sub&&sub.id,
+      summary:compactAuditRecord(sub)
+     }))
+    }))
+   };
+  });
  }
  function compareArrayDetails(a,b){
   if(!array(a)||!array(b))return null;
@@ -453,6 +475,7 @@
    sourceComparisons,
    candidateSequenceAudit:sequenceAudit,
    candidateRecordDiffs:candidateRecordDiffs(snap.records),
+   projectDetailAudit:projectDetailAudit(snap.records),
    candidateDateCoverage:candidateDateCoverage(snap.records),
    issues,
    records:rows,
