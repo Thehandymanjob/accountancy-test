@@ -40,6 +40,16 @@
      duplicateIds:compactIds(duplicates),comparison:"canonical full-record equality"};
    };
    const a=parse(LS.accounting),p=parse(LS.projects),c=parse(LS.contracts);
+   const projectRaw=root.localStorage.getItem(LS.projects);
+   let projectProbe={expectedKey:LS.projects,present:projectRaw!==null,bytes:projectRaw===null?0:new Blob([projectRaw]).size,
+    validJson:null,parsedType:null,rootKeys:[],arrayFields:[],parseError:null,candidateKeys:[]};
+   if(projectRaw!==null){try{const parsed=JSON.parse(projectRaw);projectProbe.validJson=true;projectProbe.parsedType=parsed===null?"null":Array.isArray(parsed)?"array":typeof parsed;
+    if(parsed&&typeof parsed==="object"&&!Array.isArray(parsed)){projectProbe.rootKeys=Object.keys(parsed).sort();projectProbe.arrayFields=Object.keys(parsed).filter(k=>Array.isArray(parsed[k])).sort();}
+    else if(Array.isArray(parsed))projectProbe.arrayFields=["<root-array>"];
+   }catch(e){projectProbe.validJson=false;projectProbe.parsedType="string";projectProbe.parseError=String(e&&e.message||e).slice(0,180);}}
+   for(let i=0;i<root.localStorage.length;i++){const key=root.localStorage.key(i);if(key&&/project|workspace/i.test(key))projectProbe.candidateKeys.push(key);}
+   projectProbe.candidateKeys.sort();
+   report.domains.projectsSourceProbe=projectProbe;
    if(a.present&&!a.plainString&&a.value&&typeof a.value==="object"){
     const d=a.value;
     for(const [field,store] of [["entries","accountingEntries"],["customers","customers"],["invoices","invoices"]]){
