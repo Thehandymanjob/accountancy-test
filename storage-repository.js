@@ -137,8 +137,8 @@
  }
  async function restore(snapshotValue){
   if(!snapshotValue||snapshotValue.format!=="tha-idb-repository-snapshot-v1"||
-     !Array.isArray(snapshotValue.domains)||!Array.isArray(snapshotValue.records))
-   throw new Error("Unsupported repository snapshot.");
+     snapshotValue.database!==DB_NAME||!Array.isArray(snapshotValue.domains)||!Array.isArray(snapshotValue.records))
+   throw new Error("Unsupported repository snapshot or database mismatch.");
   const domains=snapshotValue.domains;
   if(domains.some(x=>!validName(x))||new Set(domains).size!==domains.length)
    throw new Error("Snapshot contains invalid or duplicate domains.");
@@ -183,7 +183,7 @@
  }
  async function selfTest(){
   const domain="repository_test",key="roundtrip";
-  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"stale-record"},{domain:"unrelated_test",key:"keep"}];
+  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"concurrent-a"},{domain,key:"concurrent-b"},{domain,key:"stale-record"},{domain:"unrelated_test",key:"keep"}];
   for(const item of reserved){
    if(await get(item.domain,item.key)!==null)
     throw new Error("Self-test key is occupied ("+recordId(item.domain,item.key)+"); refusing to overwrite existing data.");
@@ -223,7 +223,7 @@
    if(!checks.emptySnapshotRestore)throw new Error("Empty snapshot restore did not clear its declared domain.");
    await remove(domain,key);await remove(domain,"batch-a");await remove(domain,"batch-b");
    await remove("unrelated_test","keep");
-   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get("unrelated_test","keep"))===null;
+   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get("unrelated_test","keep"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
    return {ok:true,database:DB_NAME,schemaVersion:DB_VERSION,checks,localStorageAccessed:false,appCutover:false};
   }catch(error){
