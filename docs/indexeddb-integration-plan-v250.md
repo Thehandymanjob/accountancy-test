@@ -287,3 +287,66 @@ The application includes a LocalStorage method wrapper that observes selected `s
 ### Audit status
 
 Pass 2 has identified all 17 literal app namespace keys and assigned initial treatment, resolved all 13 `index.html` aliases, and classified the eight `storage-foundation.js` direct access expressions by function. The next pass must trace report module read/write helpers and all callers of the synchronous persistence functions, including ignored return values. This is still a read-only audit; no application source or user data has been changed.
+
+
+## 12. Persistence call-site audit — pass 3
+
+### Call-site inventory
+
+A source-level trace of the three synchronous persistence helpers found the following call sites (the helper definitions are excluded from the counts):
+
+- `persist()`: 17 call sites in addition to its definition.
+- `prPersist()`: 29 call sites in addition to its definition.
+- `ctWrite()`: 2 call sites in addition to its definition.
+
+These are call-expression counts, not a count of unique business workflows; several functions contain multiple branches or repeated call sites.
+
+### Accounting persistence — `persist()`
+
+The helper is called by entry create/edit/delete, settings save, customer create/delete, invoice create/update/delete, invoice paid/unpaid transitions, invoice-number assignment, project-to-accounting synchronization, project-sync removal, startup cleanup and test-marker cleanup.
+
+Callers that explicitly inspect success and either roll back in-memory changes or defer UI success include `saveEntry`, `deleteEntry`, `saveSettings`, `clearAll`, `saveCustomer`, `deleteCustomer`, `saveInvoice`, `deleteInvoice`, `assignNumbersToExistingInvoices`, `saveInvoicePaidPayment`, `markInvoiceUnpaid`, `prSyncOneProjectFinancials` and `prRemoveProjectSync`.
+
+Two unsafe/ambiguous patterns were confirmed:
+
+1. `printInvoice()` changes a paid draft invoice to issued, calls `persist()` without checking the result, and proceeds to render the print view. With asynchronous IndexedDB this must await a committed save; on failure it must not present the status change as saved.
+2. Startup cleanup calls `persist()` after removing orphan invoice income and later performs additional direct LocalStorage writes. The cleanup currently ignores the save result. Startup repair must become part of a validated bootstrap transaction and the UI must remain blocked until commit succeeds.
+
+The test-isolation cleanup helper conditionally checks `persist()` if it removed a synthetic row, but then writes its LocalStorage completion marker independently. Both actions must be removed from ordinary runtime migration or replaced with a non-authoritative, namespaced diagnostic mechanism.
+
+### Projects persistence — `prPersist()`
+
+The helper has a broad set of project workflows: contractor/company/job/package management, project create/delete, project and subproject finance rows, project completion/synchronization, unified costs, people directories, profile/logo changes, project restore and project detail navigation.
+
+Most save workflows check the return value and either restore their previous in-memory state or avoid showing success. However, the following sites ignore the result and therefore cannot be mechanically converted by changing `prPersist` to return a Promise:
+
+- `prOpenProject()`: changes current project/subproject selectors, calls `prPersist()` without checking, then navigates to project detail.
+- `prDeleteRow()`: deletes a project-ledger row, calls `prPersist()` without checking, then rerenders as if saved.
+- `prDeletePerson()`: deletes a worker/partner from the directory, calls `prPersist()` without checking, then rerenders and refreshes selectors.
+- Legacy startup project-sync cleanup near the end of the main script calls `persist()` conditionally only when it detects a change, but ignores the result and continues startup.
+
+Other project callers already contain explicit failure branches, including `prSaveProject`, `prSaveSubFinanceRow`, `prAddSubproject`, `prSaveSubprojectEdit`, `prEditUnifiedCost`, `prDeleteUnifiedCost`, `prSaveRow`, `prSavePerson`, and the company-job payment workflow. Their rollback coverage still needs review for every mutated nested object and selector.
+
+### Contracts persistence — `ctWrite()`
+
+There are two application callers: `ctSave()` and `ctDelete()`. Both check the result before updating the UI. The current helper performs write, read-back validation and a best-effort rollback synchronously. The IndexedDB replacement must preserve validation and make the caller await the transaction's committed outcome; rollback should be transaction-level rather than a second compensating write.
+
+### Report module persistence
+
+The report module defines generic `load(key,fallback)` and `save(key,value)` wrappers over LocalStorage and loads four independent keys at initialization: report archive, notifications, settings and workflow. It also separately reads/writes report email settings. The save helper returns false on storage failure and displays an inline warning, but the audit still needs to trace every `save()` caller to establish whether each caller checks the boolean before reporting success or advancing workflow state. These report records are not included in approved backup v6; they require a separately approved v7 auxiliary-data scope.
+
+### Conversion implications
+
+The app currently depends on synchronous mutation followed by a synchronous boolean result. A Promise-returning repository adapter cannot be substituted in place. Each workflow needs an explicit asynchronous sequence:
+
+1. validate inputs and construct a candidate state without exposing success;
+2. submit the complete required domain mutation (or multi-domain transaction) to the repository;
+3. await transaction completion;
+4. only then commit in-memory state, update the UI and emit success/monitor events;
+5. on failure, preserve or reload the last committed state and show a recovery-safe error.
+
+For operations currently mutating shared objects before calling persistence, a shallow reference rollback is insufficient when nested arrays/objects have already been mutated. Prefer immutable candidate envelopes or a pre-mutation structured clone, with tests for nested project ledgers, invoice-linked entries and project/accounting synchronization.
+
+### Audit status
+
+Pass 3 confirms that the main risk is not just the persistence helper implementation: several business functions assume synchronous completion, and at least five paths ignore persistence results (invoice print status, startup orphan cleanup, project open selector persistence, project ledger-row deletion, and worker/partner deletion; the startup legacy sync cleanup is an additional ignored-result path). These must be fixed before the app can use IndexedDB as its sole canonical store. No app source, browser data, IndexedDB records, backup or production branch was changed in this pass.
