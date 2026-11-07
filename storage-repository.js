@@ -197,8 +197,8 @@
    checks.atomicBatch=result.ok&&canonical(await get(domain,"batch-a"))===canonical({v:1})&&canonical(await get(domain,"batch-b"))===canonical({v:2});
    if(!checks.atomicBatch)throw new Error("Atomic batch test failed.");
    await put("unrelated_test","keep",{untouched:true});
-   await put(domain,"stale-record",{mustBeRemoved:true});
    const snap=await snapshot([domain]);
+   await put(domain,"stale-record",{mustBeRemoved:true});
    const restoreResult=await restore(snap);
    checks.snapshotRestore=restoreResult.ok&&canonical(await get(domain,key))===canonical(fixture);
    if(!checks.snapshotRestore)throw new Error("Snapshot restore test failed.");
