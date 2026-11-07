@@ -101,7 +101,7 @@
     return {source:item.source,destination:{domain:item.domain,key:item.key},recordCount:item.recordCount,nestedCounts:item.nestedCounts,canonicalBytes:bytes.byteLength,canonicalSha256:await sha256(bytes.buffer),sourceValuePreserved:true};
    }));
    result.summary.migrationMode="dry-run-only";
-   result.summary.typedWritePrepared:false;
+   result.summary.typedWritePrepared=false;
   }
   return result;
  }
