@@ -482,3 +482,13 @@ The test button uses synthetic records only and checks basic initialization, exa
 - Added an explicit `emptySnapshotRestore` assertion to the repository self-test.
 - This is a repository-only change on `release239`. It does not modify `index.html`, connect the app to IndexedDB, access LocalStorage, import backup v6, or touch production.
 - Browser execution is still pending; code change and test assertion do not constitute a passed browser test.
+
+
+## 17. Domain-exact snapshot restore and expanded isolation tests
+
+- Commit: `5040949bc2c0ae633e6793920e649ca6dc3ff7b8`
+- Changed `restore(snapshot)` from write-only behavior to exact replacement within the snapshot's declared domains: existing records in those domains are removed and snapshot records are written in one IndexedDB read-write transaction.
+- Records outside the declared domains are preserved. Snapshot validation rejects invalid/duplicate domains, invalid keys, duplicate record IDs, and records outside the declared domain list.
+- Added self-test assertions for removal of stale records, preservation of unrelated domains, and empty-snapshot clearing of its declared domain.
+- This is still isolated repository work on `release239`; no app integration, LocalStorage migration, backup import, production update, or cutover.
+- Browser test of this new behavior is pending. The previously reported six passing checks apply to the preceding implementation, not this new change.
