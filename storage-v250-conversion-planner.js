@@ -305,6 +305,47 @@
   if(array(item.materials))out.materials={count:item.materials.length};
   return out;
  }
+ function auditFinancialValue(value){
+  if(value===null||value===undefined)return {present:false};
+  if(typeof value==="number")return {present:true,type:"number",value:Number.isFinite(value)?value:null};
+  if(typeof value==="string"){
+   const n=Number(value);
+   return {present:true,type:"string",numericValue:value.trim()!==""&&Number.isFinite(n)?n:null};
+  }
+  if(array(value)){
+   const rows=value.filter(object);
+   const amountRows=rows.map(x=>Number(x.amount??x.price??x.total??x.value)).filter(Number.isFinite);
+   return {present:true,type:"array",count:value.length,objectItems:rows.length,amountCount:amountRows.length,amountTotal:Math.round(amountRows.reduce((a,b)=>a+b,0)*100)/100};
+  }
+  if(object(value)){
+   const out={present:true,type:"object"};
+   for(const key of ["amount","total","value","paid","unpaid","price","rate","percentage","count"])
+    if(Object.prototype.hasOwnProperty.call(value,key)&&["number","string","boolean"].includes(typeof value[key]))out[key]=value[key];
+   for(const key of ["items","payments","transactions","records"])
+    if(array(value[key]))out[key]=auditFinancialValue(value[key]);
+   return out;
+  }
+  return {present:true,type:typeof value};
+ }
+ function projectFinancialAudit(project){
+  const subprojects=array(project&&project.subprojects)?project.subprojects:[];
+  const prices=subprojects.map(x=>Number(x&&x.price)).filter(Number.isFinite);
+  const expenses=subprojects.flatMap(x=>array(x&&x.expenses)?x.expenses:[]);
+  const expenseAmounts=expenses.map(x=>Number(x&&((x.amount??x.price??x.total)))).filter(Number.isFinite);
+  return {
+   projectPrice:auditFinancialValue(project&&project.price),
+   projectIncome:auditFinancialValue(project&&project.income),
+   projectExpenses:auditFinancialValue(project&&project.expenses),
+   projectWages:auditFinancialValue(project&&project.wages),
+   partnerShare:auditFinancialValue(project&&project.partnerShare),
+   subprojectCount:subprojects.length,
+   subprojectPriceTotal:Math.round(prices.reduce((a,b)=>a+b,0)*100)/100,
+   subprojectExpenseCount:expenses.length,
+   subprojectExpenseAmountCount:expenseAmounts.length,
+   subprojectExpenseTotal:Math.round(expenseAmounts.reduce((a,b)=>a+b,0)*100)/100,
+   subprojectPriceMinusProjectPrice:prices.length&&Number.isFinite(Number(project&&project.price))?Math.round((prices.reduce((a,b)=>a+b,0)-Number(project.price))*100)/100:null
+  };
+ }
  function projectDetailAudit(rows){
   const values=parsedRows(rows);
   const keys=["handyman_projects_workspace_v1","tha_restore_test_v1_projects_v1","tha_v212_migration_projects_v1"];
@@ -316,9 +357,17 @@
     projects:projects.map(project=>({
      id:project&&project.id,
      summary:compactAuditRecord(project),
+     financialAudit:projectFinancialAudit(project),
      subprojects:(array(project&&project.subprojects)?project.subprojects:[]).map(sub=>({
       id:sub&&sub.id,
-      summary:compactAuditRecord(sub)
+      summary:compactAuditRecord(sub),
+      financialFields:{
+       price:auditFinancialValue(sub&&sub.price),
+       income:auditFinancialValue(sub&&sub.income),
+       expenses:auditFinancialValue(sub&&sub.expenses),
+       wages:auditFinancialValue(sub&&sub.wages),
+       partnerShare:auditFinancialValue(sub&&sub.partnerShare)
+      }
      }))
     }))
    };
