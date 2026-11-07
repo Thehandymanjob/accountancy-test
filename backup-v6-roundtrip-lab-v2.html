@@ -109,7 +109,7 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
    show({ok:true,sourceBytes:r.sourceBytes,sourceSha256:r.sourceSha256,imageCount:r.imageHashes.length,normalizedCounts:r.normalizedCounts,localStorageAccessed:false,indexedDBChanged:false,appCutover:false});
   }catch(e){show({ok:false,error:e.message});}
  };
- $('stage').onclick=async()=>{if(!inspected||!confirm('Stage into the NEW isolated v6 TEST IndexedDB only?'))return;try{const r=await HandymanBackupV6RoundTrip.stage(raw);staged=true;$('audit').disabled=false;$('cleanup').disabled=false;show(r);}catch(e){show({ok:false,error:e.message,localStorageChanged:false,appCutover:false});}};
+ $('stage').onclick=async()=>{if(!inspected||!confirm('Stage into the NEW isolated v6 TEST IndexedDB only?'))return;try{const r=await HandymanBackupV6RoundTrip.stage(raw);staged=true;$('audit').disabled=false;$('cleanup').disabled=false;show(r);}catch(e){show({ok:false,error:e.message,stack:e&&e.stack?String(e.stack):null,foundation:{loaded:!!window.HandymanStorageFoundation,database:window.HandymanStorageFoundation&&window.HandymanStorageFoundation.databaseName,schemaVersion:window.HandymanStorageFoundation&&window.HandymanStorageFoundation.schemaVersion},localStorageChanged:false,appCutover:false});}};
  $('audit').onclick=async()=>{try{show(await HandymanBackupV6RoundTrip.audit());}catch(e){show({ok:false,error:e.message});}};
  $('cleanup').onclick=async()=>{if(!confirm('Delete only records owned by this test manifest?'))return;try{const r=await HandymanBackupV6RoundTrip.cleanup();show(r);if(r.ok){staged=false;$('audit').disabled=true;$('cleanup').disabled=true;}}catch(e){show({ok:false,error:e.message});}};
 })();
