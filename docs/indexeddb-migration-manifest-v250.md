@@ -243,3 +243,33 @@ The parent project record must also retain the original nested arrays or a byte/
 
 **Unresolved:** the application’s actual runtime calculations and edit/delete flows must be checked to determine whether they expect nested arrays as canonical storage. Until that code-path review is complete, keep the project object intact in the staging payload; do not make normalized child stores the only source of truth.
 
+
+
+## 11. Runtime project persistence review: canonical model decision
+
+The v250 application source was inspected at the actual project load/save boundary:
+
+- `prLoad()` reads the complete Projects workspace object from `tha_test226_projects_v1`.
+- `prPersist()` serializes and writes the complete `prDB` workspace object.
+- The workspace object contains `projects[]`, and each project contains its own subprojects and nested ledger arrays.
+- Project load-time compatibility logic iterates over each project and its subprojects; it mutates a cloned candidate and commits only after verification.
+- The application's project editing and reporting logic is therefore built around the complete nested workspace object, not around independently loaded receipt/expense tables.
+
+**Decision for first cutover:** keep the complete Projects workspace payload as the canonical record in IndexedDB (one envelope under a dedicated `kv` key, or a single workspace record with exact JSON preservation). Do not make `projects`, `projectReceipts`, or `projectExpenses` the only canonical representation during the first migration.
+
+Typed child stores may be populated later as verified secondary indexes/projections, but only if:
+1. each row carries its original ID, project ID, subproject ID and ledger type;
+2. a deterministic projection/rebuild process exists;
+3. the application continues to use one authoritative canonical workspace;
+4. projection writes are atomic with the canonical workspace update, or can be safely rebuilt;
+5. projections are checked against the canonical nested payload and are never independently edited.
+
+This avoids a dangerous dual-source-of-truth condition in which an edit changes a normalized receipt but leaves the nested project ledger stale (or vice versa).
+
+The approved backup v6 therefore maps as follows for the first safe import:
+- Preserve the entire `projects` root object exactly, including `current`, `guide`, `currentSubproject`, `profitReportProjectId`, `profile`, nested ledgers and all images.
+- Preserve the entire `data` root object exactly, including accounting arrays, settings, custom categories and third-party transactions.
+- Preserve the root `contracts[]` exactly.
+- Keep a separately hashed immutable copy of the complete backup JSON.
+
+The above is a source-preserving import design. It does not yet establish that the live app has been switched to IndexedDB; that requires replacing every persistence call site and testing all user workflows.
