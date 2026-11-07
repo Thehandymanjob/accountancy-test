@@ -221,3 +221,69 @@ Startup currently calls `loadDB()`, then isolation cleanup and invoice-sequence 
 5. Reconcile the eight `storage-foundation.js` accesses individually with the earlier manifest's count and label each migration-only, inventory-only or normal-runtime.
 
 No app code, LocalStorage value, browser database, backup or production branch was changed by this audit. The repository adapter remains unreferenced by the app. Continue only on `release239`; do not import v6 or perform cutover during this audit.
+
+
+## 11. Storage-key and alias audit — pass 2
+
+### Application keys identified in `index.html`
+
+The source contains 17 distinct literal keys in the `tha_test226_*` namespace. This list is a source-code inventory, not evidence that every key currently exists in the user's browser:
+
+| Key | Initial classification | Migration treatment |
+|---|---|---|
+| `tha_test226_accounting_v1` | Core Accounting envelope | Canonical `accounting/main`; v6 is the approved source for migration. |
+| `tha_test226_projects_v1` | Core Projects workspace | Canonical `projects/workspace`; v6 approved source. |
+| `tha_test226_contracts_v1` | Core Contracts envelope | Canonical `contracts/main`; v6 currently has an empty contract array. |
+| `tha_test226_invoice_sequence_v1` | Business sequence metadata | Must be reconciled from validated invoice/income records and explicit approved metadata; never import stale browser value. |
+| `tha_test226_invoice_sequence_cleanup_v1` | Startup cleanup marker | Reconstruct/redefine under repository schema; do not treat as user business data. |
+| `tha_test226_empty_invoice_sequence_reset_v229` | Startup/test reset marker | Legacy implementation marker; do not migrate as authoritative data. |
+| `tha_test226_isolation_test_record_cleanup_v1` | Isolation-test cleanup marker | Disposable test instrumentation; exclude from user data migration. |
+| `tha_test226_app_language_v1` | User preference | Include only under explicit preferences/v7 policy; v6 does not establish its value. |
+| `tha_test226_app_language_pref_version_v1` | Preference migration/version marker | Recreate using a documented preference schema; not a user-data source. |
+| `tha_test226_monitor_log_v1` | Local diagnostics/activity log | Best-effort diagnostics; retention and backup policy required; do not source from stale LocalStorage. |
+| `tha_test226_report_archive_v1` | User report archive | Dedicated report envelope; determine whether archive is user data and whether v7 backup includes it. |
+| `tha_test226_report_notifications_v1` | Report notification state | Dedicated report envelope; define expiry/retention and backup policy. |
+| `tha_test226_report_settings_v1` | Report preferences/configuration | Dedicated report envelope; preserve only from a specifically approved source. |
+| `tha_test226_report_workflow_v1` | Report workflow state | Dedicated report envelope; define recovery and backup policy. |
+| `tha_test226_report_email_settings_v1` | Report recipient configuration | Sensitive operational preference; preserve only through explicit v7 scope and consent. |
+| `tha_test226_help_contact_drafts_v1` | Support/contact drafts | Preserve pending-local-only drafts if user data policy requires; never treat as sent. |
+| `tha_test226_factory_reset_recovery_v1` | Recovery snapshot | Do not migrate as active business data; retain a separate immutable recovery design and explicit restore path. |
+
+### LocalStorage alias resolution
+
+The 13 application aliases are not 13 additional stores. They resolve to:
+
+- `raw` in `loadDB()`: raw Accounting JSON read.
+- `lang` in report language lookup: language preference value.
+- `rawAccounting`, `rawContracts`: pre-restore source snapshots for Accounting and Contracts.
+- `check`: value read-back inside `safeWrite()` during restore.
+- `checkDB`: restore verification after rollback/write sequence.
+- `raw` in invoice diagnostic: Accounting envelope read for invoice cross-check.
+- `raw` in `prLoad()`: Projects workspace read.
+- `oldRaw` in project restore: prior Projects raw payload for rollback.
+- `checkRaw` in `ctWrite()`: Contracts write read-back.
+- `ok` in monitor self-check: temporary diagnostic test value.
+- `prefVersion`, `saved` in language bootstrap: preference-version and selected-language reads.
+
+The seven `storage-foundation.js` aliases are local variables holding enumerated keys or raw values during legacy inventory, snapshot, migration and verification. They are not independent normal-runtime app data flows.
+
+### Exact classification of the eight storage-foundation calls
+
+| Function | Calls | Classification | Boundary |
+|---|---|---|---|
+| `enumerateLegacyKeys()` | `localStorage.length`, `localStorage.key(i)` | Migration inventory | Reads key names only; does not write or delete. |
+| `snapshotLegacyData()` | `getItem(key)` | Migration snapshot | Reads legacy values into an explicit snapshot; not approved as a source for this v250 migration. |
+| `migrateLegacyData()` | `getItem(key)` | Migration operation | Reads legacy values before staging them into the foundation KV store; prohibited as a source for the approved v6 migration. |
+| `verifyMigration()` | `getItem(key)` | Migration verification | Compares legacy values to staged KV values; read-only verification, not canonical app runtime. |
+| `inspectStorageInventory()` | `length`, `key(i)`, `getItem(key)` | Diagnostic inventory | Reads key names and value metadata for local diagnostic output. |
+| `inspectMigrationSources()` | `length`, `key(i)`, `getItem(key)` | Diagnostic inventory/reconciliation | Reads all current-origin keys for a local diagnostic; not an approved migration source. |
+
+Thus the eight direct call expressions are accounted for as migration/inventory/verification helpers in this file, not as the app's canonical runtime persistence adapter. However, these helpers still access LocalStorage and must be disabled, isolated or explicitly retained as read-only diagnostic tools after cutover; they cannot be allowed to silently migrate old keys into the new canonical database.
+
+### Additional dynamic interception behavior
+
+The application includes a LocalStorage method wrapper that observes selected `setItem` and `removeItem` operations and records monitor events for non-exempt keys. This means a final audit cannot rely only on direct source call counts: it must review patched prototype methods and ensure IndexedDB operations are not routed through a LocalStorage compatibility shim. The wrapper must be removed or made strictly diagnostic and non-authoritative after cutover.
+
+### Audit status
+
+Pass 2 has identified all 17 literal app namespace keys and assigned initial treatment, resolved all 13 `index.html` aliases, and classified the eight `storage-foundation.js` direct access expressions by function. The next pass must trace report module read/write helpers and all callers of the synchronous persistence functions, including ignored return values. This is still a read-only audit; no application source or user data has been changed.
