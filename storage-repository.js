@@ -8,7 +8,7 @@
  const DB_NAME="the_handyman_accountancy_v250_idb";
  const DB_VERSION=1;
  const STORE="records";
- const SELF_TEST_BUILD="repo-selftest-20261107-03";
+ const SELF_TEST_BUILD="repo-selftest-20261107-04";
  const EXPECTED_CHECKS=["ready","roundTrip","atomicBatch","atomicMultiDomainMutation","abortRollback","concurrentWrites","concurrentCounterReservation","snapshotRestore","restoreRemovesStaleRecords","restorePreservesOtherDomains","emptySnapshotRestore","cleanup"];
  const META="metadata";
  const SCHEMA_KEY="schema";
@@ -215,14 +215,16 @@
     };
     req.onerror=()=>fail(req.error||new Error("Multi-record read failed for "+item.id));
    });
-   try{await done}catch(error){throw callbackError||error;}
    if(!committedValues)throw new Error("Multi-record transaction completed without executing its updater.");
-   const verify=db.transaction([STORE],"readonly"),verifyDone=txDone(verify),read=verify.objectStore(STORE);
-   const rows=await Promise.all(prepared.map(item=>requestResult(read.get(item.id))));
-   await verifyDone;
+   // Queue read-back requests in the SAME readwrite transaction. This verifies
+   // this transaction's own writes before another queued writer can commit.
+   const verifyRequests=prepared.map(item=>requestResult(store.get(item.id)));
+   const verifiedRows=await Promise.all(verifyRequests);
    for(let i=0;i<prepared.length;i++){
-    if(!rows[i]||rows[i].raw!==validateValue(committedValues[i]))throw new Error("Multi-record read-back verification failed for "+prepared[i].id);
+    if(!verifiedRows[i]||verifiedRows[i].raw!==validateValue(committedValues[i]))
+     throw new Error("Multi-record in-transaction verification failed for "+prepared[i].id);
    }
+   await done;
    return {ok:true,updated:prepared.length,records:prepared.map((item,i)=>({domain:item.domain,key:item.key,value:clone(committedValues[i])})),updatedAt:stamp};
   }finally{db.close();}
  }
