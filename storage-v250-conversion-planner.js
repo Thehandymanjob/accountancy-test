@@ -288,6 +288,75 @@
    return {accountingSource:pair.accounting,sequenceSource:pair.sequence,invoiceCount:invoices.length,numberedInvoiceCount:invoiceNumbers.length,numberedEntryCount:entryNumbers.length,observedMax,sequenceValue:sequence,sequenceBelowObservedMax:sequence===null?null:sequence<observedMax};
   });
  }
+ function compactAuditRecord(item){
+  if(!object(item))return item;
+  const out={};
+  for(const key of ["number","date","createdAt","updatedAt","type","amount","category","method","status","paymentStatus","paymentDate","paymentMethod","income","expenses","wages","price","total"])
+   if(Object.prototype.hasOwnProperty.call(item,key)&&["string","number","boolean"].includes(typeof item[key]))out[key]=item[key];
+  if(array(item.items)){
+   const prices=item.items.map(x=>Number(x&&x.price)).filter(Number.isFinite);
+   out.items={count:item.items.length,pricedItems:prices.length,totalPrice:Math.round(prices.reduce((a,b)=>a+b,0)*100)/100};
+  }
+  if(array(item.subprojects))out.subprojects={count:item.subprojects.length};
+  if(array(item.expenses))out.expenses={count:item.expenses.length};
+  if(array(item.materials))out.materials={count:item.materials.length};
+  return out;
+ }
+ function compareArrayDetails(a,b){
+  if(!array(a)||!array(b))return null;
+  const left=new Map(a.filter(x=>object(x)&&typeof x.id==="string"&&x.id.trim()).map(x=>[x.id,x]));
+  const right=new Map(b.filter(x=>object(x)&&typeof x.id==="string"&&x.id.trim()).map(x=>[x.id,x]));
+  const changed=[];
+  for(const [id,x] of left){
+   if(!right.has(id))continue;
+   const y=right.get(id);
+   if(stable(x)===stable(y))continue;
+   const xa=compactAuditRecord(x),yb=compactAuditRecord(y);
+   const fields=[...new Set([...Object.keys(xa),...Object.keys(yb)])].filter(k=>stable(xa[k])!==stable(yb[k]));
+   changed.push({id,changedFields:fields,left:xa,right:yb});
+  }
+  return {changed,onlyLeft:[...left.keys()].filter(id=>!right.has(id)),onlyRight:[...right.keys()].filter(id=>!left.has(id))};
+ }
+ function candidateRecordDiffs(rows){
+  const values=parsedRows(rows);
+  const get=(key)=>values.get(key);
+  const restore=get("tha_restore_test_v1_accounting_v1"),v212=get("tha_v212_migration_accounting_v1");
+  const hand=get("handyman_accounting_v2");
+  const restoreProjects=get("tha_restore_test_v1_projects_v1"),v212Projects=get("tha_v212_migration_projects_v1");
+  const handProjects=get("handyman_projects_workspace_v1");
+  const result={
+   accountingRestoreVsV212:restore&&v212?{
+    entries:compareArrayDetails(restore.entries,v212.entries),
+    invoices:compareArrayDetails(restore.invoices,v212.invoices)
+   }:null,
+   accountingHandymanVsV212:hand&&v212?{
+    entries:compareArrayDetails(hand.entries,v212.entries),
+    invoices:compareArrayDetails(hand.invoices,v212.invoices)
+   }:null,
+   projectsRestoreVsV212:restoreProjects&&v212Projects?{
+    projects:compareArrayDetails(restoreProjects.projects,v212Projects.projects),
+    subprojects:compareArrayDetails(restoreProjects.projects&&restoreProjects.projects[0]&&restoreProjects.projects[0].subprojects,v212Projects.projects&&v212Projects.projects[0]&&v212Projects.projects[0].subprojects)
+   }:null,
+   projectsWorkspaceVsV212:handProjects&&v212Projects?{
+    projects:compareArrayDetails(handProjects.projects,v212Projects.projects),
+    subprojects:compareArrayDetails(handProjects.projects&&handProjects.projects[0]&&handProjects.projects[0].subprojects,v212Projects.projects&&v212Projects.projects[0]&&v212Projects.projects[0].subprojects)
+   }:null
+  };
+  return result;
+ }
+ function candidateDateCoverage(rows){
+  const keys=["handyman_accounting_v2","tha_restore_test_v1_accounting_v1","tha_v212_migration_accounting_v1","handyman_projects_workspace_v1","tha_restore_test_v1_projects_v1","tha_v212_migration_projects_v1"];
+  const values=parsedRows(rows),result=[];
+  for(const key of keys){
+   const data=values.get(key);if(!data)continue;
+   const dates=[];
+   const collect=list=>{if(!array(list))return;for(const x of list)if(object(x))for(const f of ["date","createdAt","updatedAt","paymentDate"])if(typeof x[f]==="string"&&x[f])dates.push(x[f]);};
+   if(object(data)){collect(data.entries);collect(data.invoices);collect(data.projects);collect(data.projects&&data.projects[0]&&data.projects[0].subprojects);}
+   const sorted=dates.slice().sort();
+   result.push({sourceKey:key,datedFieldCount:dates.length,earliest:sorted[0]||null,latest:sorted[sorted.length-1]||null});
+  }
+  return result;
+ }
  function candidateMigrationGate(sequenceAudit){
   const rows=Array.isArray(sequenceAudit)?sequenceAudit:[];
   const maxObserved=Math.max(0,...rows.map(x=>Number(x.observedMax)||0));
@@ -383,6 +452,8 @@
    exactDuplicateGroups:candidates.exactDuplicateGroups,
    sourceComparisons,
    candidateSequenceAudit:sequenceAudit,
+   candidateRecordDiffs:candidateRecordDiffs(snap.records),
+   candidateDateCoverage:candidateDateCoverage(snap.records),
    issues,
    records:rows,
    writesPerformed:false,
