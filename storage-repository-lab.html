@@ -17,18 +17,18 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border:1px solid #8
 <h1>IndexedDB Storage Repository — v250 isolated lab</h1>
 <p class="note"><strong>Test-only page.</strong> It does not load the accountancy application, read or write LocalStorage, import your backup, or change production. Running the self-test creates/uses only the dedicated database <code>the_handyman_accountancy_v250_idb</code> and writes synthetic test records.</p>
 <p>Use this page only on the test site. The test is manual and starts only when you press the button.</p>
-<p><strong>Lab build:</strong> <code>lab-selftest-20261107-01</code> · <strong>Expected self-test build:</strong> <code>repo-selftest-20261107-03</code></p>
+<p><strong>Lab build:</strong> <code>lab-selftest-20261107-04</code> · <strong>Expected self-test build:</strong> <code>repo-selftest-20261107-04</code></p>
 <button id="run" type="button">Run repository self-test</button>
 <button id="health" type="button">Check database health</button>
 <pre id="result" aria-live="polite">No test has been run.</pre>
-<script src="storage-repository.js?v=repo-selftest-20261107-03"></script>
+<script src="storage-repository.js?v=repo-selftest-20261107-04"></script>
 <script>
 (function(){
  "use strict";
  const run=document.getElementById("run"),health=document.getElementById("health"),out=document.getElementById("result");
  const api=window.HandymanStorageRepository;
- const LAB_BUILD="lab-selftest-20261107-03";
- const EXPECTED_BUILD="repo-selftest-20261107-03";
+ const LAB_BUILD="lab-selftest-20261107-04";
+ const EXPECTED_BUILD="repo-selftest-20261107-04";
  const EXPECTED_CHECKS=["ready","roundTrip","atomicBatch","atomicMultiDomainMutation","abortRollback","concurrentWrites","concurrentCounterReservation","snapshotRestore","restoreRemovesStaleRecords","restorePreservesOtherDomains","emptySnapshotRestore","cleanup"];
  const show=value=>{out.textContent=JSON.stringify(value,null,2)};
  if(!api){out.textContent="ERROR: Storage repository module did not load.";run.disabled=true;health.disabled=true;return}
