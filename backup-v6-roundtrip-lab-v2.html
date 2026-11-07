@@ -25,7 +25,7 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
  $('diagnose').onclick=async()=>{
   let db;
   try{
-   const request=indexedDB.open('the_handyman_accountancy_test226',4);
+   const request=indexedDB.open('the_handyman_accountancy_roundtrip_v6',4);
    request.onupgradeneeded=()=>{request.transaction.abort();};
    db=await new Promise((resolve,reject)=>{
     request.onsuccess=()=>resolve(request.result);
