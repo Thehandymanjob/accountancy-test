@@ -10,7 +10,7 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
 <p>Select the original complete v6 JSON backup:</p><input id="file" type="file" accept=".json,application/json">
 <p><button id="inspect">Inspect backup (read-only)</button><button id="stage" disabled>Stage into isolated v6 test IndexedDB</button><button id="audit" disabled>Audit persisted data</button><button id="cleanup" disabled>Remove this test copy</button></p>
 <p><button id="copy" type="button">Copy result</button><span id="copyStatus" aria-live="polite"></span></p>
-<button id="diagnose" type="button">Inspect existing test DB (read-only)</button><pre id="out">Ready. No operation has run.</pre>
+<button id="diagnose" type="button">Inspect existing test DB (read-only)</button><button id="foundationCheck" type="button">Check Foundation / Adapter (read-only)</button><pre id="out">Ready. No operation has run.</pre>
 </main>
 <script>
 (async()=>{
@@ -75,6 +75,24 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
   finally{if(db)db.close();}
  };
 
+ $('foundationCheck').onclick=()=>{
+  const f=window.HandymanStorageFoundation;
+  const a=window.HandymanBackupV6RoundTrip;
+  show({
+   ok:!!f&&!!a,
+   readOnly:true,
+   foundationLoaded:!!f,
+   foundationType:typeof f,
+   foundationDatabase:f&&f.databaseName||null,
+   foundationSchemaVersion:f&&f.schemaVersion||null,
+   foundationStores:f&&Array.isArray(f.stores)?f.stores:null,
+   foundationHasOpenDatabase:!!(f&&typeof f.openDatabase==='function'),
+   adapterLoaded:!!a,
+   adapterType:typeof a,
+   adapterMethods:a?Object.keys(a):[],
+   note:'Read-only runtime compatibility check. No database opened, no records changed, LocalStorage untouched.'
+  });
+ };
  $('copy').onclick=async()=>{
   const value=out.textContent;
   try{
