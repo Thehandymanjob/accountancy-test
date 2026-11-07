@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>THA v6 IndexedDB Round-trip Lab</title>
+<script src="storage-foundation.js?v=250-roundtrip-1"></script>
+<style>
+body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margin:24px auto;padding:0 16px;color:#172b45}main{border:1px solid #dce4ee;border-radius:14px;padding:18px}button{padding:11px 14px;margin:6px;border:0;border-radius:8px;background:#174d83;color:white;font-weight:700}button:disabled{opacity:.4}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb;padding:14px;border-radius:8px}.warning{padding:12px;background:#fff5df;border:1px solid #e8cf91;border-radius:8px}
+</style></head><body><main>
+<h1>IndexedDB v6 Round-trip Lab</h1>
+<p class="warning"><b>Test only.</b> Uses isolated database <code>the_handyman_accountancy_test226</code>. Does not read or write LocalStorage, does not change the live app, and does not access production storage. Destination stores must be empty.</p>
+<p>Select the original complete v6 JSON backup:</p><input id="file" type="file" accept=".json,application/json">
+<p><button id="inspect">Inspect backup (read-only)</button><button id="stage" disabled>Stage into test IndexedDB</button><button id="audit" disabled>Audit persisted data</button><button id="cleanup" disabled>Remove this test copy</button></p>
+<pre id="out">Ready. No operation has run.</pre>
+</main>
+<script>
+(async()=>{
+ const out=document.getElementById('out'),$=id=>document.getElementById(id);
+ try{
+  const r=await fetch('backup-v6-roundtrip.js.gz?v=1');if(!r.ok)throw Error('Adapter download failed: '+r.status);
+  const source=await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).text();
+  (0,eval)(source);
+ }catch(e){out.textContent='Adapter load error: '+e.message;return;}
+ let raw=null,inspected=false,staged=false;
+ const show=x=>out.textContent=JSON.stringify(x,null,2);
+ $('inspect').onclick=async()=>{
+  try{const f=$('file').files[0];if(!f)throw Error('Select a backup JSON first.');raw=await f.text();
+   const p=JSON.parse(raw),r=await HandymanBackupV6RoundTrip.inspectPayload(p,raw);inspected=true;$('stage').disabled=false;
+   show({ok:true,sourceBytes:r.sourceBytes,sourceSha256:r.sourceSha256,imageCount:r.imageHashes.length,normalizedCounts:r.normalizedCounts,localStorageAccessed:false,indexedDBChanged:false,appCutover:false});
+  }catch(e){show({ok:false,error:e.message});}
+ };
+ $('stage').onclick=async()=>{if(!inspected||!confirm('Stage into isolated TEST IndexedDB only?'))return;try{const r=await HandymanBackupV6RoundTrip.stage(raw);staged=true;$('audit').disabled=false;$('cleanup').disabled=false;show(r);}catch(e){show({ok:false,error:e.message,localStorageChanged:false,appCutover:false});}};
+ $('audit').onclick=async()=>{try{show(await HandymanBackupV6RoundTrip.audit());}catch(e){show({ok:false,error:e.message});}};
+ $('cleanup').onclick=async()=>{if(!confirm('Delete only records owned by this test manifest?'))return;try{const r=await HandymanBackupV6RoundTrip.cleanup();show(r);if(r.ok){staged=false;$('audit').disabled=true;$('cleanup').disabled=true;}}catch(e){show({ok:false,error:e.message});}};
+})();
+</script></body></html>
