@@ -722,6 +722,109 @@
     } finally { db.close(); }
   }
 
+  // Complete database-level backup. IndexedDB structured-clone values (including
+  // Blob/File payloads) are retained; no JSON stringify/parse is used internally.
+  async function exportCompleteBackup() {
+    const db = await openDatabase();
+    try {
+      const names = [...STORES, KV_STORE];
+      const tx = db.transaction(names, "readonly");
+      const done = transactionDone(tx);
+      const data = {};
+      for (const name of names) {
+        data[name] = await requestResult(tx.objectStore(name).getAll());
+      }
+      await done;
+      const counts = Object.fromEntries(names.map(name => [name, data[name].length]));
+      return {
+        format: "the-handyman-indexeddb-backup",
+        formatVersion: 1,
+        database: DB_NAME,
+        schemaVersion: DB_VERSION,
+        exportedAt: new Date().toISOString(),
+        stores: names,
+        counts,
+        data
+      };
+    } finally { db.close(); }
+  }
+
+  // Replace every store in one read/write transaction. Invalid packages are
+  // rejected before any mutation; transaction failure rolls the replacement back.
+  async function restoreCompleteBackup(packageValue) {
+    if (!packageValue || typeof packageValue !== "object" ||
+        packageValue.format !== "the-handyman-indexeddb-backup" ||
+        packageValue.formatVersion !== 1 ||
+        !packageValue.data || typeof packageValue.data !== "object") {
+      throw new Error("Unsupported or invalid IndexedDB backup package.");
+    }
+    const names = [...STORES, KV_STORE];
+    if (!Array.isArray(packageValue.stores) ||
+        names.length !== packageValue.stores.length ||
+        names.some(name => !packageValue.stores.includes(name))) {
+      throw new Error("Backup store manifest does not match this application database.");
+    }
+    for (const name of names) {
+      const rows = packageValue.data[name];
+      if (!Array.isArray(rows)) throw new Error("Backup is missing a valid store: " + name);
+      const seen = new Set();
+      for (const row of rows) {
+        if (!row || typeof row !== "object" || Array.isArray(row)) {
+          throw new Error("Invalid record in backup store: " + name);
+        }
+        const key = name === KV_STORE ? row.key : row.id;
+        if ((typeof key !== "string" && !(typeof key === "number" && Number.isFinite(key))) ||
+            String(key).trim() === "") {
+          throw new Error("Backup record has no valid key in store: " + name);
+        }
+        const normalized = typeof key + ":" + String(key);
+        if (seen.has(normalized)) throw new Error("Duplicate key in backup store: " + name);
+        seen.add(normalized);
+      }
+    }
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(names, "readwrite");
+      const done = transactionDone(tx);
+      for (const name of names) {
+        const store = tx.objectStore(name);
+        store.clear();
+        for (const row of packageValue.data[name]) store.put(row);
+      }
+      await done;
+      const verification = {};
+      for (const name of names) {
+        const verifyTx = db.transaction([name], "readonly");
+        const rows = await requestResult(verifyTx.objectStore(name).getAll());
+        const expected = packageValue.data[name].length;
+        if (rows.length !== expected) throw new Error("Restore count verification failed for store: " + name);
+        verification[name] = { expected, actual: rows.length, ok: true };
+      }
+      return { ok: true, atomic: true, database: DB_NAME, schemaVersion: DB_VERSION, verification };
+    } finally { db.close(); }
+  }
+
+  // IndexedDB-only clearing primitive. Deliberately does not touch LocalStorage
+  // until the application has completed migration and can prove no live data
+  // remains there. This is not exposed as the user-facing Factory Reset yet.
+  async function clearIndexedDBData() {
+    const names = [...STORES, KV_STORE];
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction(names, "readwrite");
+      const done = transactionDone(tx);
+      for (const name of names) tx.objectStore(name).clear();
+      await done;
+      const remaining = {};
+      for (const name of names) {
+        const verifyTx = db.transaction([name], "readonly");
+        remaining[name] = await requestResult(verifyTx.objectStore(name).count());
+        if (remaining[name] !== 0) throw new Error("IndexedDB clear verification failed for store: " + name);
+      }
+      return { ok: true, cleared: names, remaining };
+    } finally { db.close(); }
+  }
+
   async function status() {
     const db = await openDatabase();
     try {
@@ -737,7 +840,7 @@
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
     putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkAddAcrossStoresVerified, bulkWriteAcrossStores,
-    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, status,
+    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, exportCompleteBackup, restoreCompleteBackup, clearIndexedDBData, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
