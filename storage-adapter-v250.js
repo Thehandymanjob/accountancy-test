@@ -347,6 +347,7 @@
       const rollbackRecord = await get("auditLog", rollbackAuditId);
       checks.transactionRollback = rollbackRejected && rollbackRecord === null;
 
+      counterWritten = true;
       const values = await Promise.all([
         reserveCounter(counterName), reserveCounter(counterName),
         reserveCounter(counterName), reserveCounter(counterName)
