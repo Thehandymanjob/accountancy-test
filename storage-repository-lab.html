@@ -27,8 +27,8 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;border:1px solid #8
  "use strict";
  const run=document.getElementById("run"),health=document.getElementById("health"),out=document.getElementById("result");
  const api=window.HandymanStorageRepository;
- const LAB_BUILD="lab-selftest-20261107-01";
- const EXPECTED_BUILD="repo-selftest-20261107-01";
+ const LAB_BUILD="lab-selftest-20261107-02";
+ const EXPECTED_BUILD="repo-selftest-20261107-02";
  const EXPECTED_CHECKS=["ready","roundTrip","atomicBatch","atomicMultiDomainMutation","abortRollback","concurrentWrites","concurrentCounterReservation","snapshotRestore","restoreRemovesStaleRecords","restorePreservesOtherDomains","emptySnapshotRestore","cleanup"];
  const show=value=>{out.textContent=JSON.stringify(value,null,2)};
  if(!api){out.textContent="ERROR: Storage repository module did not load.";run.disabled=true;health.disabled=true;return}
