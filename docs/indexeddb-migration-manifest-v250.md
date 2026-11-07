@@ -332,3 +332,20 @@ The file contains 17 distinct literal `tha_test226_*` storage keys:
 ### Remaining audit boundary
 
 This scan covers the monolithic `index.html`. Before claiming the whole application is free of direct LocalStorage access, inspect every separately loaded JavaScript file and any inline scripts added by service worker/update infrastructure. Also search for bracket notation, aliases such as `const storage = localStorage`, and indirect helper wrappers. The current finding is **93 direct method-call expressions in index.html**, not a proof that the complete deployed origin has no other access.
+
+
+## 13. External script and storage-foundation audit
+
+The `index.html` file loads two external JavaScript files:
+
+- `version-manager.js` (SHA `39da652c2cec49d62b4b45236d2a40a8db411540`): zero direct LocalStorage method calls found.
+- `storage-foundation.js` (SHA `63cffe890c6aacc860eb696deeb33a555a4eb66f`): five direct LocalStorage reads found. They are in legacy inventory/snapshot and migration helper paths (enumerating same-origin keys, reading a legacy snapshot source, and capturing source values). The module also provides IndexedDB operations.
+
+The foundation's legacy LocalStorage reads are not ordinary app persistence, but they remain a potential path to old browser data. For the final cutover:
+- Keep migration/snapshot functionality behind an explicit, separately invoked migration mode.
+- Do not run generic all-key enumeration or import every key as business data.
+- Do not use legacy values as authoritative data when v6 is the approved source.
+- After migration acceptance, the normal application runtime must not invoke LocalStorage migration helpers.
+- Any retained legacy snapshot utility must be read-only, explicitly scoped, and unavailable to normal save/load flows.
+
+No other external JavaScript files are referenced directly by the current `index.html`. This audit does not yet cover scripts dynamically injected at runtime, browser extensions, or hosting-level service worker behavior; those are separate deployment checks.
