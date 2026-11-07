@@ -167,3 +167,57 @@ The repository primitive stage is passed. The next permitted work is a read-only
 7. Do not edit `index.html`, connect the app to the repository, import v6, modify LocalStorage, or perform cutover during this audit stage.
 
 The application source remains unchanged at blob SHA `f6bdb6a31fd9e424ca0464b5fb725c4ad0fb2315`. The repository module is still not referenced by `index.html`. Work remains limited to the existing `release239` branch; production `main` and all existing user data remain out of scope.
+
+
+## 10. Read-only application storage audit — pass 1 (inventory and workflow tracing)
+
+Reviewed the unchanged v250 application source and its two loaded support scripts on `release239`:
+
+- `index.html`: blob `f6bdb6a31fd9e424ca0464b5fb725c4ad0fb2315`, 647,160 characters.
+- `storage-foundation.js`: blob `63cffe890c6aacc860eb696deeb33a555a4eb66f`, 39,463 characters.
+- `version-manager.js`: blob `39da652c2cec49d62b4b45236d2a40a8db411540`, 18,094 characters.
+
+### Static inventory (source-text counts; not unique workflows)
+
+| Source | Direct LocalStorage method-call expressions | Other observations |
+|---|---:|---|
+| `index.html` | 93 | 6 `window.localStorage` references; 13 declarations assigning a LocalStorage expression to an alias; no `indexedDB` reference. |
+| `storage-foundation.js` | 8 | 7 LocalStorage alias declarations/references in migration, inventory and verification helpers; 3 IndexedDB references. |
+| `version-manager.js` | 0 | No direct LocalStorage or IndexedDB references in this source scan. |
+
+The counts overlap conceptually: a direct method call may also be included in an alias-containing function. They must not be added together as if they were independent data paths. No bracket-notation `['localStorage']` access was found in these three files by the initial pattern scan. Dynamic evaluation, computed aliases and external browser extensions are outside this source-only inventory.
+
+### Application workflow map from traced functions
+
+| Area | Current functions / behavior | Migration requirement |
+|---|---|---|
+| Accounting bootstrap | `loadDB()` reads the Accounting JSON envelope synchronously. | Replace with validated async read before UI readiness; preserve integrity-error lock. |
+| Accounting persistence | `persist()` writes and reads back the Accounting envelope synchronously; callers use boolean success/failure. | Convert definition, all callers and event handlers to await durable commit. Do not display success or render dependent state before commit. |
+| Invoice sequence | `highestSharedRecordNumber()`, `reserveRecordNumber()`, `cleanupUncommittedInvoiceNumbers()`, `resetStaleSequenceOnlyWhenNoSavedRecords()`. | Sequence reservation and envelope updates must share a transaction. Startup cleanup must not run against defaults or before validated canonical data is loaded. |
+| Invoice lifecycle | Create/update/delete, payment status, diagnostic and orphan cleanup paths call `persist()`; some flows also update invoice-linked accounting entries. | One canonical Accounting envelope commit per logical operation; restore prior in-memory state on abort; audit every event handler for ignored return values. |
+| Projects | `prLoad()` and `prPersist()` synchronously load/save the whole nested workspace; many project, subproject, worker, partner, company and job handlers depend on boolean return values. | Keep the entire workspace envelope canonical; convert every caller to async and preserve rollback behavior. |
+| Project/accounting sync | Startup cleanup and project-financial sync helpers can update Accounting data after inspecting project records. | Define exact cross-domain transaction boundary and ensure no partial Accounting/Projects update. Preserve existing business rules; do not infer new synchronization. |
+| Contracts | `ctRead()` / `ctWrite()` synchronously read, validate, write and verify the contract list; save/delete/render paths call them. | Async read/write with integrity lock and commit confirmation before success. |
+| Full backup/restore | `backup()` reads Accounting, Projects and Contracts from separate synchronous storage calls; `restore()` validates and writes/removes multiple keys with rollback helpers. | Replace with one consistent multi-envelope snapshot and one atomic validated restore; preserve current merge/replace semantics only after explicit regression tests. |
+| Factory reset | `factoryResetFinalConfirm()` snapshots/recovery-reads and removes several app keys. | Separate recovery snapshot and reset marker transaction; do not remove or mutate legacy LocalStorage during migration/cutover. Keep explicit confirmation and test rollback. |
+| Preferences/language | `currentAppLang()`, `applyAppLanguage()`, `reportArchiveLanguage()` read/write language and preference-version values. | Load and validate preferences during async bootstrap; do not write defaults before canonical data validation. |
+| Reports | `refreshReport()`, report archive/settings/workflow/email/notification helpers read report settings and language. | Inventory report keys and all call sites; assign explicit repository domains and decide which values are included in a future complete backup. |
+| Monitoring/diagnostics | `monitorReadLog()`, `monitorWriteLog()`, `monitorContext()`, self-check and diagnostic export use LocalStorage. | Best-effort bounded diagnostics; diagnostic write failure must not fail business saves. Exclude synthetic self-test data from user migration. |
+| Support | `submitHelpContact()` stores support/contact draft state. | Preserve draft semantics and sent/not-sent state; classify whether it belongs in user backup v7. |
+| Launcher/profile | `syncLauncherBrand()`, `ctProfile()` and project profile helpers access persisted profile data. | Resolve canonical owner of profile/logo; avoid duplicated authoritative copies. |
+
+### Critical synchronous assumptions confirmed
+
+The source has 18 textual occurrences of `persist(` (including its definition), 30 of `prPersist(` (including its definition), and 3 of `ctWrite(` (including its definition). Existing callers use synchronous truthy/falsy branches, and some calls intentionally ignore the result. This means replacing storage calls alone is unsafe: all callers, event handlers, startup sequencing, and dependent render/alert actions need coordinated async conversion.
+
+Startup currently calls `loadDB()`, then isolation cleanup and invoice-sequence cleanup/reset routines, then `prLoad()`, followed by additional project/accounting synchronization and launcher setup. The async bootstrap must gate all these operations and classify each startup repair before it is allowed to persist.
+
+### Remaining audit work (not yet complete)
+
+1. Resolve every one of the 13 `index.html` LocalStorage aliases and all 7 `storage-foundation.js` alias declarations to the exact underlying operation and classify read/write/delete/inventory/verification.
+2. Enumerate all report, preferences, monitor and support key constants and trace every reader/writer.
+3. Trace every `persist()`, `prPersist()` and `ctWrite()` call to its enclosing function/event callback, including ignored return values and rollback branches.
+4. Review all dynamic script creation/imports and any storage access through computed property names or wrappers.
+5. Reconcile the eight `storage-foundation.js` accesses individually with the earlier manifest's count and label each migration-only, inventory-only or normal-runtime.
+
+No app code, LocalStorage value, browser database, backup or production branch was changed by this audit. The repository adapter remains unreferenced by the app. Continue only on `release239`; do not import v6 or perform cutover during this audit.
