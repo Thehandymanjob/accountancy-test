@@ -153,6 +153,33 @@
   const failed=checks.filter(x=>!x.ok);
   return {ok:failed.length===0,mode:"in-memory-self-test",checks,passed:checks.length-failed.length,failed:failed.length,writesPerformed:false,localStorageChanged:false,typedDomainsChanged:false,appCutover:false};
  }
+
+ function candidateAudit(rows){
+  return rows.filter(row=>row.status==="RETAIN_LEGACY"&&/(account|project|contract|restore|migration)/i.test(row.sourceKey)).map(row=>{
+   const env=row.value;
+   let parsed=null,parseable=false;
+   try{parsed=JSON.parse(env.raw);parseable=true}catch(_){}
+   const result={sourceKey:row.sourceKey,parseable};
+   if(!parseable){result.shape="raw-scalar";return result;}
+   if(array(parsed)){
+    result.shape="array";result.items=parsed.length;
+    result.objectItems=parsed.filter(object).length;
+    result.itemsWithId=parsed.filter(x=>object(x)&&typeof x.id==="string"&&x.id.trim()).length;
+    result.possibleContracts=parsed.length>0&&parsed.every(x=>object(x)&&typeof x.id==="string"&&x.id.trim());
+   }else if(object(parsed)){
+    const fields=Object.keys(parsed);
+    result.shape="object";result.topLevelFields=fields.length;
+    result.hasEntries=array(parsed.entries);result.hasInvoices=array(parsed.invoices);
+    result.hasProjects=array(parsed.projects);result.hasWorkers=array(parsed.workers);
+    if(array(parsed.entries))result.entries=parsed.entries.length;
+    if(array(parsed.invoices))result.invoices=parsed.invoices.length;
+    if(array(parsed.projects))result.projects=parsed.projects.length;
+    if(array(parsed.workers))result.workers=parsed.workers.length;
+    result.fieldNames=fields.slice(0,30);
+   }else result.shape=parsed===null?"null":typeof parsed;
+   return result;
+  });
+ }
  async function plan(){
   const api=root.HandymanStorageRepository;
   if(!api||api.databaseName!==DB||typeof api.snapshot!=="function")
@@ -174,6 +201,7 @@
   try{const raw=findRaw("tha_test226_accounting_v1");if(raw!==null)accounting=JSON.parse(raw)}catch(_){}
   try{const raw=findRaw("tha_test226_invoice_sequence_v1");if(raw!==null)sequence=Number(raw)}catch(_){}
   const invoice=invoiceAudit(accounting,sequence);
+  const candidates=candidateAudit(snap.records.map(row=>({sourceKey:row.key,value:row.value,status:MAP[row.key]?"MAPPED":"RETAIN_LEGACY"})));
   const issues=rows.flatMap(x=>x.issues.map(issue=>({...issue,sourceKey:x.sourceKey}))).concat(invoice.issues);
   const blockers=issues.filter(x=>x.severity==="blocker").length;
   const warnings=issues.filter(x=>x.severity==="warning").length;
@@ -192,6 +220,7 @@
    blockedCount:blocked,
    unmappedCount:unmapped,
    invoiceReconciliation:invoice,
+   candidateAudit:candidates,
    issues,
    records:rows,
    writesPerformed:false,
