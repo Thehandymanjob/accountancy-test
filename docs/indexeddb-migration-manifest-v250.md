@@ -501,3 +501,41 @@ The test button uses synthetic records only and checks basic initialization, exa
 - `7d4f35d82f635bdc59dc69c6d2898eef5982963f`: added snapshot database identity validation and expanded preflight/cleanup checks for every synthetic key used by the self-test.
 - The current self-test now includes concurrent independent writes, exact-domain replacement, stale-record removal, unrelated-domain preservation, empty-domain clearing, and refuses to overwrite pre-existing test keys.
 - Browser execution of these latest changes is pending. Earlier six-check browser success does not validate these new changes.
+
+
+## 19. Browser validation of hardened repository prototype — passed
+
+The user executed the current cache-busted manual lab in the browser and returned this result:
+
+```json
+{
+  "ok": true,
+  "database": "the_handyman_accountancy_v250_idb",
+  "schemaVersion": 1,
+  "checks": {
+    "ready": true,
+    "roundTrip": true,
+    "atomicBatch": true,
+    "concurrentWrites": true,
+    "snapshotRestore": true,
+    "restoreRemovesStaleRecords": true,
+    "restorePreservesOtherDomains": true,
+    "emptySnapshotRestore": true,
+    "cleanup": true
+  },
+  "localStorageAccessed": false,
+  "appCutover": false
+}
+```
+
+### Interpretation
+
+- All nine repository self-test checks passed in the user's browser.
+- The tested database was `the_handyman_accountancy_v250_idb`, schema version 1.
+- The lab reports that it did not access LocalStorage.
+- The lab explicitly reports `appCutover: false`; the accountancy app is not connected to this repository and no app storage migration has occurred.
+- This validates the isolated repository prototype's tested behaviors only. It does not validate iPhone Safari app workflows, production data import, full application adapter integration, backup-v6 import, or cutover.
+
+### Next engineering gate
+
+Proceed with a read-only adapter contract and call-site integration plan for the v250 app. Before changing `index.html`, enumerate every caller that must become asynchronous and define transaction boundaries and regression tests. Keep the repository lab isolated. Do not import backup v6, change LocalStorage, modify production, or perform cutover without separate explicit approval.
