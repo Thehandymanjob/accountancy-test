@@ -182,11 +182,12 @@
   }finally{db.close();}
  }
  async function selfTest(){
-  const domain="repository_test",key="roundtrip";
-  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"concurrent-a"},{domain,key:"concurrent-b"},{domain,key:"stale-record"},{domain:"unrelated_test",key:"keep"}];
+  const runToken=Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,10);
+  const domain="test_"+runToken,otherDomain="other_"+runToken,key="roundtrip";
+  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"concurrent-a"},{domain,key:"concurrent-b"},{domain,key:"stale-record"},{domain:otherDomain,key:"keep"}];
   for(const item of reserved){
    if(await get(item.domain,item.key)!==null)
-    throw new Error("Self-test key is occupied ("+recordId(item.domain,item.key)+"); refusing to overwrite existing data.");
+    throw new Error("Generated self-test namespace is unexpectedly occupied ("+recordId(item.domain,item.key)+"); refusing to overwrite existing data.");
   }
   const fixture={zero:0,blank:"",nil:null,flag:false,nested:[{id:"a",unknown:{keep:true}},[1,null,"x"]]};
   const checks={ready:false,roundTrip:false,atomicBatch:false,concurrentWrites:false,snapshotRestore:false,restoreRemovesStaleRecords:false,restorePreservesOtherDomains:false,emptySnapshotRestore:false,cleanup:false};
@@ -208,7 +209,7 @@
     canonical(await get(domain,"concurrent-b"))===canonical({writer:"B",value:2});
    if(!checks.concurrentWrites)throw new Error("Concurrent independent writes test failed.");
    await remove(domain,"concurrent-a");await remove(domain,"concurrent-b");
-   await put("unrelated_test","keep",{untouched:true});
+   await put(otherDomain,"keep",{untouched:true});
    const snap=await snapshot([domain]);
    await put(domain,"stale-record",{mustBeRemoved:true});
    const restoreResult=await restore(snap);
@@ -216,14 +217,14 @@
    if(!checks.snapshotRestore)throw new Error("Snapshot restore test failed.");
    checks.restoreRemovesStaleRecords=(await get(domain,"stale-record"))===null;
    if(!checks.restoreRemovesStaleRecords)throw new Error("Restore did not remove stale records in declared domain.");
-   checks.restorePreservesOtherDomains=canonical(await get("unrelated_test","keep"))===canonical({untouched:true});
+   checks.restorePreservesOtherDomains=canonical(await get(otherDomain,"keep"))===canonical({untouched:true});
    if(!checks.restorePreservesOtherDomains)throw new Error("Restore modified a record outside declared domains.");
    const emptyRestore=await restore({format:"tha-idb-repository-snapshot-v1",database:DB_NAME,domains:[domain],records:[]});
    checks.emptySnapshotRestore=emptyRestore.ok&&emptyRestore.written===0&&emptyRestore.emptySnapshot===true&&(await get(domain,key))===null;
    if(!checks.emptySnapshotRestore)throw new Error("Empty snapshot restore did not clear its declared domain.");
    await remove(domain,key);await remove(domain,"batch-a");await remove(domain,"batch-b");
-   await remove("unrelated_test","keep");
-   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get("unrelated_test","keep"))===null;
+   await remove(otherDomain,"keep");
+   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get(otherDomain,"keep"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
    return {ok:true,database:DB_NAME,schemaVersion:DB_VERSION,checks,localStorageAccessed:false,appCutover:false};
   }catch(error){
