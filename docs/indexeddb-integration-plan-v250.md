@@ -466,3 +466,36 @@ Required IndexedDB design: when a user action changes project ledger data and it
 Current backup/restore is not a source-preserving round trip; factory reset covers selected core keys only; invoice numbering is not atomic with invoice data; and multi-project synchronization can partially commit. These are implementation blockers. The required design is a source-preserving, multi-domain IndexedDB transaction model with explicit auxiliary-data and reset policies.
 
 This pass was read-only against application source and browser storage. Only this migration-plan document is being updated. No app code, LocalStorage data, IndexedDB records, backup files, production branch or branch structure was changed.
+
+
+## 15. LocalStorage alias, indirect-access and foundation-call classification audit — pass 6
+
+### Main application source: direct and indirect access
+
+The current index.html has no executable IndexedDB integration. Its LocalStorage references are direct calls rather than a shared LocalStorage alias adapter. The targeted scan found no computed localStorage property access (localStorage[...]), window['localStorage']/window["localStorage"], or getItem/setItem/removeItem bound-function aliases. This narrows the alias risk but is not a substitute for a full JavaScript AST/data-flow audit; dynamically generated code and future script additions still require a final scan.
+
+Direct application access remains distributed across the main Accounting load/save path, report language selection, contractor/profile/logo lookups, complete backup/restore, factory reset, isolation cleanup, invoice sequence and numbering, project bootstrap/persistence/completion/restore, support drafts, Contracts, monitoring/diagnostics, report module storage and app language preferences. These are runtime dependencies, not merely migration helpers. Existing direct writes in startup and the Projects material conversion remain particularly important because they bypass a single application repository boundary.
+
+### Storage prototype instrumentation
+
+index.html patches Storage.prototype.setItem and removeItem through installMonitorStorageHooks(). It retains original methods and invokes them, then logs writes/removals for same-origin LocalStorage except selected monitor/sequence/accounting keys. This is instrumentation around the browser storage API, not an application data adapter. It does not intercept getItem, clear(), direct property access, or IndexedDB. During migration it must not be mistaken for a persistence layer; its hooks must be removed or redesigned so diagnostic logging cannot create hidden runtime LocalStorage dependencies or interfere with the repository.
+
+The monitor self-check also creates, reads and removes a temporary LocalStorage key. This is a diagnostic write, not user data, but it violates a strict no-LocalStorage runtime rule after cutover and must be replaced with an IndexedDB/repository health check or removed. The diagnostic report currently reads LocalStorage-backed app/project data and must be redesigned to inspect repository health without exposing raw user values.
+
+### storage-foundation.js classification
+
+storage-foundation.js is not wired into the current main app script list and remains an isolated prototype. Its LocalStorage operations fall into these classes:
+
+1. **Legacy migration/source archival:** enumerateLegacyKeys() reads every same-origin key and explicitly includes four known core keys even when absent. snapshotLegacyData()/migration routines read raw legacy values, record snapshots and move/copy values into IndexedDB; verification compares the saved values against the source. These are migration-only operations and must run only in an explicitly authorized migration phase. The source values must remain untouched until a separately approved cutover and retention policy.
+2. **Read-only inventory/diagnostics:** inspectStorageInventory() enumerates all same-origin LocalStorage keys, reads values only to compute byte length/JSON type, and reports metadata; inspectMigrationSources() reads all keys to compare digests and source/IndexedDB snapshots. These are diagnostic-only and must not run as ordinary app startup or post-cutover runtime paths. Their reports intentionally omit raw values, but still expose key names and metadata.
+3. **No ordinary runtime persistence through LocalStorage:** foundation get/set/remove/keys APIs target the IndexedDB kv store; typed-record APIs target IndexedDB object stores. The module does not provide a LocalStorage-backed fallback. Its self-test writes only to its designated IndexedDB test namespace/stores and does not need LocalStorage migration.
+
+The foundation's all-origin enumeration is broader than the four-item LEGACY_KEYS list. It can include report, language, monitoring, help-draft and unrelated same-origin keys. That breadth is useful for auditability but creates a privacy/scope concern: migration must not automatically import every same-origin key as canonical user data. Each key/domain needs an explicit classification and approved mapping; unknown/unrelated keys should be preserved in a source archive or left untouched, not silently promoted into app data.
+
+### Remaining runtime key groups to resolve
+
+The source confirms distinct persisted state beyond the three core envelopes: app language and preference-version keys; report archive, notifications, settings, workflow and email settings; monitor log; support-contact drafts; invoice sequence and cleanup markers; isolation-test cleanup marker; empty-sequence reset marker; factory-reset recovery snapshot; and project/accounting/contracts envelopes. These require an explicit v7 auxiliary-domain inventory and retention/backup/reset policy. Existing key-name pattern grouping in the foundation inventory is only heuristic; it must not be treated as authoritative domain mapping.
+
+### Pass 6 conclusion
+
+No LocalStorage alias adapter was found in the targeted scan, but the application still has numerous direct runtime reads/writes, prototype-level diagnostic instrumentation and LocalStorage-dependent self-checks. The foundation's LocalStorage access is migration/inventory-only, but it scans all same-origin keys and therefore needs strict scope control. This is a blocker to claiming IndexedDB-only operation. No app source, LocalStorage/browser data, IndexedDB records, backup, branch structure or production branch was changed in this pass; only this migration-plan document is being updated.
