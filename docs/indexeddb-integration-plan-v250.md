@@ -545,3 +545,38 @@ The confirmed key list is not yet a claim that the runtime inventory is exhausti
 ### Pass 7 conclusion
 
 The key-level inventory is now sufficiently concrete to define the initial v7 auxiliary-domain model, but not to authorize migration or reset. The next audit should trace all report/preferences/monitor/support read-write paths and confirm whether any additional keys are constructed dynamically or written by external scripts. No application code or browser data was changed; only this migration-plan document is being updated.
+
+
+## 17. Auxiliary storage call-path and dynamic-script audit — pass 8
+
+### Confirmed auxiliary read/write paths
+
+- Report module: ARCH, NOTIFS, CFG and FLOW are loaded at module evaluation through a shared `load(key, fallback)` helper; `report188SaveSettings`, archive generation/status changes, notification read/open actions and workflow completion/reminder checks write through `save(key, value)`. Accountant recipient settings are loaded lazily when the email page is opened and saved by `report188SaveEmailSettings`. Email is not sent by this feature; it stores recipient details locally only.
+- The generic report `load()` catches malformed JSON and returns a fallback. That is unsafe for authoritative archive/notification/workflow state: IndexedDB bootstrap must validate stored records and expose corruption/recovery status, not silently substitute an empty archive or default settings.
+- `report188SaveSettings`, notification state changes, report status rename, workflow completion, and due/reminder updates do not consistently gate subsequent UI state on a successful save. `report188GenerateAndSave` checks archive save but notification creation is only mutated in memory in that path. IndexedDB conversion must make each logical action atomic (for example archive plus its report-ready notification) and render success only after commit.
+- Language: `currentAppLang()` reads the preference-version marker and language; if version is not `204`, it writes English and the new marker. `setAppLanguage()` writes both keys, but applies the selected language even if persistence fails. Replace with a versioned preferences record and show success only after commit; do not carry forward the destructive default-to-English rule as an unconditional bootstrap migration.
+- Support: `submitHelpContact()` reads and rewrites the whole local draft array. Invalid JSON silently becomes an empty list, risking loss on the next write. Store drafts as validated records in `support/drafts`; preserve `pending-local-only` and never imply that a draft was sent.
+- Monitoring: `monitorReadLog()`/`monitorWriteLog()` read and replace the capped array. Diagnostic export reads the Projects LocalStorage envelope directly, and the self-check creates, reads and removes a temporary LocalStorage key. Move log writes to best-effort repository operations; diagnostics should use repository health and redacted metadata; remove the temporary LocalStorage self-check. Monitor failures must not abort business transactions.
+- Project completion is a direct `localStorage.setItem(PR_KEY, JSON.stringify(prDB))` path, bypassing `prPersist()`. It must be converted to the same async repository commit path as all other Projects mutations.
+- Additional direct read paths remain in contractor selection, financial report localization/logo rendering, launcher branding, contract profile rendering and diagnostic context. After cutover, these must read the canonical in-memory/bootstrap envelope or repository APIs; no module may independently parse a LocalStorage Projects copy.
+
+### Dynamic scripts and indirect storage access
+
+- Static scan of `index.html` found 96 textual `localStorage` occurrences, 26 `setItem(`, 57 `getItem(` and 11 `removeItem(` occurrences. These are source-expression counts, not independent workflows; repeated snippets and wrappers overlap.
+- No `sessionStorage`, `import(`, `eval(`, `new Function`, or `localStorage.clear()` expression was found in this source scan. This is a targeted text scan, not a complete JavaScript AST/data-flow proof.
+- Dynamic script element creation is present in PDF/export workflows. The observed dynamic loads fetch the external `html2pdf.js` library from cdnjs for financial reports, invoices and receipts; they are not observed loading an app storage adapter or an alternate application bundle. Generated print documents also contain their own embedded PDF-library loader. These external library loads are runtime dependencies for PDF features and should be audited separately for offline behavior/CSP, but they do not establish an IndexedDB integration path.
+- `version-manager.js` is loaded as a static script near the end of the document. No dynamic `import()`/`eval()` storage adapter loader was found in `index.html`.
+- The monitor patches `Storage.prototype.setItem` and `removeItem`. This instrumentation must be removed or redesigned before cutover; it must not intercept or observe normal storage writes after the app has moved to IndexedDB.
+
+### Required implementation consequences
+
+1. Create one awaited application bootstrap barrier. Load and validate core envelopes and explicitly selected auxiliary domains before enabling the UI or initializing report, language, monitor, support, Projects or Contracts modules.
+2. Convert every auxiliary write path to asynchronous repository operations. Do not display saved/completed/updated status before transaction completion.
+3. Use record-level support drafts and monitor events rather than read-modify-write whole arrays where appropriate; preserve the existing monitor cap as a retention policy, not a reason to overwrite unrelated domains.
+4. Implement explicit corruption handling for report archive, support drafts and preferences. Never convert parse/read failures into empty arrays/defaults and then persist those defaults.
+5. Audit PDF library loading independently; it is not a storage dependency, but PDF generation must not block bootstrap or trigger application LocalStorage access.
+6. Run a final AST/data-flow scan and runtime instrumentation after integration. This pass is not proof that future third-party scripts or all computed keys are absent.
+
+### Pass 8 conclusion
+
+The remaining auxiliary storage call paths are now identified well enough to specify their conversion requirements. Important uncovered paths include direct Projects completion writes, report notification/workflow persistence, language preference writes that are not commit-gated, support-draft corruption fallback, and monitor diagnostics that still inspect LocalStorage. The dynamic script review found PDF-library loading rather than a hidden application storage loader. No app code, user data, LocalStorage, IndexedDB database or production branch was changed; only this plan document was updated.
