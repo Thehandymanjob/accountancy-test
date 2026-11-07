@@ -120,6 +120,39 @@
   if(sequenceValue<observedMax)issues.push({severity:"blocker",code:"sequence_below_observed_max",sequence:sequenceValue,observedMax});
   return {issues,invoiceCount:invoices.length,standaloneIncomeCount:standalone.length,observedMax,sequenceValue};
  }
+
+ function selfTest(){
+  const checks=[];
+  const check=(name,condition)=>checks.push({name,ok:!!condition});
+  const goodAccounting=validate("accounting",JSON.stringify({entries:[],customers:[],invoices:[]}),"fixture");
+  check("valid_accounting_shape",goodAccounting.valid&&goodAccounting.issues.length===0);
+  const badAccounting=validate("accounting",JSON.stringify({entries:{}}),"fixture");
+  check("reject_invalid_accounting_shape",!badAccounting.valid&&badAccounting.issues.some(x=>x.code==="accounting_shape"));
+  const duplicateIds=validate("accounting",JSON.stringify({entries:[],customers:[{id:"c1"},{id:"c1"}],invoices:[]}),"fixture");
+  check("detect_duplicate_customer_ids",!duplicateIds.valid&&duplicateIds.issues.some(x=>x.code==="duplicate_ids"));
+  const goodProjects=validate("projects",JSON.stringify({projects:[],workers:[]}),"fixture");
+  check("valid_projects_shape",goodProjects.valid);
+  const badProjects=validate("projects",JSON.stringify({projects:{},workers:[]}),"fixture");
+  check("reject_invalid_projects_shape",!badProjects.valid);
+  const goodContracts=validate("contracts",JSON.stringify([{id:"contract-1"}]),"fixture");
+  check("valid_contract_shape",goodContracts.valid);
+  const badContracts=validate("contracts",JSON.stringify([{name:"missing-id"}]),"fixture");
+  check("reject_contract_without_id",!badContracts.valid);
+  const goodCounter=validate("counter","4","fixture");
+  const badCounter=validate("counter","-1","fixture");
+  check("accept_nonnegative_counter",goodCounter.valid&&goodCounter.summary.highWaterMark===4);
+  check("reject_negative_counter",!badCounter.valid);
+  const cleanInvoice=invoiceAudit({invoices:[{id:"i1",number:3}],entries:[{id:"e1",type:"income",number:4}]},4);
+  check("accept_noncolliding_invoice_sequence",cleanInvoice.issues.length===0&&cleanInvoice.observedMax===4);
+  const duplicateInvoice=invoiceAudit({invoices:[{id:"i1",number:3},{id:"i2",number:3}],entries:[]},3);
+  check("detect_duplicate_invoice_numbers",duplicateInvoice.issues.some(x=>x.code==="duplicate_invoice_numbers"));
+  const crossCollision=invoiceAudit({invoices:[{id:"i1",number:3}],entries:[{id:"e1",type:"income",number:3}]},3);
+  check("detect_invoice_income_number_collision",crossCollision.issues.some(x=>x.code==="invoice_income_number_collision"));
+  const lowSequence=invoiceAudit({invoices:[{id:"i1",number:5}],entries:[]},4);
+  check("detect_sequence_below_observed_max",lowSequence.issues.some(x=>x.code==="sequence_below_observed_max"));
+  const failed=checks.filter(x=>!x.ok);
+  return {ok:failed.length===0,mode:"in-memory-self-test",checks,passed:checks.length-failed.length,failed:failed.length,writesPerformed:false,localStorageChanged:false,typedDomainsChanged:false,appCutover:false};
+ }
  async function plan(){
   const api=root.HandymanStorageRepository;
   if(!api||api.databaseName!==DB||typeof api.snapshot!=="function")
@@ -168,5 +201,5 @@
    note:"This planner only reads the v250 legacy domain. It does not create or modify typed domain records."
   };
  }
- root.HandymanV250ConversionPlanner=Object.freeze({plan});
+ root.HandymanV250ConversionPlanner=Object.freeze({plan,selfTest});
 })(window);
