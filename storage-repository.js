@@ -124,6 +124,47 @@
    return {ok:true,written:prepared.length,updatedAt:stamp};
   }finally{db.close();}
  }
+ async function mutate(operations){
+  if(!Array.isArray(operations)||operations.length===0)throw new Error("A non-empty operations array is required.");
+  const prepared=operations.map(item=>{
+   if(!item||!validName(item.domain)||!validKey(item.key)||typeof item.update!=="function")
+    throw new Error("Each mutation requires a valid domain, key and synchronous update function.");
+   return {id:recordId(item.domain,item.key),domain:item.domain,key:item.key,update:item.update,initialValue:item.initialValue};
+  });
+  const ids=new Set();for(const item of prepared){if(ids.has(item.id))throw new Error("Duplicate key in mutation: "+item.id);ids.add(item.id);}
+  const db=await open(),values={},stamp=new Date().toISOString();
+  try{
+   const tx=db.transaction([STORE],"readwrite"),done=txDone(tx),store=tx.objectStore(STORE);
+   let callbackError=null;
+   for(const item of prepared){
+    const req=store.get(item.id);
+    req.onsuccess=()=>{
+     if(callbackError)return;
+     try{
+      const current=req.result?JSON.parse(req.result.raw):clone(item.initialValue===undefined?null:item.initialValue);
+      const next=item.update(clone(current));
+      if(next===undefined)throw new Error("Mutation returned undefined for "+item.id);
+      const raw=validateValue(next);
+      values[item.id]=JSON.parse(raw);
+      store.put({id:item.id,domain:item.domain,key:item.key,raw,updatedAt:stamp,byteLength:new Blob([raw]).size});
+     }catch(error){callbackError=error;try{tx.abort()}catch(_){}}
+    };
+   }
+   try{await done}catch(error){throw callbackError||error;}
+   const verify=db.transaction([STORE],"readonly"),verifyDone=txDone(verify),read=verify.objectStore(STORE);
+   for(const item of prepared){
+    const row=await requestResult(read.get(item.id));
+    if(!row||canonical(JSON.parse(row.raw))!==canonical(values[item.id]))throw new Error("Mutation read-back verification failed for "+item.id);
+   }
+   await verifyDone;
+   return {ok:true,updated:prepared.length,values:clone(values),updatedAt:stamp};
+  }finally{db.close();}
+ }
+ async function reserveCounter(domain,key,minimum){
+  const floor=Number(minimum)||0;
+  const result=await mutate([{domain,key,initialValue:0,update:current=>Math.max(Number(current)||0,floor)+1}]);
+  return {ok:true,value:result.values[recordId(domain,key)]};
+ }
  async function snapshot(domains){
   if(!Array.isArray(domains)||domains.some(x=>!validName(x)))throw new Error("domains must be an array of valid names.");
   const db=await open();
@@ -190,7 +231,7 @@
     throw new Error("Generated self-test namespace is unexpectedly occupied ("+recordId(item.domain,item.key)+"); refusing to overwrite existing data.");
   }
   const fixture={zero:0,blank:"",nil:null,flag:false,nested:[{id:"a",unknown:{keep:true}},[1,null,"x"]]};
-  const checks={ready:false,roundTrip:false,atomicBatch:false,concurrentWrites:false,snapshotRestore:false,restoreRemovesStaleRecords:false,restorePreservesOtherDomains:false,emptySnapshotRestore:false,cleanup:false};
+  const checks={ready:false,roundTrip:false,atomicBatch:false,atomicMultiDomainMutation:false,abortRollback:false,concurrentWrites:false,concurrentCounterReservation:false,snapshotRestore:false,restoreRemovesStaleRecords:false,restorePreservesOtherDomains:false,emptySnapshotRestore:false,cleanup:false};
   try{
    await ready();checks.ready=true;
    await put(domain,key,fixture);
@@ -201,6 +242,28 @@
    const result=await transact(batch);
    checks.atomicBatch=result.ok&&canonical(await get(domain,"batch-a"))===canonical({v:1})&&canonical(await get(domain,"batch-b"))===canonical({v:2});
    if(!checks.atomicBatch)throw new Error("Atomic batch test failed.");
+   const multi=await mutate([
+    {domain,key:"domain-accounting",initialValue:{entries:[]},update:v=>({...v,entries:[...(v.entries||[]),{id:"e1",amount:10}]})},
+    {domain,key:"domain-projects",initialValue:{projects:[]},update:v=>({...v,projects:[...(v.projects||[]),{id:"p1"}]})},
+    {domain:otherDomain,key:"domain-contracts",initialValue:[],update:v=>[...v,{id:"c1"}]}
+   ]);
+   checks.atomicMultiDomainMutation=multi.ok&&canonical(await get(domain,"domain-accounting"))===canonical({entries:[{id:"e1",amount:10}]})&&
+    canonical(await get(domain,"domain-projects"))===canonical({projects:[{id:"p1"}]})&&
+    canonical(await get(otherDomain,"domain-contracts"))===canonical([{id:"c1"}]);
+   if(!checks.atomicMultiDomainMutation)throw new Error("Atomic multi-domain mutation failed.");
+   await put(domain,"abort-a",{before:"A"});await put(domain,"abort-b",{before:"B"});
+   const abortDb=await open();
+   try{
+    const abortTx=abortDb.transaction([STORE],"readwrite"),abortDone=txDone(abortTx),abortStore=abortTx.objectStore(STORE);
+    abortStore.put({id:recordId(domain,"abort-a"),domain,key:"abort-a",raw:validateValue({after:"A"}),updatedAt:stamp,byteLength:1});
+    abortStore.put({id:recordId(domain,"abort-b"),domain,key:"abort-b",raw:validateValue({after:"B"}),updatedAt:stamp,byteLength:1});
+    abortTx.abort();
+    try{await abortDone;throw new Error("Deliberate abort unexpectedly committed.")}catch(error){
+     if(error&&error.message==="Deliberate abort unexpectedly committed.")throw error;
+    }
+   }finally{abortDb.close();}
+   checks.abortRollback=canonical(await get(domain,"abort-a"))===canonical({before:"A"})&&canonical(await get(domain,"abort-b"))===canonical({before:"B"});
+   if(!checks.abortRollback)throw new Error("Aborted transaction changed stored records.");
    await Promise.all([
     put(domain,"concurrent-a",{writer:"A",value:1}),
     put(domain,"concurrent-b",{writer:"B",value:2})
@@ -208,6 +271,11 @@
    checks.concurrentWrites=canonical(await get(domain,"concurrent-a"))===canonical({writer:"A",value:1})&&
     canonical(await get(domain,"concurrent-b"))===canonical({writer:"B",value:2});
    if(!checks.concurrentWrites)throw new Error("Concurrent independent writes test failed.");
+   const counters=await Promise.all(Array.from({length:8},()=>reserveCounter(domain,"invoice-counter",0)));
+   const counterValues=counters.map(x=>x.value).sort((a,b)=>a-b);
+   checks.concurrentCounterReservation=counterValues.length===8&&new Set(counterValues).size===8&&counterValues.every((v,i)=>v===i+1);
+   if(!checks.concurrentCounterReservation)throw new Error("Concurrent counter reservation produced duplicate or non-monotonic values.");
+   await remove(domain,"invoice-counter");
    await remove(domain,"concurrent-a");await remove(domain,"concurrent-b");
    await put(otherDomain,"keep",{untouched:true});
    const snap=await snapshot([domain]);
@@ -223,6 +291,8 @@
    checks.emptySnapshotRestore=emptyRestore.ok&&emptyRestore.written===0&&emptyRestore.emptySnapshot===true&&(await get(domain,key))===null;
    if(!checks.emptySnapshotRestore)throw new Error("Empty snapshot restore did not clear its declared domain.");
    await remove(domain,key);await remove(domain,"batch-a");await remove(domain,"batch-b");
+   await remove(domain,"domain-accounting");await remove(domain,"domain-projects");await remove(otherDomain,"domain-contracts");
+   await remove(domain,"abort-a");await remove(domain,"abort-b");
    await remove(otherDomain,"keep");
    checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get(otherDomain,"keep"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
@@ -232,5 +302,5 @@
    return {ok:false,database:DB_NAME,checks,error:String(error&&error.message||error),cleanupAttempted:false,appCutover:false};
   }
  }
- root.HandymanStorageRepository=Object.freeze({databaseName:DB_NAME,schemaVersion:DB_VERSION,ready,get,put,remove,transact,snapshot,restore,health,selfTest});
+ root.HandymanStorageRepository=Object.freeze({databaseName:DB_NAME,schemaVersion:DB_VERSION,ready,get,put,remove,transact,mutate,reserveCounter,snapshot,restore,health,selfTest});
 })(window);
