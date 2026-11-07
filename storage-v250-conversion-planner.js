@@ -240,6 +240,51 @@
   return {candidates:result,exactDuplicateGroups};
  }
 
+ function stable(value){
+  if(Array.isArray(value))return "["+value.map(stable).join(",")+"]";
+  if(object(value))return "{"+Object.keys(value).sort().map(k=>JSON.stringify(k)+":"+stable(value[k])).join(",")+"}";
+  return JSON.stringify(value);
+ }
+ function compareArrays(a,b){
+  if(!array(a)||!array(b))return null;
+  const mapA=new Map(),mapB=new Map();
+  for(const item of a)if(object(item)&&typeof item.id==="string"&&item.id.trim())mapA.set(item.id,item);
+  for(const item of b)if(object(item)&&typeof item.id==="string"&&item.id.trim())mapB.set(item.id,item);
+  const common=[...mapA.keys()].filter(id=>mapB.has(id));
+  let identical=0,changed=0;
+  for(const id of common)if(stable(mapA.get(id))===stable(mapB.get(id)))identical++;else changed++;
+  return {countA:a.length,countB:b.length,idsA:mapA.size,idsB:mapB.size,commonIds:common.length,identicalRecords:identical,changedRecordsSameId:changed,onlyInA:[...mapA.keys()].filter(id=>!mapB.has(id)).length,onlyInB:[...mapB.keys()].filter(id=>!mapA.has(id)).length,duplicateIdsA:a.length-mapA.size,duplicateIdsB:b.length-mapB.size};
+ }
+ function parsedRows(rows){
+  const out=new Map();
+  for(const row of rows){const env=row.value;if(!env||typeof env.raw!=="string")continue;try{out.set(row.key,JSON.parse(env.raw))}catch(_){}}
+  return out;
+ }
+ function compareCandidateVersions(rows){
+  const values=parsedRows(rows);
+  const specs=[
+   {name:"accounting: handyman vs restore",a:"handyman_accounting_v2",b:"tha_restore_test_v1_accounting_v1",fields:["entries","customers","invoices"]},
+   {name:"accounting: restore vs v212",a:"tha_restore_test_v1_accounting_v1",b:"tha_v212_migration_accounting_v1",fields:["entries","customers","invoices","customExpenseCategories","thirdPartyTransactions"]},
+   {name:"accounting: handyman vs v212",a:"handyman_accounting_v2",b:"tha_v212_migration_accounting_v1",fields:["entries","customers","invoices"]},
+   {name:"projects: workspace vs restore",a:"handyman_projects_workspace_v1",b:"tha_restore_test_v1_projects_v1",fields:["projects","workers","partners","contractors","companies","companyJobs"]},
+   {name:"projects: restore vs v212",a:"tha_restore_test_v1_projects_v1",b:"tha_v212_migration_projects_v1",fields:["projects","workers","partners","contractors","companies","companyJobs"]},
+   {name:"projects: workspace vs v212",a:"handyman_projects_workspace_v1",b:"tha_v212_migration_projects_v1",fields:["projects","workers","partners","contractors","companies","companyJobs"]},
+   {name:"contracts: restore vs v212",a:"tha_restore_test_v1_contracts_v1",b:"tha_v212_migration_contracts_v1",fields:null}
+  ];
+  return specs.map(spec=>{
+   const a=values.get(spec.a),b=values.get(spec.b);
+   if(a===undefined||b===undefined)return {comparison:spec.name,available:false};
+   if(!spec.fields)return {comparison:spec.name,available:true,records:compareArrays(a,b)};
+   const result={comparison:spec.name,available:true,fields:{}};
+   for(const field of spec.fields)if(array(a&&a[field])||array(b&&b[field]))result.fields[field]=compareArrays(a&&a[field],b&&b[field]);
+   if(array(a&&a.projects)&&array(b&&b.projects)){
+    const pa=a.projects[0],pb=b.projects[0];
+    if(object(pa)&&object(pb)){result.subprojects=compareArrays(pa.subprojects,pb.subprojects);result.projectSameId=String(pa.id||"")===String(pb.id||"");}
+   }
+   return result;
+  });
+ }
+
  async function plan(){
   const api=root.HandymanStorageRepository;
   if(!api||api.databaseName!==DB||typeof api.snapshot!=="function")
@@ -262,6 +307,7 @@
   try{const raw=findRaw("tha_test226_invoice_sequence_v1");if(raw!==null)sequence=Number(raw)}catch(_){}
   const invoice=invoiceAudit(accounting,sequence);
   const candidates=await candidateAudit(snap.records.map(row=>({sourceKey:row.key,value:row.value,status:MAP[row.key]?"MAPPED":"RETAIN_LEGACY"})));
+  const sourceComparisons=compareCandidateVersions(snap.records);
   const issues=rows.flatMap(x=>x.issues.map(issue=>({...issue,sourceKey:x.sourceKey}))).concat(invoice.issues);
   const blockers=issues.filter(x=>x.severity==="blocker").length;
   const warnings=issues.filter(x=>x.severity==="warning").length;
@@ -282,6 +328,7 @@
    invoiceReconciliation:invoice,
    candidateAudit:candidates.candidates,
    exactDuplicateGroups:candidates.exactDuplicateGroups,
+   sourceComparisons,
    issues,
    records:rows,
    writesPerformed:false,
