@@ -728,3 +728,32 @@ Only `storage-repository.js`, `storage-repository-lab.html` and this design docu
 ### Pass 11 conclusion
 
 The transaction-scoped multi-record API is implemented and statically checked. It is ready for isolated browser self-test, but is not yet approved for app integration. Browser test evidence is the remaining gate for this pass.
+
+
+## 21. Concurrent read-back correction — pass 11 retest build 04
+
+### Failure evidence from build 03
+
+The user's browser result confirmed that build identifiers matched build 03, and the following checks passed: `ready`, `roundTrip`, `atomicBatch`, `atomicMultiDomainMutation`, and `abortRollback`. The concurrent reservation check failed with:
+
+`Multi-record read-back verification failed for <synthetic-domain>/invoice-counter`
+
+The remaining snapshot/restore and cleanup checks were not reached. The report correctly showed `cleanupAttempted: false`; the failed run's synthetic namespace must therefore be treated as potentially present in the dedicated test database.
+
+### Root cause
+
+The build 03 implementation committed a `mutateMany` read-write transaction, then opened a separate readonly transaction and compared the current stored values with that operation's own committed values. With concurrent callers, a later serialized writer can commit between those two transactions. The later writer legitimately advances the shared counter, so the earlier caller's post-commit comparison can observe the newer value and incorrectly report its own successful transaction as failed.
+
+This was a verification race, not evidence that IndexedDB allowed two read-write transactions to mutate the same records simultaneously or that invoice reservations were duplicated.
+
+### Correction in build 04
+
+- `mutateMany` now queues read-back requests for all records inside the same active read-write transaction, after its writes have been queued.
+- It compares those read-back rows against the values written by that transaction before awaiting transaction completion.
+- This prevents another queued writer from committing between the write and its verification, while preserving the atomic multi-record transaction boundary.
+- The repository build is now `repo-selftest-20261107-04`; the lab build is `lab-selftest-20261107-04`, with matching expected build and script cache-buster.
+- The app remains unwired. This correction does not read or modify LocalStorage, import backup v6, or touch production.
+
+### Retest status
+
+Build 04 is a code correction only. It has not passed browser testing yet. Do not treat Pass 11 as passed until a fresh build-04 browser report confirms all 12 checks, complete report, matching builds, and no LocalStorage access. The prior failed synthetic namespace `test_mw6e6s2k_rtexou4y` is not automatically cleaned by this code correction; do not perform a broad database clear.
