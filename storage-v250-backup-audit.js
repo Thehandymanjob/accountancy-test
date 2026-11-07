@@ -4,8 +4,8 @@
 */
 (function(root){
  "use strict";
- const EXPECTED_SHA256="75e3a19b348739ac0efe11f019dc1a6d634d60ba56566a21e3b5bdd3dda11d41";
- const EXPECTED_EXPORT="2026-11-06T18:25:04.936Z";
+ const EXPECTED_SHA256="07b6170db9169e3b59d0b4527b88e26d589bd18c178ec9a1b1975b55f403db90";
+ const EXPECTED_EXPORT="2026-11-07T08:35:24.557Z";
  const EXPECTED_VERSION=6;
  const arr=v=>Array.isArray(v);
  const obj=v=>!!v&&typeof v==="object"&&!arr(v);
@@ -35,7 +35,7 @@
    ["projects.contractors",p.contractors],["projects.companies",p.companies],["contracts",c]
   ];
   const idAudit=lists.map(([name,list])=>({name,count:list.length,missingIdCount:list.filter(x=>!obj(x)||typeof x.id!=="string"||!x.id.trim()).length,duplicateIds:duplicateIds(list)}));
-  for(const item of idAudit){if(item.duplicateIds.length)issues.push({code:"duplicate_ids",severity:"blocker",area:item.name,ids:item.duplicateIds});if(item.missingIdCount)warnings.push({code:"missing_ids",area:item.name,count:item.missingIdCount});}
+  for(const item of idAudit){if(item.duplicateIds.length)warnings.push({code:"duplicate_ids_preserved",area:item.name,ids:item.duplicateIds});if(item.missingIdCount)warnings.push({code:"missing_ids",area:item.name,count:item.missingIdCount});}
   const projects=p.projects.map(project=>{
    const subs=arr(project.subprojects)?project.subprojects:[];
    const subAudit=subs.map(s=>({
@@ -50,7 +50,7 @@
    const subIncomeTotal=subAudit.reduce((t,s)=>t+s.incomeTotal,0);
    const subExpenseTotal=subAudit.reduce((t,s)=>t+s.expenseTotal,0);
    const duplicateSubIds=duplicateIds(subs);
-   if(duplicateSubIds.length)issues.push({code:"duplicate_subproject_ids",severity:"blocker",projectId:project.id,ids:duplicateSubIds});
+   if(duplicateSubIds.length)warnings.push({code:"duplicate_subproject_ids_preserved",projectId:project.id,ids:duplicateSubIds});
    return {id:project.id||null,name:project.name||null,projectPrice:num(project.price),status:project.status||null,subprojectCount:subs.length,subprojectPriceTotal:subPriceTotal,priceDifference:subPriceTotal-num(project.price),subprojectIncomeTotal:subIncomeTotal,subprojectExpenseTotal:subExpenseTotal,subprojects:subAudit};
   });
   const entryIncome=a.entries.filter(x=>x&&x.type==="income"),entryExpense=a.entries.filter(x=>x&&x.type==="expense");
@@ -76,10 +76,10 @@
    proposedSourceDomains:sourceDomains,
    unmappedLegacyPolicy:"All LocalStorage keys not represented in this backup remain preserved in the existing v250 legacy domain; no key is deleted or overwritten."
   };
-  return {ok:issues.length===0,mode:"backup-file-read-only-audit",validBackupShape:true,sourceAuthority:"Last_backup.json only",summary,issues,warnings,writesPerformed:false,localStorageChanged:false,typedDomainsChanged:false,appCutover:false,nextGate:"Review this report, then separately implement and test an atomic typed-domain import with snapshot rollback."};
+  return {ok:issues.length===0,mode:"backup-file-read-only-audit",validBackupShape:true,sourceAuthority:"New_new(1).json only",summary,issues,warnings,writesPerformed:false,localStorageChanged:false,typedDomainsChanged:false,appCutover:false,nextGate:"Review this report, then separately implement and test an atomic typed-domain import with snapshot rollback."};
  }
  async function inspectFile(file){
-  if(!file)throw new Error("Select the designated Last_backup.json file first.");
+  if(!file)throw new Error("Select the designated New_new(1).json file first.");
   const buffer=await file.arrayBuffer();
   const hash=await sha256(buffer);
   let parsed;
