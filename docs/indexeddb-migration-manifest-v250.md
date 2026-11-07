@@ -162,3 +162,84 @@ Not authorized by this manifest: modifying production `main`, changing live app 
 
 ---
 Generated as a working specification. This document records observed facts separately from proposed design and unresolved mappings.
+
+
+## 10. Field-level inspection of approved backup v6 (completed)
+
+The approved JSON was inspected directly. Its top-level structure is exactly:
+`app`, `backupType`, `version`, `exportedAt`, `data`, `projects`, `contracts`.
+
+### Accounting payload
+
+`data` contains exactly:
+- `entries[]`: 22 records. Observed entry fields include `id`, `type`, `date`, `amount`, `method`, `category`, `reference`, `notes`, `invoiceId`, `createdAt`.
+- `customers[]`: 1 record. Observed fields: `id`, `name`, `phone`, `address`, `workAddress`, `email`.
+- `invoices[]`: 2 records. Observed fields include `id`, `number`, `date`, `customerId`, `customerName`, `phone`, `billingAddress`, `workAddress`, `description`, `qty`, `unitPrice`, `vat`, `status`, `notes`, `historical`, `paymentStatus`, `paymentDate`, `paymentMethod`, `items[]`, `updatedAt`. Nested item fields must be preserved as-is.
+- `customExpenseCategories[]`: 1 string value (not an object record).
+- `settings`: object with `businessName`, `ownerName`.
+- `thirdPartyTransactions[]`: 0 records.
+- Root `contracts[]`: 0 records.
+
+### Projects payload
+
+`projects` contains:
+- `projects[]`: 1 project record.
+- `workers[]`, `partners[]`, `contractors[]`, `companies[]`: 1 record each.
+- `companyJobs[]`: 0 records.
+- `profile`: object with `businessName`, `ownerName`, `phone`, `email`, `logo`, `paymentDetails`.
+- `current`: project ID string.
+- `guide`: language string (`en`).
+- `currentSubproject`: null.
+- `profitReportProjectId`: project ID string.
+
+The single project has fields:
+`id`, `name`, `customer`, `address`, `phone`, `price`, `contract`, `partnerId`, `share`, `notes`, `photo`, `status`, `created`, `income[]`, `expenses[]`, `wages[]`, `tools[]`, `food[]`, `materials[]`, `hasSubprojects`, `subprojects[]`, `partnerShare`, `contractors[]`.
+
+There are 7 subprojects. Each carries its own ID, name, price and one or more ledger/category arrays; observed keys include `income`, `expenses`, `wages`, `tools`, `food`, `materials`, and `photo`. Preserve every subproject as a nested child or as a normalized row with an explicit `projectId` and stable `subprojectId`; never flatten away its parent relationship.
+
+### Confirmed project ledger mapping
+
+The backup has 9 receipt/income rows and 1 expense row, all nested under subprojects:
+
+| Parent subproject | Income rows | Expense rows |
+|---|---:|---:|
+| Roof (first) | 4 | 1 |
+| Top floor | 2 | 0 |
+| Porch roof | 1 | 0 |
+| Plumbing | 1 | 0 |
+| Roof (second) | 1 | 0 |
+| Basement | 0 | 0 |
+| Bathroom | 0 | 0 |
+| **Total** | **9** | **1** |
+
+The project-level ledger arrays (`income`, `expenses`, `wages`, `tools`, `food`, `materials`) are empty in this backup. All nine receipt records and the single expense must therefore be traced to their owning subproject during normalization.
+
+Observed receipt fields vary. Examples include `id`, `description`, `amount`, `date`, `method`, `reference`, `receiptType`, and `receiptImage`. Observed expense fields include `id`, `date`, `amount`, `description`, `reference`, `category`, `contractorId`, and `contractorName`. Preserve optional/missing fields and empty strings exactly; do not force all records into one narrowed schema.
+
+Observed totals for this backup only:
+- Subproject receipt amount total: £12,200.
+- Subproject expense amount total: £280.
+- These totals are reconciliation checks, not values to write back over the project price or ledger records.
+
+### Image accounting correction
+
+There are **8 image payloads in total**:
+- 1 project profile logo (`projects.profile.logo`).
+- 1 main project photo (`projects.projects[0].photo`).
+- 6 non-empty subproject photos (the Basement photo is an empty string).
+
+The prior description of “8 embedded images” is correct only when the profile logo is included. The project workspace itself has 7 non-empty photos (main project + 6 subprojects). Each image must be hashed and verified at its original path; empty photo strings remain empty strings.
+
+### Required mapping decision before implementation
+
+The source backup stores receipts and expenses nested inside subprojects. The existing typed target stores `projectReceipts` and `projectExpenses` use `id` as keyPath. Normalization is permissible only if each child row retains:
+- original child `id`;
+- `projectId`;
+- `subprojectId`;
+- original category/ledger type;
+- original row payload without field loss.
+
+The parent project record must also retain the original nested arrays or a byte/canonical-equivalent representation until the complete normalized round-trip is proven. Avoid dual-write ambiguity: designate one canonical representation and document a deterministic rehydration function before app cutover.
+
+**Unresolved:** the application’s actual runtime calculations and edit/delete flows must be checked to determine whether they expect nested arrays as canonical storage. Until that code-path review is complete, keep the project object intact in the staging payload; do not make normalized child stores the only source of truth.
+
