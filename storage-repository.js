@@ -139,6 +139,7 @@
   if(!snapshotValue||snapshotValue.format!=="tha-idb-repository-snapshot-v1"||!Array.isArray(snapshotValue.records))
    throw new Error("Unsupported repository snapshot.");
   const writes=snapshotValue.records.map(row=>({domain:row.domain,key:row.key,value:row.value}));
+  if(writes.length===0)return {ok:true,written:0,updatedAt:new Date().toISOString(),emptySnapshot:true};
   return transact(writes);
  }
  async function health(){
@@ -159,7 +160,7 @@
   const domain="repository_test",key="roundtrip",existing=await get(domain,key);
   if(existing!==null)throw new Error("Self-test key is occupied; refusing to overwrite it.");
   const fixture={zero:0,blank:"",nil:null,flag:false,nested:[{id:"a",unknown:{keep:true}},[1,null,"x"]]};
-  const checks={ready:false,roundTrip:false,atomicBatch:false,snapshotRestore:false,cleanup:false};
+  const checks={ready:false,roundTrip:false,atomicBatch:false,snapshotRestore:false,emptySnapshotRestore:false,cleanup:false};
   try{
    await ready();checks.ready=true;
    await put(domain,key,fixture);
@@ -174,6 +175,9 @@
    const restoreResult=await restore(snap);
    checks.snapshotRestore=restoreResult.ok&&canonical(await get(domain,key))===canonical(fixture);
    if(!checks.snapshotRestore)throw new Error("Snapshot restore test failed.");
+   const emptyRestore=await restore({format:"tha-idb-repository-snapshot-v1",records:[]});
+   checks.emptySnapshotRestore=emptyRestore.ok&&emptyRestore.written===0&&emptyRestore.emptySnapshot===true;
+   if(!checks.emptySnapshotRestore)throw new Error("Empty snapshot restore test failed.");
    await remove(domain,key);await remove(domain,"batch-a");await remove(domain,"batch-b");
    checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
