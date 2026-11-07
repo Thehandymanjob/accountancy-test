@@ -492,3 +492,12 @@ The test button uses synthetic records only and checks basic initialization, exa
 - Added self-test assertions for removal of stale records, preservation of unrelated domains, and empty-snapshot clearing of its declared domain.
 - This is still isolated repository work on `release239`; no app integration, LocalStorage migration, backup import, production update, or cutover.
 - Browser test of this new behavior is pending. The previously reported six passing checks apply to the preceding implementation, not this new change.
+
+
+## 18. Follow-up hardening after code review
+
+- `543f34a75c2f5d469b2e89d09043d52ab9598293`: corrected the stale-record test fixture so the snapshot is captured before the stale record is inserted; this makes the test actually prove stale-record removal.
+- `ea352f88bcc092bfbaf9ab1b18b34f657f5aa56f`: added independent concurrent-write coverage and preflight protection against overwriting reserved synthetic test keys.
+- `7d4f35d82f635bdc59dc69c6d2898eef5982963f`: added snapshot database identity validation and expanded preflight/cleanup checks for every synthetic key used by the self-test.
+- The current self-test now includes concurrent independent writes, exact-domain replacement, stale-record removal, unrelated-domain preservation, empty-domain clearing, and refuses to overwrite pre-existing test keys.
+- Browser execution of these latest changes is pending. Earlier six-check browser success does not validate these new changes.
