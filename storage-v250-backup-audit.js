@@ -10,6 +10,11 @@
  const arr=v=>Array.isArray(v);
  const obj=v=>!!v&&typeof v==="object"&&!arr(v);
  const num=v=>typeof v==="number"&&Number.isFinite(v)?v:0;
+ const canonical=value=>{
+  if(Array.isArray(value))return "["+value.map(canonical).join(",")+"]";
+  if(value&&typeof value==="object")return "{"+Object.keys(value).sort().map(k=>JSON.stringify(k)+":"+canonical(value[k])).join(",")+"}";
+  return JSON.stringify(value);
+ };
  const sum=(items,field)=>items.reduce((t,x)=>t+num(x&&x[field]),0);
  const ids=list=>list.filter(obj).map(x=>x.id).filter(x=>typeof x==="string"&&x);
  const duplicateIds=list=>{const seen=new Set(),dupes=new Set();for(const id of ids(list)){if(seen.has(id))dupes.add(id);seen.add(id)}return [...dupes]};
@@ -84,7 +89,21 @@
   const hash=await sha256(buffer);
   let parsed;
   try{parsed=JSON.parse(new TextDecoder().decode(buffer))}catch(_){throw new Error("The selected file is not valid JSON.");}
-  return auditBackup(parsed,hash,buffer.byteLength,file.name);
+  const result=auditBackup(parsed,hash,buffer.byteLength,file.name);
+  if(result.validBackupShape){
+   const sources=[
+    {source:"data",domain:"accounting",key:"main",value:parsed.data,recordCount:1,nestedCounts:{entries:count(parsed.data.entries),customers:count(parsed.data.customers),invoices:count(parsed.data.invoices),customExpenseCategories:count(parsed.data.customExpenseCategories),thirdPartyTransactions:count(parsed.data.thirdPartyTransactions)}},
+    {source:"projects",domain:"projects",key:"main",value:parsed.projects,recordCount:1,nestedCounts:{projects:count(parsed.projects.projects),workers:count(parsed.projects.workers),partners:count(parsed.projects.partners),contractors:count(parsed.projects.contractors),companies:count(parsed.projects.companies),companyJobs:count(parsed.projects.companyJobs)}},
+    {source:"contracts",domain:"contracts",key:"main",value:parsed.contracts,recordCount:1,nestedCounts:{contracts:count(parsed.contracts)}}
+   ];
+   result.summary.payloadManifest=await Promise.all(sources.map(async item=>{
+    const bytes=new TextEncoder().encode(canonical(item.value));
+    return {source:item.source,destination:{domain:item.domain,key:item.key},recordCount:item.recordCount,nestedCounts:item.nestedCounts,canonicalBytes:bytes.byteLength,canonicalSha256:await sha256(bytes.buffer),sourceValuePreserved:true};
+   }));
+   result.summary.migrationMode="dry-run-only";
+   result.summary.typedWritePrepared:false;
+  }
+  return result;
  }
  function selfTest(){
   const fixture={backupType:"complete-user-data",version:6,exportedAt:EXPECTED_EXPORT,data:{entries:[],customers:[],invoices:[],customExpenseCategories:[],thirdPartyTransactions:[]},projects:{projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[]},contracts:[]};
