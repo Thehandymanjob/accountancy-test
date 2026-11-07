@@ -690,8 +690,24 @@
       const contractsLocal=local[PREFIX+"contracts_v1"]??null;
       const projectsLocal=local[PREFIX+"projects_v1"]??null;
       const safeLocalSummary=raw=>raw===null?{present:false}:({present:true,bytes:byteLength(raw),digest:digest(raw),jsonValid:safeJson(raw).valid});
+      const localStorageKeys=Object.keys(local).sort();
+      const localStorageDomainKeys={
+        accounting:localStorageKeys.filter(k=>/accounting|invoice_sequence|sequence_cleanup/i.test(k)),
+        projects:localStorageKeys.filter(k=>/project|workspace/i.test(k)),
+        contracts:localStorageKeys.filter(k=>/contract/i.test(k)),
+        diagnostics:localStorageKeys.filter(k=>/monitor|diagnostic|audit/i.test(k)),
+        reports:localStorageKeys.filter(k=>/report/i.test(k)),
+        language:localStorageKeys.filter(k=>/language/i.test(k)),
+        recovery:localStorageKeys.filter(k=>/recovery|restore|baseline|factory_reset/i.test(k))
+      };
+      const kvRows=await readAll(KV_STORE);
+      const snapshotCounts={total:snapshots.length,present:snapshots.filter(x=>x.present).length,
+        byLegacyKey:Object.fromEntries([...new Set(snapshots.map(x=>x.legacyKey))].sort().map(key=>[key,snapshots.filter(x=>x.legacyKey===key).length]))};
       return {ok:true,readOnly:true,willWrite:false,localStorageChanged:false,indexedDBChanged:false,
+        diagnosticBuild:"all-origin-source-compare-v2",
         database:DB_NAME,schemaVersion:DB_VERSION,
+        localStorageAudit:{keyCount:localStorageKeys.length,keys:localStorageKeys,domainKeys:localStorageDomainKeys},
+        indexedDBAudit:{kvCount:kvRows.length,kvKeys:kvRows.map(x=>x.key).sort(),snapshotCounts},
         localStorageSources:{projects:safeLocalSummary(projectsLocal),contracts:safeLocalSummary(contractsLocal),
           monitorLog:safeLocalSummary(local[PREFIX+"monitor_log_v1"]??null)},
         projects:projectComparison,projectFieldComparison,
