@@ -254,6 +254,7 @@
    await put(domain,"abort-a",{before:"A"});await put(domain,"abort-b",{before:"B"});
    const abortDb=await open();
    try{
+    const stamp=new Date().toISOString();
     const abortTx=abortDb.transaction([STORE],"readwrite"),abortDone=txDone(abortTx),abortStore=abortTx.objectStore(STORE);
     abortStore.put({id:recordId(domain,"abort-a"),domain,key:"abort-a",raw:validateValue({after:"A"}),updatedAt:stamp,byteLength:1});
     abortStore.put({id:recordId(domain,"abort-b"),domain,key:"abort-b",raw:validateValue({after:"B"}),updatedAt:stamp,byteLength:1});
