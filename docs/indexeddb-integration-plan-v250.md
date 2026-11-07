@@ -499,3 +499,49 @@ The source confirms distinct persisted state beyond the three core envelopes: ap
 ### Pass 6 conclusion
 
 No LocalStorage alias adapter was found in the targeted scan, but the application still has numerous direct runtime reads/writes, prototype-level diagnostic instrumentation and LocalStorage-dependent self-checks. The foundation's LocalStorage access is migration/inventory-only, but it scans all same-origin keys and therefore needs strict scope control. This is a blocker to claiming IndexedDB-only operation. No app source, LocalStorage/browser data, IndexedDB records, backup, branch structure or production branch was changed in this pass; only this migration-plan document is being updated.
+
+
+## 16. Persisted-key inventory and auxiliary-domain mapping — pass 7
+
+### Confirmed application-owned LocalStorage keys
+
+The source audit now identifies the following explicit persisted keys. These names are code-defined keys, not a claim that each key currently exists in a particular user's browser; runtime presence and byte counts require a separate read-only browser inventory.
+
+| Key | Current content / role | Proposed IndexedDB domain | Backup / restore policy |
+|---|---|---|---|
+| tha_test226_accounting_v1 | Main Accounting envelope: entries, customers, invoices, settings and related fields | accounting/main | Required core envelope; preserve whole object and unknown fields |
+| tha_test226_projects_v1 | Complete Projects workspace, profile and images | projects/workspace | Required core envelope; preserve nested project/subproject structure and unknown fields |
+| tha_test226_contracts_v1 | Contracts array | contracts/main | Required core envelope; preserve array and all fields |
+| tha_test226_invoice_sequence_v1 | Shared invoice/income number high-water mark | accounting/sequence | Required for number continuity; update atomically with invoice/income operations |
+| tha_test226_invoice_sequence_cleanup_v1 | Legacy startup cleanup marker | migration/legacy-markers | Migration-only compatibility metadata; do not let it lower the sequence |
+| tha_test226_empty_invoice_sequence_reset_v229 | One-time stale/empty sequence reset marker | migration/legacy-markers | Migration-only; never use as authority to reset a committed counter |
+| tha_test226_isolation_test_record_cleanup_v1 | One-time marker for removal of a known test entry | migration/legacy-markers | Historical migration marker; do not run destructive cleanup against imported user data |
+| tha_test226_factory_reset_recovery_v1 | Last factory-reset recovery snapshot (core envelopes and sequence) | recovery/factory-reset-snapshots | Preserve and verify; retain according to explicit recovery retention policy |
+| tha_test226_report_archive_v1 | Saved report HTML snapshots and metadata | reports/archive | Preserve exact historical HTML and metadata; include in complete backup |
+| tha_test226_report_notifications_v1 | Report notification list and read state | reports/notifications | Preserve in complete backup and restore |
+| tha_test226_report_settings_v1 | Report period mode/configuration | reports/settings | Preserve in complete backup and restore |
+| tha_test226_report_workflow_v1 | Period completion and delayed review/reminder state | reports/workflow | Preserve in complete backup and restore |
+| tha_test226_report_email_settings_v1 | Accountant recipient name/email; email sending is not connected | preferences/report-email | Preserve as local preference; optionally exclude from portable/shareable exports only with explicit user-facing policy |
+| tha_test226_monitor_log_v1 | Local diagnostic/activity events, capped at 2,500 | diagnostics/monitor-log | Separate opt-in/defined policy; include in local recovery snapshot only if user chooses; do not silently send externally |
+| tha_test226_help_contact_drafts_v1 | Locally saved support messages with pending-local-only status | support/drafts | Preserve locally; include in full device backup only with explicit disclosure; never imply they were sent |
+| tha_test226_app_language_v1 | Selected UI language | preferences/ui | Preserve and restore as a preference |
+| tha_test226_app_language_pref_version_v1 | UI language preference migration/version marker | preferences/ui-metadata | Preserve or migrate through explicit preference schema versioning |
+
+### Additional source-derived storage behavior
+
+- The report module defines ARCH, NOTIFS, CFG and FLOW for archive, notifications, settings and workflow. It lazily reads the fifth email-settings key when the email view opens. The report module's generic load() silently substitutes defaults on malformed JSON; after migration, corrupted persisted report state must be surfaced as a protected/recovery condition rather than overwritten by defaults.
+- Report archive records contain saved HTML snapshots (node.outerHTML) and metadata. These are historical records; do not regenerate them from current Accounting data during migration or restore.
+- Support drafts are explicitly marked pending-local-only. The UI says they have not been sent. Preserve that status and do not transform them into sent support requests.
+- Monitor log writes are capped to the latest 2,500 events. The current monitor self-check uses a temporary LocalStorage key, not a durable application key; after cutover it must use repository diagnostics and must not create a new LocalStorage item.
+- Language initialization may overwrite language preference with English when the preference-version marker is not 204. This is a legacy preference migration rule, not a valid default for the new IndexedDB bootstrap. Preserve the stored value where valid and migrate the preference schema deliberately.
+- The factory reset snapshot currently covers only Accounting, Projects, Contracts and invoice sequence. It does not contain the auxiliary domains listed above. The v7 policy must distinguish a core recovery snapshot from a complete-device recovery snapshot and make the choice explicit.
+
+### Canonical domain policy for v7
+
+Use source-preserving envelopes for Accounting, Projects and Contracts. Store sequence state with Accounting in the same transaction. Keep reports, preferences, diagnostics, support drafts, recovery snapshots and migration markers in separately named auxiliary domains. The auxiliary domains must not be merged into the core envelopes or silently discarded during core restore. Define restore modes explicitly (core user-data restore versus full device-state restore) and state which auxiliary domains are preserved, replaced or excluded in each mode. Factory reset scope must be independently defined and confirmed before implementation.
+
+The confirmed key list is not yet a claim that the runtime inventory is exhaustive: computed keys, third-party scripts, browser storage outside LocalStorage, and keys present only in a particular device session remain to be checked. The existing foundation inventory can enumerate all same-origin LocalStorage keys without exposing values, but its output must be reviewed for unrelated-origin-app data before any mapping is approved.
+
+### Pass 7 conclusion
+
+The key-level inventory is now sufficiently concrete to define the initial v7 auxiliary-domain model, but not to authorize migration or reset. The next audit should trace all report/preferences/monitor/support read-write paths and confirm whether any additional keys are constructed dynamically or written by external scripts. No application code or browser data was changed; only this migration-plan document is being updated.
