@@ -416,3 +416,53 @@ No startup cleanup may infer that a missing envelope means an empty account. No 
 ### Pass 4 conclusion
 
 The report module contains 11 save call sites, of which eight ignore the returned success/failure value. The module has a repeatable initialization path, silently defaults malformed report JSON, and stores historical HTML snapshots. Startup performs multiple unchecked/redundant accounting writes, project cleanup writes and a direct project completion write. These findings are blockers for an IndexedDB-only cutover. This pass was read-only: no application code, browser data, IndexedDB records, backup or production branch was changed.
+
+
+## 14. Backup/restore, factory reset, invoice numbering and project/accounting synchronization audit — pass 5
+
+### Complete backup (backup())
+
+The current v6 exporter reads three LocalStorage payloads: Accounting (KEY / tha_test226_accounting_v1, or an in-memory db clone only when the key is absent), Projects (tha_test226_projects_v1), and Contracts (tha_test226_contracts_v1). It exports app, backupType, version 6, exportedAt, data, projects and contracts. It does not include report archive/settings/notifications/workflow/email settings, support drafts, monitoring log, language/preferences, factory-reset recovery snapshot, invoice sequence/cleanup markers or other auxiliary state. v6 is therefore the approved core user-data payload, not a complete image of every application-owned datum.
+
+Accounting, Projects and Contracts are read sequentially from separate keys, so the export does not establish a consistent cross-domain snapshot boundary. A future IndexedDB exporter must read all canonical and approved auxiliary domains from one consistent readonly transaction/snapshot and preserve unknown fields and exact source payloads.
+
+### Restore (restore(e))
+
+Restore validates the file root, app/type, Accounting arrays/settings and required Projects/Contracts sections for a complete backup. It then transforms imported data in ways incompatible with source-preserving restore:
+
+- Merges existing device companies and companyJobs into imported Projects, with existing-device items taking precedence on duplicate IDs/names. The result is device-dependent, not the supplied backup.
+- Recalculates each parent project price from subproject agreed prices, potentially replacing the source value.
+- Adds restoreReviewRequired and restoreReviewReason fields to contracts matching sample-content text.
+- Builds Accounting using defaultDB() plus imported data and merges settings with defaults, potentially adding or normalizing fields.
+
+It removes the three existing LocalStorage keys before writing replacements sequentially. Old raw strings and in-memory db are retained for best-effort rollback; basic readback is checked. This is not atomic across keys: interruption between writes can leave a partial restore before rollback executes. Projects-only prRestore() is a separate restore path with its own LocalStorage rollback and must be retired or routed through the same full restore transaction after cutover.
+
+Required IndexedDB design: validate and stage every imported envelope without mutation; do not merge, recalculate, annotate or normalize user records; replace declared domains in one readwrite transaction. Preserve unprovided domains according to an explicit versioned restore policy. Verify transaction completion/readback before publishing state or success. Failure must leave all previous domains intact through transaction rollback, not compensating writes.
+
+### Factory reset (factoryResetFinalConfirm())
+
+The reset creates a recovery object containing app version, timestamp, raw Accounting, Projects, Contracts and invoice-sequence values, stores it under tha_test226_factory_reset_recovery_v1, and verifies those fields. It then removes Accounting, Projects, Contracts, invoice sequence and invoice-sequence cleanup marker, and verifies only the three main keys plus sequence are absent.
+
+The recovery snapshot is retained, but the reset does not clear or snapshot report keys, support drafts, monitor log, language/preferences, other auxiliary keys or the empty-sequence reset marker. Existing semantics are a selective core-data reset, not a complete application-data reset. Before implementation, define whether IndexedDB reset preserves recovery history, monitoring, preferences, report archive and support drafts. Snapshot and delete the approved reset scope in one transaction; verify all declared domains. Do not silently broaden or narrow the current scope.
+
+### Invoice numbering and lifecycle
+
+The shared number is derived from the maximum of the LocalStorage high-water mark, invoice numbers and income-entry numbers. reserveRecordNumber(n) advances the high-water mark after invoice save/delete/legacy assignment, but its write is best-effort and does not return failure. highestSharedRecordNumber() and reservation operate outside the Accounting save transaction.
+
+Startup separately runs cleanupUncommittedInvoiceNumbers(), resetStaleSequenceOnlyWhenNoSavedRecords(), assignNumbersToExistingIncome(), removeOrphanedInvoiceIncome(), ensureInvoicePaymentFields(), ensureInvoiceFields() and assignNumbersToExistingInvoices(), with repeated direct Accounting writes. The first cleanup resets the remembered sequence to the maximum current invoice/income number and writes a marker. The stale-sequence helper can set it to zero when no numbered records exist and writes another marker. Orphan cleanup may remove linked income, but its subsequent persist() result is ignored. Invoice-number backfill updates invoice numbers and linked income references; it checks persist() and rolls back those in-memory fields on failure, then reserves numbers individually after the Accounting write.
+
+Invoice save and mark-paid/unpaid workflows update invoice plus linked income in one Accounting object and call persist(), rolling back in-memory state if it fails. However, sequence reservation follows the Accounting save, so it is not atomic with invoice/linked-income changes. A crash between steps can leave a saved number without a matching high-water mark; reservation can also fail silently.
+
+Required IndexedDB design: keep the sequence counter in the same transaction as invoice create/update/delete and linked income changes. Reserve and collision-check atomically, including legacy backfill. Preserve the shared invoice/income number namespace and the rule that deleted invoice numbers remain reserved unless explicitly changed. Remove startup cleanup that can lower a valid high-water mark; reconciliation must never reuse a previously committed number. Do not reset to zero merely because current arrays are empty if historical reservations exist.
+
+### Project/accounting synchronization
+
+prSyncOneProjectFinancials(project) rebuilds generated Accounting entries and third-party rows from project/subproject ledgers, removes prior generated rows for that project, then calls persist(). prSyncAllProjectFinancials() loops projects and commits each separately; earlier projects can commit before a later project fails. The helper commits Accounting only; Projects is stored separately. Project completion status is written directly to the Projects LocalStorage key by prToggleProjectCompletion() and explicitly does not create/remove/sync financial entries. Legacy startup cleanup also removes generated project-sync rows and writes Accounting separately.
+
+Required IndexedDB design: when a user action changes project ledger data and its generated Accounting representation, commit the full Projects workspace and Accounting envelope in one transaction. Rebuild affected generated rows deterministically and idempotently; preserve manual Accounting entries and unrelated project rows. Multi-project reconciliation must be one transaction or use an explicitly recoverable journal, never a partially synchronized set. Keep completion status separate from financial synchronization unless product requirements explicitly change.
+
+### Pass 5 conclusion and scope
+
+Current backup/restore is not a source-preserving round trip; factory reset covers selected core keys only; invoice numbering is not atomic with invoice data; and multi-project synchronization can partially commit. These are implementation blockers. The required design is a source-preserving, multi-domain IndexedDB transaction model with explicit auxiliary-data and reset policies.
+
+This pass was read-only against application source and browser storage. Only this migration-plan document is being updated. No app code, LocalStorage data, IndexedDB records, backup files, production branch or branch structure was changed.
