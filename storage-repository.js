@@ -8,7 +8,7 @@
  const DB_NAME="the_handyman_accountancy_v250_idb";
  const DB_VERSION=1;
  const STORE="records";
- const SELF_TEST_BUILD="repo-selftest-20261107-02";
+ const SELF_TEST_BUILD="repo-selftest-20261107-03";
  const EXPECTED_CHECKS=["ready","roundTrip","atomicBatch","atomicMultiDomainMutation","abortRollback","concurrentWrites","concurrentCounterReservation","snapshotRestore","restoreRemovesStaleRecords","restorePreservesOtherDomains","emptySnapshotRestore","cleanup"];
  const META="metadata";
  const SCHEMA_KEY="schema";
@@ -79,6 +79,21 @@
    if(!row)return null;
    const value=JSON.parse(row.raw);
    return clone(value);
+  }finally{db.close();}
+ }
+ async function readMany(descriptors){
+  if(!Array.isArray(descriptors)||descriptors.length===0)throw new Error("A non-empty descriptors array is required.");
+  const prepared=descriptors.map(item=>{
+   if(!item||!validName(item.domain)||!validKey(item.key))throw new Error("Invalid read descriptor.");
+   return {domain:item.domain,key:item.key,id:recordId(item.domain,item.key)};
+  });
+  const ids=new Set();for(const item of prepared){if(ids.has(item.id))throw new Error("Duplicate key in read: "+item.id);ids.add(item.id);}
+  const db=await open();
+  try{
+   const tx=db.transaction([STORE],"readonly"),done=txDone(tx),store=tx.objectStore(STORE);
+   const requests=prepared.map(item=>requestResult(store.get(item.id)));
+   const rows=await Promise.all(requests);await done;
+   return {ok:true,records:rows.map((row,i)=>({domain:prepared[i].domain,key:prepared[i].key,value:row?clone(JSON.parse(row.raw)):null}))};
   }finally{db.close();}
  }
  async function put(domain,key,value){
@@ -167,6 +182,50 @@
    return {ok:true,updated:prepared.length,values:clone(values),updatedAt:stamp};
   }finally{db.close();}
  }
+ async function mutateMany(descriptors,updater){
+  if(!Array.isArray(descriptors)||descriptors.length===0||typeof updater!=="function")
+   throw new Error("A non-empty descriptors array and synchronous updater are required.");
+  const prepared=descriptors.map(item=>{
+   if(!item||!validName(item.domain)||!validKey(item.key))
+    throw new Error("Invalid multi-record mutation descriptor.");
+   return {domain:item.domain,key:item.key,id:recordId(item.domain,item.key),initialValue:item.initialValue};
+  });
+  const ids=new Set();for(const item of prepared){if(ids.has(item.id))throw new Error("Duplicate key in multi-record mutation: "+item.id);ids.add(item.id);}
+  const db=await open(),stamp=new Date().toISOString();
+  try{
+   const tx=db.transaction([STORE],"readwrite"),done=txDone(tx),store=tx.objectStore(STORE);
+   let remaining=prepared.length,callbackError=null,committedValues=null;
+   const fail=error=>{if(callbackError)return;callbackError=error;try{tx.abort()}catch(_){}};
+   prepared.forEach((item,index)=>{
+    const req=store.get(item.id);
+    req.onsuccess=()=>{
+     if(callbackError)return;
+     try{
+      item.current=req.result?clone(JSON.parse(req.result.raw)):clone(item.initialValue===undefined?null:item.initialValue);
+      remaining--;
+      if(remaining!==0)return;
+      const current=prepared.map(x=>({domain:x.domain,key:x.key,value:clone(x.current)}));
+      const next=updater(current);
+      if(next&&typeof next.then==="function")throw new Error("Multi-record updater must be synchronous; Promise results are not supported.");
+      if(!Array.isArray(next)||next.length!==prepared.length)throw new Error("Multi-record updater must return one replacement value per descriptor, in descriptor order.");
+      const encoded=next.map((value,i)=>({item:prepared[i],raw:validateValue(value)}));
+      committedValues=encoded.map(x=>JSON.parse(x.raw));
+      for(const entry of encoded)store.put({id:entry.item.id,domain:entry.item.domain,key:entry.item.key,raw:entry.raw,updatedAt:stamp,byteLength:new Blob([entry.raw]).size});
+     }catch(error){fail(error)}
+    };
+    req.onerror=()=>fail(req.error||new Error("Multi-record read failed for "+item.id));
+   });
+   try{await done}catch(error){throw callbackError||error;}
+   if(!committedValues)throw new Error("Multi-record transaction completed without executing its updater.");
+   const verify=db.transaction([STORE],"readonly"),verifyDone=txDone(verify),read=verify.objectStore(STORE);
+   const rows=await Promise.all(prepared.map(item=>requestResult(read.get(item.id))));
+   await verifyDone;
+   for(let i=0;i<prepared.length;i++){
+    if(!rows[i]||rows[i].raw!==validateValue(committedValues[i]))throw new Error("Multi-record read-back verification failed for "+prepared[i].id);
+   }
+   return {ok:true,updated:prepared.length,records:prepared.map((item,i)=>({domain:item.domain,key:item.key,value:clone(committedValues[i])})),updatedAt:stamp};
+  }finally{db.close();}
+ }
  async function reserveCounter(domain,key,minimum){
   const floor=Number(minimum)||0;
   const result=await mutate([{domain,key,initialValue:0,update:current=>Math.max(Number(current)||0,floor)+1}]);
@@ -232,7 +291,7 @@
  async function selfTest(){
   const runToken=Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,10);
   const domain="test_"+runToken,otherDomain="other_"+runToken,key="roundtrip";
-  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"concurrent-a"},{domain,key:"concurrent-b"},{domain,key:"stale-record"},{domain,key:"domain-accounting"},{domain,key:"domain-projects"},{domain,key:"abort-a"},{domain,key:"abort-b"},{domain,key:"invoice-counter"},{domain:otherDomain,key:"keep"},{domain:otherDomain,key:"domain-contracts"}];
+  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"concurrent-a"},{domain,key:"concurrent-b"},{domain,key:"stale-record"},{domain,key:"domain-accounting"},{domain,key:"domain-projects"},{domain,key:"abort-a"},{domain,key:"abort-b"},{domain,key:"invoice-counter"},{domain,key:"invoice-ledger"},{domain:otherDomain,key:"keep"},{domain:otherDomain,key:"domain-contracts"}];
   for(const item of reserved){
    if(await get(item.domain,item.key)!==null)
     throw new Error("Generated self-test namespace is unexpectedly occupied ("+recordId(item.domain,item.key)+"); refusing to overwrite existing data.");
@@ -249,16 +308,20 @@
    const result=await transact(batch);
    checks.atomicBatch=result.ok&&canonical(await get(domain,"batch-a"))===canonical({v:1})&&canonical(await get(domain,"batch-b"))===canonical({v:2});
    if(!checks.atomicBatch)throw new Error("Atomic batch test failed.");
-   const multi=await mutate([
-    {domain,key:"domain-accounting",initialValue:{entries:[]},update:v=>({...v,entries:[...(v.entries||[]),{id:"e1",amount:10}]})},
-    {domain,key:"domain-projects",initialValue:{projects:[]},update:v=>({...v,projects:[...(v.projects||[]),{id:"p1"}]})},
-    {domain:otherDomain,key:"domain-contracts",initialValue:[],update:v=>[...v,{id:"c1"}]}
+   const descriptors=[{domain,key:"domain-accounting",initialValue:{entries:[]}},{domain,key:"domain-projects",initialValue:{projects:[]}},{domain:otherDomain,key:"domain-contracts",initialValue:[]}];
+   const multi=await mutateMany(descriptors,current=>[
+    {...current[0].value,entries:[...(current[0].value.entries||[]),{id:"e1",amount:10}]},
+    {...current[1].value,projects:[...(current[1].value.projects||[]),{id:"p1"}]},
+    [...current[2].value,{id:"c1"}]
    ]);
-   checks.atomicMultiDomainMutation=multi.ok&&canonical(await get(domain,"domain-accounting"))===canonical({entries:[{id:"e1",amount:10}]})&&
-    canonical(await get(domain,"domain-projects"))===canonical({projects:[{id:"p1"}]})&&
-    canonical(await get(otherDomain,"domain-contracts"))===canonical([{id:"c1"}]);
+   const consistent=await readMany(descriptors);
+   checks.atomicMultiDomainMutation=multi.ok&&consistent.ok&&canonical(consistent.records[0].value)===canonical({entries:[{id:"e1",amount:10}]})&&
+    canonical(consistent.records[1].value)===canonical({projects:[{id:"p1"}]})&&canonical(consistent.records[2].value)===canonical([{id:"c1"}]);
    if(!checks.atomicMultiDomainMutation)throw new Error("Atomic multi-domain mutation failed.");
    await put(domain,"abort-a",{before:"A"});await put(domain,"abort-b",{before:"B"});
+   let mutationAborted=false;
+   try{await mutateMany([{domain,key:"abort-a"},{domain,key:"abort-b"}],()=>{throw new Error("Injected multi-record validation failure.");})}
+   catch(error){mutationAborted=error.message==="Injected multi-record validation failure.";}
    const abortDb=await open();
    try{
     const stamp=new Date().toISOString();
@@ -270,7 +333,7 @@
      if(error&&error.message==="Deliberate abort unexpectedly committed.")throw error;
     }
    }finally{abortDb.close();}
-   checks.abortRollback=canonical(await get(domain,"abort-a"))===canonical({before:"A"})&&canonical(await get(domain,"abort-b"))===canonical({before:"B"});
+   checks.abortRollback=mutationAborted&&canonical(await get(domain,"abort-a"))===canonical({before:"A"})&&canonical(await get(domain,"abort-b"))===canonical({before:"B"});
    if(!checks.abortRollback)throw new Error("Aborted transaction changed stored records.");
    await Promise.all([
     put(domain,"concurrent-a",{writer:"A",value:1}),
@@ -279,12 +342,20 @@
    checks.concurrentWrites=canonical(await get(domain,"concurrent-a"))===canonical({writer:"A",value:1})&&
     canonical(await get(domain,"concurrent-b"))===canonical({writer:"B",value:2});
    if(!checks.concurrentWrites)throw new Error("Concurrent independent writes test failed.");
-   const counters=await Promise.all(Array.from({length:8},()=>reserveCounter(domain,"invoice-counter",0)));
-   const counterValues=counters.map(x=>x.value).sort((a,b)=>a-b);
-   const finalCounter=await get(domain,"invoice-counter");
-   checks.concurrentCounterReservation=counterValues.length===8&&new Set(counterValues).size===8&&counterValues.every((v,i)=>v===i+1)&&finalCounter===8;
-   if(!checks.concurrentCounterReservation)throw new Error("Concurrent counter reservation produced duplicate, non-monotonic, or incorrectly persisted values.");
-   await remove(domain,"invoice-counter");
+   const reservations=await Promise.all(Array.from({length:8},()=>mutateMany([
+    {domain,key:"invoice-counter",initialValue:0},
+    {domain,key:"invoice-ledger",initialValue:{invoices:[],entries:[]}}
+   ],current=>{
+    const sequence=Number(current[0].value)||0,ledger=current[1].value;
+    const used=[...(ledger.invoices||[]),...(ledger.entries||[])].map(x=>Number(x.number)||0);
+    const number=Math.max(sequence,...used)+1;
+    return [number,{...ledger,invoices:[...(ledger.invoices||[]),{id:"test-invoice-"+number,number}]}];
+   })));
+   const counterValues=reservations.map(x=>x.records[0].value).sort((a,b)=>a-b);
+   const finalCounter=await get(domain,"invoice-counter"),finalLedger=await get(domain,"invoice-ledger");
+   checks.concurrentCounterReservation=counterValues.length===8&&new Set(counterValues).size===8&&counterValues.every((v,i)=>v===i+1)&&finalCounter===8&&finalLedger.invoices.length===8&&new Set(finalLedger.invoices.map(x=>x.number)).size===8;
+   if(!checks.concurrentCounterReservation)throw new Error("Concurrent multi-record invoice reservation produced duplicate, non-monotonic, or incorrectly persisted numbers.");
+   await remove(domain,"invoice-counter");await remove(domain,"invoice-ledger");
    await remove(domain,"concurrent-a");await remove(domain,"concurrent-b");
    await put(otherDomain,"keep",{untouched:true});
    const snap=await snapshot([domain]);
@@ -303,7 +374,7 @@
    await remove(domain,"domain-accounting");await remove(domain,"domain-projects");await remove(otherDomain,"domain-contracts");
    await remove(domain,"abort-a");await remove(domain,"abort-b");
    await remove(otherDomain,"keep");
-   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get(domain,"domain-accounting"))===null&&(await get(domain,"domain-projects"))===null&&(await get(domain,"abort-a"))===null&&(await get(domain,"abort-b"))===null&&(await get(domain,"invoice-counter"))===null&&(await get(otherDomain,"keep"))===null&&(await get(otherDomain,"domain-contracts"))===null;
+   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get(domain,"concurrent-a"))===null&&(await get(domain,"concurrent-b"))===null&&(await get(domain,"stale-record"))===null&&(await get(domain,"domain-accounting"))===null&&(await get(domain,"domain-projects"))===null&&(await get(domain,"abort-a"))===null&&(await get(domain,"abort-b"))===null&&(await get(domain,"invoice-counter"))===null&&(await get(domain,"invoice-ledger"))===null&&(await get(otherDomain,"keep"))===null&&(await get(otherDomain,"domain-contracts"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
    const missingChecks=EXPECTED_CHECKS.filter(name=>checks[name]!==true);
    return {ok:missingChecks.length===0,database:DB_NAME,schemaVersion:DB_VERSION,selfTestBuild:SELF_TEST_BUILD,expectedChecks:EXPECTED_CHECKS.slice(),checks,missingChecks,localStorageAccessed:false,appCutover:false};
@@ -312,5 +383,5 @@
    return {ok:false,database:DB_NAME,schemaVersion:DB_VERSION,selfTestBuild:SELF_TEST_BUILD,expectedChecks:EXPECTED_CHECKS.slice(),checks,missingChecks:EXPECTED_CHECKS.filter(name=>checks[name]!==true),error:String(error&&error.message||error),cleanupAttempted:false,appCutover:false};
   }
  }
- root.HandymanStorageRepository=Object.freeze({databaseName:DB_NAME,schemaVersion:DB_VERSION,selfTestBuild:SELF_TEST_BUILD,expectedChecks:EXPECTED_CHECKS.slice(),ready,get,put,remove,transact,mutate,reserveCounter,snapshot,restore,health,selfTest});
+ root.HandymanStorageRepository=Object.freeze({databaseName:DB_NAME,schemaVersion:DB_VERSION,selfTestBuild:SELF_TEST_BUILD,expectedChecks:EXPECTED_CHECKS.slice(),ready,get,readMany,put,remove,transact,mutate,mutateMany,reserveCounter,snapshot,restore,health,selfTest});
 })(window);
