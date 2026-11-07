@@ -89,6 +89,23 @@
    const lang=parse(LS.language),langV=parse(LS.languageVersion),kv=await readStore("kv");
    report.domains.language={localStoragePresent:lang.present,localStorageValue:lang.value,localStoragePrefVersion:langV.value,
     indexedDBKvCount:kv.length,status:"no approved typed mapping yet"};
+   // Read-only financial ledger mapping audit. It inspects nested project and company-job records
+   // against typed IDB stores without attempting to infer or create links.
+   if(p.present&&!p.plainString&&p.value&&Array.isArray(p.value.projects)){
+    const projects=p.value.projects,ledgers=[];
+    for(const project of projects){ledgers.push({project,ledger:project,subprojectId:"",subprojectName:"Main project"});for(const sub of (Array.isArray(project.subprojects)?project.subprojects:[]))ledgers.push({project,ledger:sub,subprojectId:String(sub.id||""),subprojectName:String(sub.name||"Sub-project")});}
+    const categories=["income","expenses","wages","tools","food","contractors","materials"];
+    const byCategory={};for(const category of categories){const rows=[];for(const item of ledgers){for(const row of (Array.isArray(item.ledger[category])?item.ledger[category]:[])){rows.push({id:String(row&&row.id!==undefined?row.id:""),projectId:String(item.project.id||""),subprojectId:item.subprojectId,amount:Number(row&&row.amount)||0,date:String(row&&row.date||""),paidBy:String(row&&row.paidBy||""),settled:String(row&&row.settled||"")});}}const ids=rows.map(x=>x.id).filter(Boolean);byCategory[category]={count:rows.length,withId:ids.length,missingId:rows.length-ids.length,duplicateIds:ids.length-new Set(ids).size,amount:Math.round(rows.reduce((n,x)=>n+x.amount,0)*100)/100,dated:rows.filter(x=>x.date).length};}
+    const [receiptStore,expenseStore,entryStore,thirdStore]=await Promise.all([readStore("projectReceipts"),readStore("projectExpenses"),readStore("accountingEntries"),readStore("thirdPartyTransactions")]);
+    const syncedEntries=entryStore.filter(x=>x&&x.projectSync===true),syncedThird=thirdStore.filter(x=>x&&x.projectSync===true);
+    const jobs=Array.isArray(p.value.companyJobs)?p.value.companyJobs:[];
+    const jobAudit=jobs.map(job=>{const packages=Array.isArray(job.packages)?job.packages:[],payments=Array.isArray(job.payments)?job.payments:[],costs=packages.flatMap(pkg=>(Array.isArray(pkg.expenses)?pkg.expenses:[]).map(e=>({amount:Number(e&&e.amount)||0,id:String(e&&e.id||"")})));return {jobId:String(job.id||""),packageCount:packages.length,paymentCount:payments.length,packageExpenseCount:costs.length,packageExpenseAmount:Math.round(costs.reduce((n,x)=>n+x.amount,0)*100)/100,paymentsGross:Math.round(payments.reduce((n,x)=>n+(Number(x.gross)||0),0)*100)/100,paymentsDeduction:Math.round(payments.reduce((n,x)=>n+(Number(x.deduction)||0),0)*100)/100,paymentsNet:Math.round(payments.reduce((n,x)=>n+(Number(x.net)||0),0)*100)/100,linkedAccountingPayments:payments.filter(x=>!!x.accountingEntryId).length,attachments:packages.filter(x=>!!x.file).length+payments.filter(x=>!!x.file).length};});
+    report.domains.projectFinancialMapping={sourceProjects:projects.length,sourceLedgers:ledgers.length,sourceRecordsByCategory:byCategory,
+     indexedDB:{projectReceipts:receiptStore.length,projectExpenses:expenseStore.length,accountingEntries:entryStore.length,projectSyncedAccountingEntries:syncedEntries.length,thirdPartyTransactions:thirdStore.length,projectSyncedThirdPartyTransactions:syncedThird.length},
+     existingProjectSyncLinks:syncedEntries.length,sourceProjectIds:projects.map(x=>String(x.id||"")),typedReceiptIds:receiptStore.map(x=>String(x.id||"")).slice(0,30),typedExpenseIds:expenseStore.map(x=>String(x.id||"")).slice(0,30),
+     status:"counts and IDs only; no source-to-target equivalence inferred"};
+    report.domains.companyJobFinancialMapping={jobCount:jobs.length,jobs:jobAudit,totals:{packages:jobAudit.reduce((n,x)=>n+x.packageCount,0),payments:jobAudit.reduce((n,x)=>n+x.paymentCount,0),packageExpenses:jobAudit.reduce((n,x)=>n+x.packageExpenseCount,0),paymentNet:Math.round(jobAudit.reduce((n,x)=>n+x.paymentsNet,0)*100)/100},status:"nested Company Job financial data remains inside companyJobs records; no independent typed payment store is currently mapped"};
+   }
    report.unmappedSources=["report archive/settings/workflow/email settings","support drafts","monitor log","language and preference version","factory-reset recovery snapshot","invoice cleanup flags","legacy/recovery namespace keys","contracts provenance"];
    report.summary={comparedDomains:Object.keys(report.domains).length,
     domainsWithMissingRecords:Object.values(report.domains).filter(x=>(x.missingFromIndexedDB||0)>0).length,
