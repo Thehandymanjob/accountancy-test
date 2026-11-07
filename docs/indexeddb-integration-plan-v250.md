@@ -692,3 +692,39 @@ Suggested coordinator phases: `booting` → `repository-ready` → `core-loaded`
 ### Pass 10 conclusion
 
 The bootstrap and transaction contract is now defined. A critical repository API gap has been made explicit: the existing per-record `mutate` and `reserveCounter` cannot atomically validate and update invoice numbering against the Accounting envelope without a new multi-record transaction callback. The correct next step is to implement and independently test the repository transaction extensions in the existing isolated test branch, without wiring them into the app. No application source, browser data, LocalStorage, user backup, existing database contents or production branch was changed in this pass; only this design document was updated.
+
+
+## 20. Repository transaction extensions — pass 11
+
+### Implemented in the isolated repository module
+
+The existing `storage-repository.js` has been extended without wiring it into `index.html`:
+
+- `readMany(descriptors)` validates a non-empty list of unique `{domain,key}` descriptors, issues all reads in one readonly transaction on `records`, waits for transaction completion, and returns cloned `{domain,key,value}` records in descriptor order. Missing records are represented as `value: null`.
+- `mutateMany(descriptors, updater)` validates unique descriptors and opens one read-write transaction. It reads all requested records in that transaction, supplies cloned current values to one synchronous updater in descriptor order, requires exactly one replacement value per descriptor, validates serializability before scheduling writes, then commits all writes together. An updater exception, Promise return, invalid return shape or failed request aborts the transaction. After commit it performs a separate readonly read-back and compares exact serialized values.
+- The updater receives an ordered array of `{domain,key,value}`. Missing values use each descriptor's `initialValue`, or `null` when omitted. The updater must be deterministic and side-effect-free; no DOM, network, timer, logging dependency or `await` is permitted inside it.
+- The repository API exports both new methods. Build identifiers were advanced to `repo-selftest-20261107-03`; the manual lab was advanced to `lab-selftest-20261107-03`, with its expected build and cache-buster aligned.
+
+### Self-test coverage changes
+
+The existing 12-check report contract was retained so the lab's report shape remains stable. Existing checks were strengthened:
+
+- `atomicMultiDomainMutation` now exercises `mutateMany` across Accounting, Projects and Contracts-shaped synthetic records and verifies a consistent `readMany` result.
+- `abortRollback` now injects an exception in the multi-record updater and verifies that neither pre-existing record changed; the existing deliberate native IndexedDB abort check remains.
+- `concurrentCounterReservation` now runs eight competing multi-record invoice reservations. Each transaction reads the sequence and invoice-ledger records together, computes a number above the current sequence and all existing invoice/income numbers, then writes the incremented sequence and invoice ledger atomically. The test checks unique monotonic values 1–8 and the final ledger contents.
+- The unique synthetic namespace preflight now includes `invoice-ledger`; cleanup verification includes this record.
+
+### Verification status and limits
+
+- GitHub read-back confirms the repository source and lab page contain the new APIs and matching build identifiers.
+- The repository JavaScript passed a syntax compilation check.
+- Browser execution of the updated lab has **not yet been confirmed** in this pass. The self-test is not considered passed until the lab returns `ok: true`, all 12 checks true, no missing/unexpected checks, `buildMatches: true`, `reportComplete: true`, and `localStorageAccessed: false`.
+- These tests validate the generic transaction primitive using synthetic records. They do not yet prove the real invoice UI, payment flow, project sync, restore, factory reset or reports.
+
+### Safety boundary
+
+Only `storage-repository.js`, `storage-repository-lab.html` and this design document were changed on the existing `release239` branch. `index.html` and all application modules remain unchanged. No LocalStorage was read or written by these code changes; no backup was imported; no IndexedDB records were created, migrated, restored or deleted by the repository source edit itself. The production `main` branch and v247 baseline remain untouched.
+
+### Pass 11 conclusion
+
+The transaction-scoped multi-record API is implemented and statically checked. It is ready for isolated browser self-test, but is not yet approved for app integration. Browser test evidence is the remaining gate for this pass.
