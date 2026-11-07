@@ -136,11 +136,36 @@
   }finally{db.close();}
  }
  async function restore(snapshotValue){
-  if(!snapshotValue||snapshotValue.format!=="tha-idb-repository-snapshot-v1"||!Array.isArray(snapshotValue.records))
+  if(!snapshotValue||snapshotValue.format!=="tha-idb-repository-snapshot-v1"||
+     !Array.isArray(snapshotValue.domains)||!Array.isArray(snapshotValue.records))
    throw new Error("Unsupported repository snapshot.");
-  const writes=snapshotValue.records.map(row=>({domain:row.domain,key:row.key,value:row.value}));
-  if(writes.length===0)return {ok:true,written:0,updatedAt:new Date().toISOString(),emptySnapshot:true};
-  return transact(writes);
+  const domains=snapshotValue.domains;
+  if(domains.some(x=>!validName(x))||new Set(domains).size!==domains.length)
+   throw new Error("Snapshot contains invalid or duplicate domains.");
+  const writes=snapshotValue.records.map(row=>{
+   if(!row||!domains.includes(row.domain)||!validKey(row.key))
+    throw new Error("Snapshot record is outside its declared domains or has an invalid key.");
+   return {id:recordId(row.domain,row.key),domain:row.domain,key:row.key,raw:validateValue(row.value)};
+  });
+  const ids=new Set();
+  for(const row of writes){if(ids.has(row.id))throw new Error("Duplicate key in snapshot: "+row.id);ids.add(row.id);}
+  const db=await open();
+  try{
+   const tx=db.transaction([STORE],"readwrite"),done=txDone(tx),store=tx.objectStore(STORE);
+   const existing=await requestResult(store.getAll());
+   for(const row of existing){if(domains.includes(row.domain))store.delete(row.id);}
+   const stamp=new Date().toISOString();
+   for(const row of writes)store.put({...row,updatedAt:stamp,byteLength:new Blob([row.raw]).size});
+   await done;
+   const verify=db.transaction([STORE],"readonly"),verifyDone=txDone(verify);
+   const saved=await requestResult(verify.objectStore(STORE).getAll());
+   await verifyDone;
+   const actual=saved.filter(row=>domains.includes(row.domain)).sort((a,b)=>a.id.localeCompare(b.id));
+   const expected=writes.slice().sort((a,b)=>a.id.localeCompare(b.id));
+   if(actual.length!==expected.length||actual.some((row,i)=>row.id!==expected[i].id||row.raw!==expected[i].raw))
+    throw new Error("Snapshot restore verification failed; restored domain contents do not match snapshot.");
+   return {ok:true,written:writes.length,domains:domains.slice(),updatedAt:stamp,emptySnapshot:writes.length===0};
+  }finally{db.close();}
  }
  async function health(){
   const db=await open();
@@ -160,7 +185,7 @@
   const domain="repository_test",key="roundtrip",existing=await get(domain,key);
   if(existing!==null)throw new Error("Self-test key is occupied; refusing to overwrite it.");
   const fixture={zero:0,blank:"",nil:null,flag:false,nested:[{id:"a",unknown:{keep:true}},[1,null,"x"]]};
-  const checks={ready:false,roundTrip:false,atomicBatch:false,snapshotRestore:false,emptySnapshotRestore:false,cleanup:false};
+  const checks={ready:false,roundTrip:false,atomicBatch:false,snapshotRestore:false,restoreRemovesStaleRecords:false,restorePreservesOtherDomains:false,emptySnapshotRestore:false,cleanup:false};
   try{
    await ready();checks.ready=true;
    await put(domain,key,fixture);
@@ -171,15 +196,22 @@
    const result=await transact(batch);
    checks.atomicBatch=result.ok&&canonical(await get(domain,"batch-a"))===canonical({v:1})&&canonical(await get(domain,"batch-b"))===canonical({v:2});
    if(!checks.atomicBatch)throw new Error("Atomic batch test failed.");
+   await put("unrelated_test","keep",{untouched:true});
+   await put(domain,"stale-record",{mustBeRemoved:true});
    const snap=await snapshot([domain]);
    const restoreResult=await restore(snap);
    checks.snapshotRestore=restoreResult.ok&&canonical(await get(domain,key))===canonical(fixture);
    if(!checks.snapshotRestore)throw new Error("Snapshot restore test failed.");
-   const emptyRestore=await restore({format:"tha-idb-repository-snapshot-v1",records:[]});
-   checks.emptySnapshotRestore=emptyRestore.ok&&emptyRestore.written===0&&emptyRestore.emptySnapshot===true;
-   if(!checks.emptySnapshotRestore)throw new Error("Empty snapshot restore test failed.");
+   checks.restoreRemovesStaleRecords=(await get(domain,"stale-record"))===null;
+   if(!checks.restoreRemovesStaleRecords)throw new Error("Restore did not remove stale records in declared domain.");
+   checks.restorePreservesOtherDomains=canonical(await get("unrelated_test","keep"))===canonical({untouched:true});
+   if(!checks.restorePreservesOtherDomains)throw new Error("Restore modified a record outside declared domains.");
+   const emptyRestore=await restore({format:"tha-idb-repository-snapshot-v1",database:DB_NAME,domains:[domain],records:[]});
+   checks.emptySnapshotRestore=emptyRestore.ok&&emptyRestore.written===0&&emptyRestore.emptySnapshot===true&&(await get(domain,key))===null;
+   if(!checks.emptySnapshotRestore)throw new Error("Empty snapshot restore did not clear its declared domain.");
    await remove(domain,key);await remove(domain,"batch-a");await remove(domain,"batch-b");
-   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null;
+   await remove("unrelated_test","keep");
+   checks.cleanup=(await get(domain,key))===null&&(await get(domain,"batch-a"))===null&&(await get(domain,"batch-b"))===null&&(await get("unrelated_test","keep"))===null;
    if(!checks.cleanup)throw new Error("Self-test cleanup failed.");
    return {ok:true,database:DB_NAME,schemaVersion:DB_VERSION,checks,localStorageAccessed:false,appCutover:false};
   }catch(error){
