@@ -94,7 +94,6 @@
    throw new Error("A destination record appeared after preparation. No typed-domain write was attempted.");
   let writeStarted=false;
   try{
-   writeStarted=true;
    const write=await repo.mutateMany(TARGETS.map(x=>({domain:x.domain,key:x.key,initialValue:null})),current=>{
     if(current.some(x=>x.value!==null))
      throw new Error("A target record appeared immediately before commit; refusing to overwrite.");
