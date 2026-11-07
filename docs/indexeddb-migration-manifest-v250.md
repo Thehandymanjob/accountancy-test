@@ -273,3 +273,62 @@ The approved backup v6 therefore maps as follows for the first safe import:
 - Keep a separately hashed immutable copy of the complete backup JSON.
 
 The above is a source-preserving import design. It does not yet establish that the live app has been switched to IndexedDB; that requires replacing every persistence call site and testing all user workflows.
+
+
+## 12. Full v250 index.html LocalStorage call-site inventory
+
+A source scan of the complete v250 `index.html` (647,160 characters; blob SHA `f6bdb6a31fd9e424ca0464b5fb725c4ad0fb2315`) found **93 direct LocalStorage method call expressions** across the application source. These are call expressions, not 93 separate data domains; several are repeated within transactional restore/reset/rollback routines.
+
+The file contains 17 distinct literal `tha_test226_*` storage keys:
+
+1. `tha_test226_accounting_v1`
+2. `tha_test226_projects_v1`
+3. `tha_test226_contracts_v1`
+4. `tha_test226_monitor_log_v1`
+5. `tha_test226_invoice_sequence_v1`
+6. `tha_test226_invoice_sequence_cleanup_v1`
+7. `tha_test226_empty_invoice_sequence_reset_v229`
+8. `tha_test226_app_language_v1`
+9. `tha_test226_app_language_pref_version_v1`
+10. `tha_test226_report_archive_v1`
+11. `tha_test226_report_notifications_v1`
+12. `tha_test226_report_settings_v1`
+13. `tha_test226_report_workflow_v1`
+14. `tha_test226_report_email_settings_v1`
+15. `tha_test226_help_contact_drafts_v1`
+16. `tha_test226_factory_reset_recovery_v1`
+17. `tha_test226_isolation_test_record_cleanup_v1`
+
+### Call-site groups confirmed in source
+
+| Area / function group | Observed responsibility | Migration requirement |
+|---|---|---|
+| `loadDB`, `persist` | Accounting payload read/write and read-back check | Replace with awaited repository calls; preserve existing integrity lock and save-failure UI. |
+| `updateMainExpenseFields` | Reads project contractor directory while creating accounting expense | Read from canonical project workspace repository. |
+| `reportArchiveLanguage`, `currentAppLang`, language initialization/save | Reads/writes language and preference version | Persist in app settings; retain exact fallback and language validation behavior. |
+| `has`, `syncLauncherBrand`, `ctProfile` | Reads project workspace/profile and logo | Read canonical project workspace; preserve image bytes and fallback behavior. |
+| `backup` | Reads accounting, project and contract payloads to build backup | Export one consistent IndexedDB snapshot, not a mixture of live in-memory and stale browser storage. |
+| `restore`, `safeWrite`, `mergeById` | Multi-domain restore, rollback and merge operations | Implement one atomic multi-store transaction or a staged import with verified rollback; preserve current duplicate/merge semantics only after explicit test coverage. |
+| `factoryResetFinalConfirm` | Saves recovery snapshot and removes/reset multiple data keys | Must become an explicit transaction with a recoverable pre-reset snapshot; no LocalStorage deletion after cutover. |
+| `removeKnownIsolationTestRecord` | Removes a known test-only record marker | Keep strictly test-only; do not let it touch business records. |
+| `cleanupUncommittedInvoiceNumbers`, `resetStaleSequenceOnlyWhenNoSavedRecords`, `highestSharedRecordNumber`, `reserveRecordNumber` | Invoice number allocation, cleanup and consistency | Serialize number reservation to avoid duplicates across tabs; preserve issued numbers and cleanup audit semantics. |
+| `updateInvoiceStatusDiagnostic`, `removeOrphanedInvoiceIncome` | Invoice/accounting cross-record consistency | Move into coordinated repository operations; validate both sides before commit. |
+| `prLoad`, `prPersist`, `prSaveProject`, `prToggleProjectCompletion`, `prRestore` | Projects workspace load/save, completion status and restore | Canonical whole-workspace repository; await commit before showing success or refreshing dependent views. |
+| `ctRead`, `ctWrite` | Contract list load/save with rollback | Repository adapter must retain validation, exact previous-value rollback and success flag semantics. |
+| Help-contact draft handlers | Saves local-only support drafts | Preserve draft state in IndexedDB; continue to label as not sent. |
+| `monitorReadLog`, `monitorWriteLog`, `monitorContext`, `exportDiagnosticReport`, `runMonitorSelfCheck` | Diagnostic event log, storage status and exported diagnostics | Store monitor data separately from business ledger; diagnostics must not make core saves fail. Self-check must test IndexedDB, not LocalStorage. |
+| Wrapped `persist` monitor hook | Compares before/after accounting snapshots for activity logging | Replace snapshot reads with repository snapshots; do not report save success before transaction commit. |
+| Report helper `load` / `save` | Generic report archive/settings/workflow/email/notification persistence | Identify each caller and key; route all through typed report/app-settings repository methods. |
+
+### Important cross-domain behavior
+
+- Invoice sequence logic is not merely a preference: it coordinates invoice numbering and accounting entries. Number reservation must be concurrency-safe and transactionally consistent.
+- Invoice status changes and orphaned invoice-income cleanup touch both invoice and accounting records; separate independent writes risk partial updates.
+- Backup and restore cover accounting, projects and contracts as a group. A cutover cannot be considered complete if only ordinary save/load paths are migrated but backup/restore remains LocalStorage-based.
+- Factory reset has a recovery snapshot dependency. The reset and its recovery point must be designed together.
+- Monitor logging is used by storage failure handling itself. Avoid recursive failure loops: monitor failure must never conceal or overwrite the original business-data save error.
+- The app has runtime in-memory state (`db`, `prDB`) as well as persistent state. Repository calls must be asynchronous and UI success must wait for transaction completion/read-back, not merely update in-memory objects.
+
+### Remaining audit boundary
+
+This scan covers the monolithic `index.html`. Before claiming the whole application is free of direct LocalStorage access, inspect every separately loaded JavaScript file and any inline scripts added by service worker/update infrastructure. Also search for bracket notation, aliases such as `const storage = localStorage`, and indirect helper wrappers. The current finding is **93 direct method-call expressions in index.html**, not a proof that the complete deployed origin has no other access.
