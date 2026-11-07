@@ -119,3 +119,26 @@ The adapter uses JSON serialization. This preserves JSON values such as null, fa
 ## 7. Safety boundary
 
 This review did not change `index.html`, `storage-repository.js`, the lab, LocalStorage, any browser database, the approved backup, or production. It did not import data or perform cutover. Continue only on existing `release239`; do not create a branch.
+
+## 8. Isolated transaction primitive implementation — browser test pending
+
+Implemented on the existing `release239` branch:
+
+- Repository module commit: `d83f62c5a751dabe25a2070a74448be744cf1153`; subsequent fixture-guard hardening: `386cd60ecd4a8862ae9aaa41c7da55a9bf0ce683`.
+- Lab cache-bust update: `2e24d3659f80eab5506e21b9e9fc1e5524359469`.
+- Added `mutate(operations)`: performs synchronous, transaction-scoped read/modify/write callbacks for multiple namespaced records inside one read-write transaction on the existing `records` store. It rejects duplicate record keys, aborts on callback/serialization errors, waits for transaction completion, then verifies every updated value in a separate readonly transaction.
+- Added `reserveCounter(domain,key,minimum)`: reserves the next integer atomically using `mutate`; concurrent read-write transactions are serialized by IndexedDB.
+- Expanded the manual self-test with:
+  - `atomicMultiDomainMutation`: update Accounting-like, Projects-like and Contracts-like envelopes in one transaction.
+  - `abortRollback`: deliberately abort a transaction after scheduling two writes and verify both prior values remain unchanged.
+  - `concurrentCounterReservation`: issue eight simultaneous reservations and verify unique monotonic values 1–8.
+- Added preflight guards for all new synthetic keys and expanded cleanup verification.
+- The lab now loads `storage-repository.js?v=386cd60` to avoid the previous cached module.
+
+### Important test boundary
+
+These are synthetic repository tests, not live app workflows. They do not prove the current invoice-number business rules, Accounting/Projects synchronization, app backup/restore, or Safari application integration. No application file is imported or modified. The user must run the updated lab and return its output before these tests can be marked passed.
+
+### Current status
+
+Implementation is committed; **browser validation is pending**. Do not proceed to app integration, backup-v6 import, LocalStorage modification, or cutover until the updated lab returns all checks true and the remaining audit gaps are resolved.
