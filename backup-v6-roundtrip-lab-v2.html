@@ -10,7 +10,7 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
 <p>Select the original complete v6 JSON backup:</p><input id="file" type="file" accept=".json,application/json">
 <p><button id="inspect">Inspect backup (read-only)</button><button id="stage" disabled>Stage into test IndexedDB</button><button id="audit" disabled>Audit persisted data</button><button id="cleanup" disabled>Remove this test copy</button></p>
 <p><button id="copy" type="button">Copy result</button><span id="copyStatus" aria-live="polite"></span></p>
-<pre id="out">Ready. No operation has run.</pre>
+<button id="diagnose" type="button">Inspect existing test DB (read-only)</button><pre id="out">Ready. No operation has run.</pre>
 </main>
 <script>
 (async()=>{
@@ -22,6 +22,41 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
  }catch(e){out.textContent='Adapter load error: '+e.message;return;}
  let raw=null,inspected=false,staged=false;
  const show=x=>out.textContent=JSON.stringify(x,null,2);
+ $('diagnose').onclick=async()=>{
+  let db;
+  try{
+   const request=indexedDB.open('the_handyman_accountancy_test226',4);
+   request.onupgradeneeded=()=>{request.transaction.abort();};
+   db=await new Promise((resolve,reject)=>{
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error||Error('IndexedDB open failed'));
+    request.onblocked=()=>reject(Error('IndexedDB open blocked'));
+   });
+   const names=Array.from(db.objectStoreNames);
+   const rows={};
+   for(const name of names){
+    const tx=db.transaction([name],'readonly');
+    rows[name]=await new Promise((resolve,reject)=>{
+     const q=tx.objectStore(name).getAll();
+     q.onsuccess=()=>resolve(q.result||[]);
+     q.onerror=()=>reject(q.error||Error('Read failed: '+name));
+    });
+   }
+   const marker='__tha_v6_roundtrip__:';
+   const summary=Object.fromEntries(Object.entries(rows).map(([name,list])=>[name,{
+    count:list.length,
+    ids:list.slice(0,30).map(row=>String(row&&row.id!==undefined?row.id:'(no id)'))
+   }]));
+   const manifests=(rows.recordOrder||[]).filter(row=>String(row.id||'').startsWith(marker));
+   const snapshots=(rows.legacySnapshots||[]).filter(row=>String(row.id||'').startsWith(marker));
+   show({ok:true,readOnly:true,database:db.name,version:db.version,stores:summary,
+    roundTripManifestFound:manifests.some(row=>row.id===marker+'manifest'),
+    roundTripSnapshotFound:snapshots.some(row=>row.id===marker+'raw-backup'),
+    note:'Read-only inspection. No records were changed.'});
+  }catch(e){show({ok:false,readOnly:true,error:e.message});}
+  finally{if(db)db.close();}
+ };
+
  $('copy').onclick=async()=>{
   const value=out.textContent;
   try{
