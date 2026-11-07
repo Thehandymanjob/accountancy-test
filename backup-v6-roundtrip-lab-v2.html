@@ -9,6 +9,7 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
 <p class="warning"><b>Test only.</b> Uses isolated database <code>the_handyman_accountancy_test226</code>. Does not read or write LocalStorage, does not change the live app, and does not access production storage. Destination stores must be empty.</p>
 <p>Select the original complete v6 JSON backup:</p><input id="file" type="file" accept=".json,application/json">
 <p><button id="inspect">Inspect backup (read-only)</button><button id="stage" disabled>Stage into test IndexedDB</button><button id="audit" disabled>Audit persisted data</button><button id="cleanup" disabled>Remove this test copy</button></p>
+<p><button id="copy" type="button">Copy result</button><span id="copyStatus" aria-live="polite"></span></p>
 <pre id="out">Ready. No operation has run.</pre>
 </main>
 <script>
@@ -21,6 +22,18 @@ body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;max-width:760px;margi
  }catch(e){out.textContent='Adapter load error: '+e.message;return;}
  let raw=null,inspected=false,staged=false;
  const show=x=>out.textContent=JSON.stringify(x,null,2);
+ $('copy').onclick=async()=>{
+  const value=out.textContent;
+  try{
+   if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(value);}
+   else{
+    const t=document.createElement('textarea');t.value=value;t.style.position='fixed';t.style.opacity='0';document.body.appendChild(t);t.select();
+    if(!document.execCommand('copy'))throw Error('Clipboard copy is not supported by this browser.');
+    t.remove();
+   }
+   $('copyStatus').textContent=' Copied.';
+  }catch(e){$('copyStatus').textContent=' Copy failed: '+e.message;}
+ };
  $('inspect').onclick=async()=>{
   try{const f=$('file').files[0];if(!f)throw Error('Select a backup JSON first.');raw=await f.text();
    const p=JSON.parse(raw),r=await HandymanBackupV6RoundTrip.inspectPayload(p,raw);inspected=true;$('stage').disabled=false;
