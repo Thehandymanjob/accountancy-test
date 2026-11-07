@@ -23,6 +23,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <h1>THA v250 — Read-only Conversion Planner</h1>
 <p>Validates staged legacy values and builds a proposed conversion manifest. This is not a data conversion or app cutover.</p>
 <div class="notice"><strong>Safety boundary:</strong> This tool reads only the <code>legacy</code> domain in <code>the_handyman_accountancy_v250_idb</code>. It does not write to IndexedDB, LocalStorage, or application records. Unknown or ambiguous keys remain unmapped.</div>
+<button id="selftest" class="secondary">Run planner self-tests (in memory)</button>
 <button id="run">Run read-only validation</button>
 <button id="download" class="secondary" disabled>Export validation manifest JSON</button>
 <pre id="out">Ready. No operation has run.</pre>
@@ -32,9 +33,15 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101d2c;color:#e8f1fb
 <script src="storage-v250-conversion-planner.js?v=1"></script>
 <script>
 (()=>{
- const out=document.getElementById("out"),run=document.getElementById("run"),download=document.getElementById("download");
+ const out=document.getElementById("out"),run=document.getElementById("run"),download=document.getElementById("download"),selftest=document.getElementById("selftest");
  let last=null;
  const show=v=>{out.textContent=JSON.stringify(v,null,2)};
+ selftest.onclick=()=>{
+  run.disabled=true;selftest.disabled=true;download.disabled=true;
+  try{last=null;show(HandymanV250ConversionPlanner.selfTest())}
+  catch(error){show({ok:false,error:String(error&&error.message||error),writesPerformed:false})}
+  finally{run.disabled=false;selftest.disabled=false}
+ };
  run.onclick=async()=>{
   run.disabled=true;download.disabled=true;
   try{
