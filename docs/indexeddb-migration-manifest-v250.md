@@ -442,3 +442,34 @@ Before changing `index.html`:
 8. App adapter contract is documented for every current synchronous caller before converting UI flows.
 
 **Current status:** design is recorded; no repository module has yet been connected to the app, no new browser database has been created by this work, and no app data has been written or moved.
+
+
+## 15. First isolated repository adapter and manual test harness
+
+Created on the existing `release239` branch:
+
+- `storage-repository.js` — standalone asynchronous IndexedDB repository adapter.
+- `storage-repository-lab.html` — manual test page; does not load the accountancy app.
+
+Adapter database:
+`the_handyman_accountancy_v250_idb`, schema version 1.
+
+Initial API:
+- `ready()`
+- `get(domain, key)`
+- `put(domain, key, value)`
+- `remove(domain, key)`
+- `transact(writes)` — atomic multi-record write in one object-store transaction
+- `snapshot(domains)`
+- `restore(snapshot)`
+- `health()`
+- `selfTest()`
+
+The initial adapter stores canonical JSON payload envelopes. It does not normalize business entities and does not call the old storage foundation. Its source contains no direct LocalStorage API calls. The only supported way to initialize it is through an explicit call from the manual test harness; loading the accountancy app does not load or initialize it.
+
+The manual test harness is:
+`https://thehandymanjob.github.io/accountancy-test/storage-repository-lab.html`
+
+The test button uses synthetic records only and checks basic initialization, exact JSON round-trip (including zero, empty string, null, false, nested arrays and unknown fields), batch writes, snapshot/restore, and cleanup. The health button reads record counts only.
+
+**Not yet tested in a real browser:** no user-side run result has been received. Therefore the module is considered an initial prototype, not accepted production-ready storage. It has not been added to `index.html`, and it does not import the approved backup v6. Running the lab creates the new isolated IndexedDB database; do not run it until ready to perform this separate synthetic test.
