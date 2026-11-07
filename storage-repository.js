@@ -182,10 +182,14 @@
   }finally{db.close();}
  }
  async function selfTest(){
-  const domain="repository_test",key="roundtrip",existing=await get(domain,key);
-  if(existing!==null)throw new Error("Self-test key is occupied; refusing to overwrite it.");
+  const domain="repository_test",key="roundtrip";
+  const reserved=[{domain,key},{domain,key:"batch-a"},{domain,key:"batch-b"},{domain,key:"stale-record"},{domain:"unrelated_test",key:"keep"}];
+  for(const item of reserved){
+   if(await get(item.domain,item.key)!==null)
+    throw new Error("Self-test key is occupied ("+recordId(item.domain,item.key)+"); refusing to overwrite existing data.");
+  }
   const fixture={zero:0,blank:"",nil:null,flag:false,nested:[{id:"a",unknown:{keep:true}},[1,null,"x"]]};
-  const checks={ready:false,roundTrip:false,atomicBatch:false,snapshotRestore:false,restoreRemovesStaleRecords:false,restorePreservesOtherDomains:false,emptySnapshotRestore:false,cleanup:false};
+  const checks={ready:false,roundTrip:false,atomicBatch:false,concurrentWrites:false,snapshotRestore:false,restoreRemovesStaleRecords:false,restorePreservesOtherDomains:false,emptySnapshotRestore:false,cleanup:false};
   try{
    await ready();checks.ready=true;
    await put(domain,key,fixture);
@@ -196,6 +200,14 @@
    const result=await transact(batch);
    checks.atomicBatch=result.ok&&canonical(await get(domain,"batch-a"))===canonical({v:1})&&canonical(await get(domain,"batch-b"))===canonical({v:2});
    if(!checks.atomicBatch)throw new Error("Atomic batch test failed.");
+   await Promise.all([
+    put(domain,"concurrent-a",{writer:"A",value:1}),
+    put(domain,"concurrent-b",{writer:"B",value:2})
+   ]);
+   checks.concurrentWrites=canonical(await get(domain,"concurrent-a"))===canonical({writer:"A",value:1})&&
+    canonical(await get(domain,"concurrent-b"))===canonical({writer:"B",value:2});
+   if(!checks.concurrentWrites)throw new Error("Concurrent independent writes test failed.");
+   await remove(domain,"concurrent-a");await remove(domain,"concurrent-b");
    await put("unrelated_test","keep",{untouched:true});
    const snap=await snapshot([domain]);
    await put(domain,"stale-record",{mustBeRemoved:true});
