@@ -473,3 +473,12 @@ The manual test harness is:
 The test button uses synthetic records only and checks basic initialization, exact JSON round-trip (including zero, empty string, null, false, nested arrays and unknown fields), batch writes, snapshot/restore, and cleanup. The health button reads record counts only.
 
 **Not yet tested in a real browser:** no user-side run result has been received. Therefore the module is considered an initial prototype, not accepted production-ready storage. It has not been added to `index.html`, and it does not import the approved backup v6. Running the lab creates the new isolated IndexedDB database; do not run it until ready to perform this separate synthetic test.
+
+
+## 16. Repository prototype correction — empty snapshot restore
+
+- Commit: `b7741a39291d70b3b565b8cf71dc4d227d7a9cea`
+- Corrected `restore(snapshot)` so a valid snapshot containing zero records returns a successful no-op result (`written: 0`) rather than failing because the generic transaction API requires at least one write.
+- Added an explicit `emptySnapshotRestore` assertion to the repository self-test.
+- This is a repository-only change on `release239`. It does not modify `index.html`, connect the app to IndexedDB, access LocalStorage, import backup v6, or touch production.
+- Browser execution is still pending; code change and test assertion do not constitute a passed browser test.
