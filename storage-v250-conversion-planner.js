@@ -154,32 +154,92 @@
   return {ok:failed.length===0,mode:"in-memory-self-test",checks,passed:checks.length-failed.length,failed:failed.length,writesPerformed:false,localStorageChanged:false,typedDomainsChanged:false,appCutover:false};
  }
 
- function candidateAudit(rows){
-  return rows.filter(row=>row.status==="RETAIN_LEGACY"&&/(account|project|contract|restore|migration)/i.test(row.sourceKey)).map(row=>{
-   const env=row.value;
-   let parsed=null,parseable=false;
-   try{parsed=JSON.parse(env.raw);parseable=true}catch(_){}
-   const result={sourceKey:row.sourceKey,parseable};
-   if(!parseable){result.shape="raw-scalar";return result;}
+ async function digest(raw){
+  try{
+   if(!root.crypto||!root.crypto.subtle||!root.TextEncoder)return null;
+   const bytes=await root.crypto.subtle.digest("SHA-256",new root.TextEncoder().encode(raw));
+   return Array.from(new Uint8Array(bytes)).map(x=>x.toString(16).padStart(2,"0")).join("");
+  }catch(_){return null;}
+ }
+ function arrayStats(list){
+  if(!array(list))return null;
+  const objects=list.filter(object),ids=objects.map(x=>x.id).filter(x=>typeof x==="string"&&x.trim());
+  return {count:list.length,objectItems:objects.length,itemsWithId:ids.length,duplicateIdCount:duplicates(ids).length};
+ }
+ function fieldPresence(list,names){
+  if(!array(list))return {};
+  const out={};
+  for(const name of names)out[name]=list.filter(x=>object(x)&&Object.prototype.hasOwnProperty.call(x,name)).length;
+  return out;
+ }
+ function nestedArrayStats(list,names){
+  if(!array(list))return {};
+  const out={};
+  for(const name of names){
+   const values=list.filter(x=>object(x)&&array(x[name])).map(x=>x[name].length);
+   out[name]={projectsWithArray:values.length,totalItems:values.reduce((a,b)=>a+b,0)};
+  }
+  return out;
+ }
+ async function candidateAudit(rows){
+  const selected=rows.filter(row=>row.status==="RETAIN_LEGACY"&&/(account|project|contract|restore|migration)/i.test(row.sourceKey));
+  const result=[];
+  for(const row of selected){
+   const env=row.value,raw=env&&typeof env.raw==="string"?env.raw:"";
+   const item={sourceKey:row.sourceKey,rawBytes:new Blob([raw]).size,sha256:await digest(raw),parseable:false};
+   let parsed;
+   try{parsed=JSON.parse(raw);item.parseable=true}catch(_){item.shape="raw-scalar";result.push(item);continue;}
    if(array(parsed)){
-    result.shape="array";result.items=parsed.length;
-    result.objectItems=parsed.filter(object).length;
-    result.itemsWithId=parsed.filter(x=>object(x)&&typeof x.id==="string"&&x.id.trim()).length;
-    result.possibleContracts=parsed.length>0&&parsed.every(x=>object(x)&&typeof x.id==="string"&&x.id.trim());
+    item.shape="array";item.items=parsed.length;
+    item.objectItems=parsed.filter(object).length;
+    item.itemsWithId=parsed.filter(x=>object(x)&&typeof x.id==="string"&&x.id.trim()).length;
+    item.duplicateIdCount=duplicates(parsed.filter(object).map(x=>x.id).filter(x=>typeof x==="string"&&x.trim())).length;
+    if(/monitor/i.test(row.sourceKey))item.family="diagnostics";
+    else if(/notification/i.test(row.sourceKey))item.family="notifications";
+    else if(/archive/i.test(row.sourceKey))item.family="report-archive";
+    else if(/contract/i.test(row.sourceKey))item.family="contracts";
+    else item.family="array-unknown";
+    item.fieldPresence=fieldPresence(parsed,["id","projectId","project_id","customerId","customer_id","contractId","invoiceId","status","date","createdAt"]);
    }else if(object(parsed)){
     const fields=Object.keys(parsed);
-    result.shape="object";result.topLevelFields=fields.length;
-    result.hasEntries=array(parsed.entries);result.hasInvoices=array(parsed.invoices);
-    result.hasProjects=array(parsed.projects);result.hasWorkers=array(parsed.workers);
-    if(array(parsed.entries))result.entries=parsed.entries.length;
-    if(array(parsed.invoices))result.invoices=parsed.invoices.length;
-    if(array(parsed.projects))result.projects=parsed.projects.length;
-    if(array(parsed.workers))result.workers=parsed.workers.length;
-    result.fieldNames=fields.slice(0,30);
-   }else result.shape=parsed===null?"null":typeof parsed;
-   return result;
-  });
+    item.shape="object";item.topLevelFields=fields.length;item.fieldNames=fields.slice(0,40);
+    if(array(parsed.entries)||array(parsed.invoices)||array(parsed.customers)){
+     item.family="accounting";
+     for(const name of ["entries","customers","invoices","customExpenseCategories","thirdPartyTransactions"])
+      if(parsed[name]!==undefined)item[name]=arrayStats(parsed[name]);
+     item.entryTypeCounts={};
+     if(array(parsed.entries))for(const entry of parsed.entries){
+      const type=object(entry)&&typeof entry.type==="string"?entry.type:"(missing)";
+      item.entryTypeCounts[type]=(item.entryTypeCounts[type]||0)+1;
+     }
+     item.entryLinkFieldPresence=fieldPresence(parsed.entries,["id","invoiceId","projectId","customerId","contractId","number","date","type"]);
+     item.invoiceFieldPresence=fieldPresence(parsed.invoices,["id","number","projectId","customerId","contractId","status","date","createdAt"]);
+     const invoiceNumbers=array(parsed.invoices)?parsed.invoices.map(x=>object(x)?Number(x.number):NaN).filter(Number.isSafeInteger):[];
+     item.invoiceNumberAudit={numberedInvoices:invoiceNumbers.length,duplicateNumbers:duplicates(invoiceNumbers).length,maximumNumber:Math.max(0,...invoiceNumbers)};
+    }else if(array(parsed.projects)||array(parsed.workers)){
+     item.family="projects";
+     for(const name of ["projects","workers","partners","contractors","companies","companyJobs"])
+      if(parsed[name]!==undefined)item[name]=arrayStats(parsed[name]);
+     item.projectFieldPresence=fieldPresence(parsed.projects,["id","customerId","contractId","status","name","createdAt","updatedAt"]);
+     item.projectNestedArrays=nestedArrayStats(parsed.projects,["subprojects","subProjects","expenses","materials","receipts","payments","invoices","images","documents"]);
+    }else{
+     item.family="object-unknown";
+     item.fieldPresence=fieldPresence([parsed],["entries","invoices","projects","workers","contracts","settings","profile"]);
+    }
+   }else{item.shape=parsed===null?"null":typeof parsed;item.family="scalar";}
+   result.push(item);
+  }
+  const groups={};
+  for(const item of result){
+   if(!item.sha256)continue;
+   const key=item.sha256;
+   if(!groups[key])groups[key]=[];
+   groups[key].push(item.sourceKey);
+  }
+  const exactDuplicateGroups=Object.values(groups).filter(names=>names.length>1);
+  return {candidates:result,exactDuplicateGroups};
  }
+
  async function plan(){
   const api=root.HandymanStorageRepository;
   if(!api||api.databaseName!==DB||typeof api.snapshot!=="function")
@@ -201,7 +261,7 @@
   try{const raw=findRaw("tha_test226_accounting_v1");if(raw!==null)accounting=JSON.parse(raw)}catch(_){}
   try{const raw=findRaw("tha_test226_invoice_sequence_v1");if(raw!==null)sequence=Number(raw)}catch(_){}
   const invoice=invoiceAudit(accounting,sequence);
-  const candidates=candidateAudit(snap.records.map(row=>({sourceKey:row.key,value:row.value,status:MAP[row.key]?"MAPPED":"RETAIN_LEGACY"})));
+  const candidates=await candidateAudit(snap.records.map(row=>({sourceKey:row.key,value:row.value,status:MAP[row.key]?"MAPPED":"RETAIN_LEGACY"})));
   const issues=rows.flatMap(x=>x.issues.map(issue=>({...issue,sourceKey:x.sourceKey}))).concat(invoice.issues);
   const blockers=issues.filter(x=>x.severity==="blocker").length;
   const warnings=issues.filter(x=>x.severity==="warning").length;
@@ -220,7 +280,8 @@
    blockedCount:blocked,
    unmappedCount:unmapped,
    invoiceReconciliation:invoice,
-   candidateAudit:candidates,
+   candidateAudit:candidates.candidates,
+   exactDuplicateGroups:candidates.exactDuplicateGroups,
    issues,
    records:rows,
    writesPerformed:false,
