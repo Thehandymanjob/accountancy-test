@@ -31,7 +31,7 @@
   return {type:v===null?"null":typeof v};
  };
  const classify=k=>{
-  if(known.includes(k))return {domain:domains.find(x=>x[1].test(k)&&x[0]!=="other_app_data")[0],classification:"known-active-key"};
+  if(known.includes(k)){const match=domains.find(x=>x[0]!=="other_app_data"&&x[1].test(k));return {domain:match?match[0]:"other_app_data",classification:"known-active-key"};}
   if(/^tha_restore_test_v1_/.test(k)||/^tha_v\d+_/.test(k)||/^handyman_/.test(k))return {domain:"legacy_or_recovery_namespace",classification:"requires-provenance-review"};
   for(const [domain,re] of domains)if(domain!=="other_app_data"&&re.test(k))return {domain,classification:"unlisted-key-review"};
   return {domain:"unclassified",classification:"manual-review"};
