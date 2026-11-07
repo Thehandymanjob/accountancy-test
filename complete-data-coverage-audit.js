@@ -56,13 +56,17 @@
     idb[name]={count:rows.length,approxBytes:bytes(JSON.stringify(rows)),ids:rows.slice(0,100).map(x=>String(x.id??x.key??"")).filter(Boolean)};
    }
    const byDomain={};for(const row of localRows)(byDomain[row.domain]??=[]).push(row.key);
+   const digestGroups={};for(const row of localRows)if(row.present){(digestGroups[row.digest]??=[]).push({key:row.key,bytes:row.bytes,domain:row.domain});}
+   const identicalLocalStorageValueGroups=Object.entries(digestGroups).filter(([,rows])=>rows.length>1).map(([valueDigest,rows])=>({valueDigest,rows}));
+   const missingKnownKeys=known.filter(key=>!localKeys.includes(key));
+
    const unknown=localRows.filter(x=>x.classification!=="known-active-key");
    const invalid=localRows.filter(x=>x.present&&x.validJson===false);
    const totals={localStorageKeys:localRows.length,localStorageBytes:localRows.reduce((n,x)=>n+x.bytes,0),
     indexedDBRecords:Object.values(idb).reduce((n,x)=>n+x.count,0),indexedDBStores:Object.keys(idb).length};
-   return {ok:true,diagnostic:"complete-data-coverage-audit-v1",readOnly:true,willWrite:false,
+   return {ok:true,diagnostic:"complete-data-coverage-audit-v2",readOnly:true,willWrite:false,
     localStorageChanged:false,indexedDBChanged:false,appCutover:false,database:a.databaseName,schemaVersion:a.schemaVersion,
-    totals,knownKeys:known.map(key=>({key,present:localKeys.includes(key)})),localStorage:localRows,
+    totals,knownKeys:known.map(key=>({key,present:localKeys.includes(key)})),missingKnownKeys,identicalLocalStorageValueGroups,localStorage:localRows,
     localStorageByDomain:byDomain,unknownOrLegacyKeys:unknown,invalidJsonKeys:invalid,indexedDB:idb,
     backupCoverage:{knownLocalStorageKeys:known.length,presentKnownKeys:known.filter(k=>localKeys.includes(k)).length,
      unclassifiedOrLegacyCount:unknown.length,invalidJsonCount:invalid.length,
