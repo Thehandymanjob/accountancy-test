@@ -58,3 +58,65 @@ Any future isolation change must be designed so that it cannot silently read, ov
 ## Current status
 
 Investigation only. No business data was read by this static audit, no browser storage was changed by this audit, no backup was imported, and no application cutover was performed.
+
+
+## Uploaded legacy snapshot comparison (user-provided file)
+
+File: `THA-v250-legacy-snapshot.json`  
+Snapshot timestamp: `2026-11-07T14:52:40.708Z`  
+Database: `the_handyman_accountancy_v250_idb`  
+Domain: `legacy` only  
+File size: 4,384,242 bytes  
+Records in snapshot: 40
+
+The uploaded snapshot has been parsed successfully. Comparing its 40 exact record keys with the 29-key current inventory supplied by the user gives:
+
+- Present in snapshot but absent from the later current inventory: **14** keys.
+- Present in later current inventory but absent from snapshot: **3** keys.
+- Net change: 40 - 14 + 3 = **29**.
+
+### 14 keys present only in the uploaded snapshot
+
+- `handyman_projects_workspace_v1`
+- `tha_baseline_v167_isolated_20261030`
+- `tha_recovery_lab_v1_a`
+- `tha_recovery_lab_v1_c`
+- `tha_recovery_lab_v1_p`
+- `tha_restore_test_v1_report_archive_v1`
+- `tha_v212_migration_accounting_v1`
+- `tha_v212_migration_app_language_pref_version_v1`
+- `tha_v212_migration_app_language_v1`
+- `tha_v212_migration_contracts_v1`
+- `tha_v212_migration_invoice_sequence_v1`
+- `tha_v212_migration_monitor_log_v1`
+- `tha_v212_migration_projects_v1`
+- `tha_v212_migration_report_notifications_v1`
+
+### 3 keys present in the later inventory but absent from the snapshot
+
+- `tha_test226_factory_reset_recovery_v1`
+- `tha_test226_projects_v1`
+- `tha_v206_projects_v1`
+
+### Data-preservation significance
+
+The 14 snapshot-only keys are not all empty markers. Examples:
+
+- `tha_v212_migration_projects_v1`: 1,487,153 raw bytes; contains one project with five subprojects, including `Extended roof` priced at 3,000.
+- `tha_restore_test_v1_projects_v1`: 1,486,643 raw bytes; contains the same parent project identity but four subprojects. It is not byte-identical to the v212 migration copy.
+- `handyman_projects_workspace_v1`: 391,308 raw bytes; contains a project workspace representation with three subprojects.
+- `tha_restore_test_v1_report_archive_v1`: 389,053 raw bytes.
+- `tha_v212_migration_accounting_v1`: 6,696 raw bytes, with 23 entries, one customer, two invoices, one custom expense category and settings.
+- `tha_v212_migration_monitor_log_v1`: 114,089 raw bytes, 377 events.
+
+These are distinct stored snapshots/keys. Similar names or project IDs do not make them interchangeable. In particular, the project copies differ in content and subproject count. Do not select one as canonical, merge them, or discard any copy automatically.
+
+### What this proves and does not prove
+
+It proves that the uploaded snapshot preserves an earlier 40-record legacy inventory and that the later reported 29-key inventory is a different key set, not merely the same set with eleven records removed.
+
+It does **not** identify the exact browser action or script that changed the key set. The later three keys could have been created after the snapshot; the snapshot cannot show their values because they were not present at its capture time. The current compare report checked key names only, not LocalStorage values.
+
+### Required next step
+
+Preserve the uploaded 40-record snapshot unchanged. Before importing the authoritative `New_new(1).json` backup, obtain a fresh read-only export of the current 29 legacy records (including raw values), then compare it with this 40-record snapshot. Keep all 40 historical records and all 29 current records available as separate evidence; do not merge them into business domains or remove duplicates until the user explicitly approves a record-by-record mapping.
