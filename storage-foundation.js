@@ -996,10 +996,12 @@
       };
       const verifyTx = db.transaction(names, "readonly");
       const verifyDone = transactionDone(verifyTx);
+      const verifyRequests = names.map(name => requestResult(verifyTx.objectStore(name).getAll()));
+      const verifiedRows = await Promise.all(verifyRequests);
+      await verifyDone;
       const verifiedCounts = {};
-      for (const name of names) {
-        const store = verifyTx.objectStore(name);
-        const rows = await requestResult(store.getAll());
+      for (let storeIndex = 0; storeIndex < names.length; storeIndex++) {
+        const name = names[storeIndex], rows = verifiedRows[storeIndex];
         if (rows.length !== restoredRows[name].length) {
           throw new Error("Post-restore IndexedDB count verification failed for store: " + name);
         }
@@ -1010,7 +1012,6 @@
         }
         verifiedCounts[name] = rows.length;
       }
-      await verifyDone;
       for (const item of localRecords) {
         const actual = localStorage.getItem(item.key);
         if (item.present ? actual !== item.value : actual !== null) {
