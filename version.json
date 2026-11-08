@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
   "version": "262",
-  "buildId": "THA-262-RESTORE-UPDATER-RECOVERY-20261108",
+  "buildId": "THA-262-RESTORE-ROLLBACK-REBUILD-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 5,
@@ -9,10 +9,10 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "dcd3a3a2c38557b76c5401b9ded3e9a08bb2b85de880e34ed2b8847bcb1d2ddd"
+      "sha256": "c4339309c2305e5ccd0649559c66dad22219b7971182c8793e5c21c34253e40b"
     },
     "version-manager.js": {
-      "sha256": "ff143d88637126144f3f5c12ffe0c95722dec33c041f9129c2323827df56b79e"
+      "sha256": "13b6eefffda97b5dcbb3b668f0de9d6214175971f17c7574c62d458c30a33fec"
     },
     "service-worker.js": {
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
@@ -22,7 +22,7 @@
     }
   },
   "releaseNotes": [
-    "v262 restore/update hotfix: suppresses monitor-log writes during portable restore and rollback; updater can recover its rollback pointer from a verified installed cache if the stored pointer is stale. Experimental branch only; controlled Safari verification required.",
+    "v262 recovery hotfix: suppresses monitor-log writes during portable restore and rollback; updater can reconstruct the exact installed v262 rollback cache from its immutable prior release commit after validating SHA-256 checksums, when Safari CacheStorage is empty. Experimental branch only; controlled Safari verification required.",
     "v262 portable restore: adds a user-confirmed restore path for complete portable backups, restores all app-prefixed LocalStorage keys and all IndexedDB stores, decodes Blob/File and binary values, and verifies restored record contents with rollback on failure. Experimental branch only; no automatic migration or production release.",
     "v262: Adds a non-destructive comprehensive backup export covering app-namespaced LocalStorage and every IndexedDB store, with explicit lossless encoding for Blob/File and binary values. No restore or migration is performed by export.",
     "v261: Adds deep read-only source-candidate and media metadata auditing across all LocalStorage keys and IndexedDB stores. The audit export no longer writes an activity-log event; no migration, reset, deletion or storage writes.",
