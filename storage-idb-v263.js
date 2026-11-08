@@ -24,6 +24,49 @@
     }
     return JSON.parse(JSON.stringify(value));
   };
+  async function valuesEqual(a, b, seen = new WeakMap()) {
+    if (Object.is(a, b)) return true;
+    if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+    let paired = seen.get(a);
+    if (paired && paired.has(b)) return true;
+    if (!paired) { paired = new WeakSet(); seen.set(a, paired); }
+    paired.add(b);
+    if (a instanceof Blob || b instanceof Blob) {
+      if (!(a instanceof Blob) || !(b instanceof Blob) || a.size !== b.size || a.type !== b.type) return false;
+      if (typeof File !== "undefined" && (a instanceof File || b instanceof File)) {
+        if (!(a instanceof File) || !(b instanceof File) || a.name !== b.name || a.lastModified !== b.lastModified) return false;
+      }
+      const [ab, bb] = await Promise.all([a.arrayBuffer(), b.arrayBuffer()]);
+      if (ab.byteLength !== bb.byteLength) return false;
+      const av = new Uint8Array(ab), bv = new Uint8Array(bb);
+      for (let i = 0; i < av.length; i++) if (av[i] !== bv[i]) return false;
+      return true;
+    }
+    if (a instanceof Date || b instanceof Date) return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+    if (a instanceof ArrayBuffer || b instanceof ArrayBuffer) {
+      if (!(a instanceof ArrayBuffer) || !(b instanceof ArrayBuffer) || a.byteLength !== b.byteLength) return false;
+      const av = new Uint8Array(a), bv = new Uint8Array(b);
+      for (let i = 0; i < av.length; i++) if (av[i] !== bv[i]) return false;
+      return true;
+    }
+    if (ArrayBuffer.isView(a) || ArrayBuffer.isView(b)) {
+      if (!ArrayBuffer.isView(a) || !ArrayBuffer.isView(b) || a.constructor !== b.constructor || a.byteLength !== b.byteLength) return false;
+      const av = new Uint8Array(a.buffer, a.byteOffset, a.byteLength);
+      const bv = new Uint8Array(b.buffer, b.byteOffset, b.byteLength);
+      for (let i = 0; i < av.length; i++) if (av[i] !== bv[i]) return false;
+      return true;
+    }
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) if (!(await valuesEqual(a[i], b[i], seen))) return false;
+      return true;
+    }
+    const ak = Object.keys(a).sort(), bk = Object.keys(b).sort();
+    if (ak.length !== bk.length || ak.some((key, i) => key !== bk[i])) return false;
+    for (const key of ak) if (!(await valuesEqual(a[key], b[key], seen))) return false;
+    return true;
+  }
+
   const requestResult = request => new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("IndexedDB request failed."));
@@ -137,11 +180,8 @@
       const saved = await get(domain, key);
       // IndexedDB structured cloning preserves binary objects; compare primitive JSON
       // values only here. Binary round-trip is covered by the self-test.
-      if (!(value instanceof Blob) && JSON.stringify(saved) !== JSON.stringify(value)) {
-        throw new Error("IndexedDB read-back verification failed for " + domain + "/" + key);
-      }
-      if (value instanceof Blob && (!(saved instanceof Blob) || saved.size !== value.size || saved.type !== value.type)) {
-        throw new Error("IndexedDB Blob read-back verification failed for " + domain + "/" + key);
+      if (!(await valuesEqual(saved, value))) {
+        throw new Error("IndexedDB content read-back verification failed for " + domain + "/" + key);
       }
       return { ok: true, domain, key, updatedAt: stamp };
     } finally { db.close(); }
@@ -179,12 +219,8 @@
       await done;
       const verify = await readMany(prepared);
       for (let i = 0; i < prepared.length; i++) {
-        if (JSON.stringify(verify.records[i].value) !== JSON.stringify(prepared[i].value)) {
-          if (!(prepared[i].value instanceof Blob && verify.records[i].value instanceof Blob &&
-                prepared[i].value.size === verify.records[i].value.size &&
-                prepared[i].value.type === verify.records[i].value.type)) {
-            throw new Error("IndexedDB transaction verification failed for " + prepared[i].domain + "/" + prepared[i].key);
-          }
+        if (!(await valuesEqual(verify.records[i].value, prepared[i].value))) {
+          throw new Error("IndexedDB transaction content verification failed for " + prepared[i].domain + "/" + prepared[i].key);
         }
       }
       return { ok: true, written: prepared.length, updatedAt: stamp };
@@ -222,8 +258,8 @@
       await done;
       const verified = await readMany(prepared);
       for (let i = 0; i < prepared.length; i++) {
-        if (JSON.stringify(verified.records[i].value) !== JSON.stringify(next[i])) {
-          throw new Error("IndexedDB mutation read-back failed for " + prepared[i].domain + "/" + prepared[i].key);
+        if (!(await valuesEqual(verified.records[i].value, next[i]))) {
+          throw new Error("IndexedDB mutation content read-back failed for " + prepared[i].domain + "/" + prepared[i].key);
         }
       }
       return { ok: true, updated: prepared.length, records: verified.records, updatedAt: stamp };
@@ -281,9 +317,12 @@
       await done;
       const verify = await snapshot(domains);
       const expected = prepared.slice().sort((a, b) => a.id.localeCompare(b.id));
-      if (verify.records.length !== expected.length ||
-          verify.records.some((row, i) => row.id !== expected[i].id)) {
-        throw new Error("IndexedDB restore verification failed.");
+      if (verify.records.length !== expected.length) throw new Error("IndexedDB restore record-count verification failed.");
+      for (let i = 0; i < expected.length; i++) {
+        const actual = verify.records[i], wanted = expected[i];
+        if (actual.id !== wanted.id || !(await valuesEqual(actual.value, wanted.value))) {
+          throw new Error("IndexedDB restore content verification failed for " + wanted.domain + "/" + wanted.key);
+        }
       }
       return { ok: true, restored: prepared.length, domains };
     } finally { db.close(); }
