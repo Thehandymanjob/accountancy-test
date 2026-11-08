@@ -4,8 +4,8 @@
   "sourceBranch": "release239",
   "version": "262",
   "buildId": "THA-262-RESTORE-ROLLBACK-REBUILD-20261108",
-  "manifestSha256": "ee42cbaa19357b68383e732e643b6b34aeccda3381b332d6b39e815a3e6fba2a",
+  "manifestSha256": "db7cdd3ffa51bb8ebff34fe416b36756ef8302e61f444504a4160f343dae27ba",
   "updatedAt": "2026-11-08T19:35:00Z",
   "note": "Test v262 restore and rollback-cache reconstruction hotfix. Experimental branch only; verify Safari before restoring user data.",
-  "sourceCommit": "fefb667b7764c6b6c392460f7c731eb5302faa03"
+  "sourceCommit": "8b5759e01718740354557b1c31175e00a9ce0d7e"
 }
