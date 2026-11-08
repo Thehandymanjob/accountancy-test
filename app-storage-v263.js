@@ -15,10 +15,15 @@
     contracts:{key:"state",fallback:()=>({contracts:[]})},
     sequences:{key:"invoice-number",fallback:()=>0},
     preferences:{key:"language",fallback:()=>"en"},
+    preferenceMeta:{key:"language-pref-version",fallback:()=>""},
     diagnostics:{key:"monitor-log",fallback:()=>[]},
     reports:{key:"archive",fallback:()=>[]},
+    reportNotifications:{key:"notifications",fallback:()=>[]},
+    reportSettings:{key:"settings",fallback:()=>({})},
+    reportWorkflow:{key:"workflow",fallback:()=>({})},
     notifications:{key:"items",fallback:()=>[]},
-    recovery:{key:"last-reset-snapshot",fallback:()=>null}
+    recovery:{key:"last-reset-snapshot",fallback:()=>null},
+    factoryResetRecovery:{key:"factory-reset-recovery",fallback:()=>null}
   });
   const descriptor=name=>{
     const item=domains[name];
