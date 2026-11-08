@@ -6,7 +6,7 @@
  "use strict";
  const FORMAT="tha-v263-portable-backup-v1";
  const SNAPSHOT_FORMAT="tha-v263-indexeddb-snapshot-v1";
- const DB="the_handyman_accountancy_v263_idb";
+
  const bytesToBase64=bytes=>{
   let binary="";
   const step=0x8000;
@@ -86,10 +86,14 @@
  const canonical=value=>JSON.stringify(value);
  function create(engine,adapter){
   if(!engine||!adapter)throw new Error("Storage engine and application adapter are required.");
+  const DB=engine.databaseName;
+  if(typeof DB!=="string"||!DB)throw new Error("Storage engine database identity is unavailable.");
   async function capture(){
    await adapter.initialize();
    const status=await engine.health();
-   const domains=[...new Set([...adapter.domains,...Object.keys(status.counts||{})])].sort();
+   const registered=typeof adapter.backup==="function"?await adapter.backup():null;
+   if(!registered||!Array.isArray(registered.domains))throw new Error("Application adapter cannot enumerate physical backup domains.");
+   const domains=[...new Set([...registered.domains,...Object.keys(status.counts||{})])].sort();
    const snapshot=await engine.snapshot(domains);
    if(snapshot.records.length!==status.totalRecords)throw new Error("Backup completeness check failed: database record count changed during capture.");
    return {format:SNAPSHOT_FORMAT,database:DB,createdAt:snapshot.createdAt,domains:snapshot.domains,records:snapshot.records};
