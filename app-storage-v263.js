@@ -10,7 +10,7 @@
     return api;
   };
   const domains=Object.freeze({
-    accounting:{key:"state",fallback:()=>({entries:[],customers:[],invoices:[],settings:{}})},
+    accounting:{key:"state",fallback:()=>({entries:[],customers:[],invoices:[],customExpenseCategories:[],settings:{businessName:"",ownerName:""}})},
     projects:{key:"state",fallback:()=>({projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[],profile:{},current:null,guide:"en"})},
     contracts:{key:"state",fallback:()=>({contracts:[]})},
     sequences:{key:"invoice-number",fallback:()=>0},
@@ -55,12 +55,22 @@
     if(!writes.length) throw new Error("No application domains supplied.");
     return engine().transact(writes);
   }
+  async function mutate(name,updater){
+    if(typeof updater!=="function") throw new Error("A synchronous state updater is required.");
+    const d=descriptor(name);
+    const result=await engine().mutateMany([{...d,initialValue:domains[name].fallback()}],rows=>{
+      const next=updater(rows[0].value);
+      if(next&&typeof next.then==="function") throw new Error("Application state updater must be synchronous.");
+      return [next];
+    });
+    return {ok:true,state:result.records[0].value,updatedAt:result.updatedAt};
+  }
   async function reserveInvoiceNumber(minimum){return engine().reserveCounter("sequences","invoice-number",minimum||0);}
   async function backup(){return engine().snapshot(Object.keys(domains));}
   async function restore(packageValue){return engine().restore(packageValue);}
   async function health(){return engine().health();}
   root.HandymanAppStorageV263=Object.freeze({
-    domains:Object.keys(domains),initialize,read,readAll,write,writeMany,
+    domains:Object.keys(domains),initialize,read,readAll,write,writeMany,mutate,
     reserveInvoiceNumber,backup,restore,health
   });
 })(window);
