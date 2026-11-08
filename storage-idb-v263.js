@@ -461,23 +461,6 @@
     } finally { db.close(); }
   }
 
-  async function beginResetAndClear() {
-    const db = await openDatabase();
-    try {
-      const tx = db.transaction([STORE, META], "readwrite");
-      const done = transactionDone(tx);
-      tx.objectStore(META).put({key:"resetLock",active:true,updatedAt:new Date().toISOString()});
-      tx.objectStore(STORE).clear();
-      await done;
-      const verify = db.transaction([STORE, META], "readonly");
-      const rowsReq = verify.objectStore(STORE).getAll();
-      const lockReq = verify.objectStore(META).get("resetLock");
-      const [rows, lock] = await Promise.all([requestResult(rowsReq),requestResult(lockReq)]);
-      await transactionDone(verify);
-      if (rows.length || !lock || !lock.active) throw new Error("Reset lock/empty-store verification failed.");
-      return {ok:true,remainingRecords:0,locked:true};
-    } finally { db.close(); }
-  }
   async function releaseResetLock() {
     const db = await openDatabase();
     try {
@@ -493,14 +476,15 @@
     try {
       const tx = db.transaction([STORE, META], "readonly");
       const done = transactionDone(tx);
-      const [rows, meta] = await Promise.all([
+      const [rows, meta, resetLock] = await Promise.all([
         requestResult(tx.objectStore(STORE).getAll()),
-        requestResult(tx.objectStore(META).get("schema"))
+        requestResult(tx.objectStore(META).get("schema")),
+        requestResult(tx.objectStore(META).get("resetLock"))
       ]);
       await done;
       const counts = {};
       for (const row of rows) counts[row.domain] = (counts[row.domain] || 0) + 1;
-      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION, build: meta ? meta.build : null, totalRecords: rows.length, counts };
+      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION, build: meta ? meta.build : null, totalRecords: rows.length, counts, resetLocked: !!(resetLock && resetLock.active) };
     } finally { db.close(); }
   }
 
@@ -562,6 +546,6 @@
   root.HandymanStorageV263 = Object.freeze({
     databaseName: DB_NAME, schemaVersion: DB_VERSION, build: BUILD,
     ready, get, readMany, put, remove, transact, mutateMany, reserveCounter,
-    snapshot, restore, beginResetLock, clearWhileResetLocked, beginResetAndClear, releaseResetLock, health, selfTest
+    snapshot, restore, beginResetLock, clearWhileResetLocked, releaseResetLock, health, selfTest
   });
 })(window);
