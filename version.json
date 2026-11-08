@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "261",
-  "buildId": "THA-261-DEEP-READONLY-STORAGE-AUDIT-20261108",
+  "version": "262",
+  "buildId": "THA-262-COMPLETE-PORTABLE-BACKUP-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 5,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "de79be0290527ba447c918b4091dc13f33c52db2ac0aa9589dca6ea945df01fd"
+      "sha256": "44ad24f2de4fe24c6fc9b1ca9f7d2e6cbc3ce7cfa52be7f7257a8a8f51e80401"
     },
     "version-manager.js": {
       "sha256": "6fb526f8b8b563315d1234d080c695a08d2ca9f0823358f2d7171de85d9dfee4"
@@ -18,10 +18,11 @@
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
     },
     "storage-foundation.js": {
-      "sha256": "c3177813603f58597356b92311b7e38da86305ed84da0dde0889eeb0289d7757"
+      "sha256": "f1a637db5c90ae3307b7d519e53078b23d859d080a5b23f350a89b244d6ee1ac"
     }
   },
   "releaseNotes": [
+    "v262: Adds a non-destructive comprehensive backup export covering app-namespaced LocalStorage and every IndexedDB store, with explicit lossless encoding for Blob/File and binary values. No restore or migration is performed by export.",
     "v261: Adds deep read-only source-candidate and media metadata auditing across all LocalStorage keys and IndexedDB stores. The audit export no longer writes an activity-log event; no migration, reset, deletion or storage writes.",
     "v260: Adds a local, read-only audit of all same-origin LocalStorage keys and IndexedDB records, plus structural source comparison. Exports a JSON report; performs no migration, writes, reset or deletion.",
     "v259: Marking an invoice as paid waits for the IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. A clear warning is shown if verification fails.",
