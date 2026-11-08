@@ -41,22 +41,34 @@ async function readDB(info,progress){
    const db=req.result, stores=[];
    try{
     const names=Array.from(db.objectStoreNames);
-    if(!names.length){db.close();resolve({name:info.name,version:db.version,stores:[],totalRecords:0});return}
-    const tx=db.transaction(names,"readonly"); let remaining=names.length, failed=false;
+    if(!names.length){const version=db.version;db.close();resolve({name:info.name,version,stores:[],totalRecords:0});return}
+    const tx=db.transaction(names,"readonly"); let failed=false;
+    tx.oncomplete=async()=>{
+     const version=db.version;db.close();
+     if(failed)return;
+     try{
+      for(const store of stores){
+       for(const item of store.raw){
+        store.records.push({key:item.key,hash:await hash(item.value),summary:summarize(item.value)});
+       }
+       delete store.raw;
+      }
+      resolve({name:info.name,version,stores,totalRecords:stores.reduce((a,s)=>a+s.count,0)});
+     }catch(e){reject(e)}
+    };
+    tx.onerror=()=>{if(!failed){failed=true;db.close();reject(new Error(info.name+": read transaction failed"))}};
+    tx.onabort=()=>{if(!failed){failed=true;db.close();reject(new Error(info.name+": read transaction aborted"))}};
     for(const name of names){
-     const store=tx.objectStore(name), result={name,count:0,records:[]}; stores.push(result);
+     const store=tx.objectStore(name), result={name,count:0,records:[],raw:[]}; stores.push(result);
      const c=store.openCursor();
      c.onerror=()=>{if(!failed){failed=true;try{tx.abort()}catch{};db.close();reject(new Error(info.name+"/"+name+": cursor failed"))}};
-     c.onsuccess=async()=>{
+     c.onsuccess=()=>{
       const cur=c.result;
       if(cur){
-       try{
-        const record=cur.value;
-        result.records.push({key:safeKey(cur.primaryKey),hash:await hash(record),summary:summarize(record)});
-        result.count++; progress();
-        cur.continue();
-       }catch(e){if(!failed){failed=true;try{tx.abort()}catch{};db.close();reject(e)}}
-      }else{remaining--;if(remaining===0&&!failed){db.close();resolve({name:info.name,version:db.version,stores,totalRecords:stores.reduce((a,s)=>a+s.count,0)})}}
+       result.raw.push({key:safeKey(cur.primaryKey),value:cur.value});
+       result.count++; progress();
+       cur.continue();
+      }
      };
     }
    }catch(e){db.close();reject(e)}
