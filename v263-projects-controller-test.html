@@ -14,7 +14,7 @@
    await window.HandymanAppStorageV263.initialize();checks.engineReady=true;
    snapshot=await window.HandymanStorageV263.snapshot(names);
    const initial=await window.HandymanProjectsV263.initialize();checks.controllerReady=true;
-   checks.emptyInitialState=initial.projects.length===0&&initial.workers.length===0;
+   checks.emptyInitialState=initial.projects.length===0&&initial.workers.length===0&&["partners","contractors","companies","companyJobs"].every(k=>initial[k].length===0)&&Object.keys(initial.profile||{}).length===0;
    if(!checks.emptyInitialState)throw new Error("Projects domain is not empty; test stopped before modifying it.");
    await window.HandymanProjectsV263.addProject({id:"v263-project-test",name:"Projects Controller Test",status:"open",subprojects:[],income:[],expenses:[],photo:new Blob(["project-photo-test"],{type:"image/jpeg"})});
    let state=await window.HandymanProjectsV263.load();checks.addProject=state.projects.length===1&&state.projects[0].id==="v263-project-test";
