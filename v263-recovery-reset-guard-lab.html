@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>THA v263 Recovery Reset Guard Integration Lab</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>THA v263 Recovery Reset Guard Integration Lab — Build 5</title>
 <style>body{font:16px system-ui;margin:18px;line-height:1.5}button{padding:13px 18px;font-size:16px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f3f3f3;padding:12px;border-radius:8px}.note{background:#fff5d8;padding:10px;border-radius:8px}</style></head>
-<body><h1>THA v263 — Recovery / Reset Guard Integration</h1>
+<body><h1>THA v263 — Recovery / Reset Guard Integration — Build 5</h1>
 <p class="note"><b>Isolation:</b> Uses only <code>tha_v263_recovery_lab_idb</code>. Tests the current reset-guard recovery logic against the isolated IndexedDB engine and lab adapter. No app database or LocalStorage is accessed.</p>
 <button id="run">Run recovery integration test</button><pre id="out">Ready.</pre>
-<script src="./storage-idb-v263-reset-guard-lab.js?build=1"></script>
-<script src="./app-storage-v263-recovery-lab.js?build=1"></script>
-<script src="./v263-recovery-reset-guard-lab.js?build=1"></script>
+<script src="./storage-idb-v263-reset-guard-lab.js?build=5"></script>
+<script src="./app-storage-v263-recovery-lab.js?build=5"></script>
+<script src="./v263-recovery-reset-guard-lab.js?build=5"></script>
 <script>
 (async()=>{
 const e=window.HandymanStorageV263Lab,r=window.HandymanRecoveryV263.create(),out=document.getElementById("out"),btn=document.getElementById("run");
