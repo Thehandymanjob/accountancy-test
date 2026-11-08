@@ -136,7 +136,10 @@
    const parsed=await readFile(file);
    const result=await engine.restore(parsed.snapshot);
    const after=await engine.snapshot(parsed.snapshot.domains);
-   if(after.records.length!==parsed.snapshot.records.length)throw new Error("Restore verification failed: record count mismatch.");
+   const afterPkg=await packageSnapshot(after);
+   const afterData={...afterPkg.payload};delete afterData.createdAt;
+   const expectedData={...parsed.pkg.payload};delete expectedData.createdAt;
+   if(await digest(canonical(afterData))!==await digest(canonical(expectedData)))throw new Error("Restore verification failed: restored records do not exactly match the selected backup.");
    return {ok:true,restored:result.restored,domains:result.domains.length,verified:true};
   }
   async function resetFromBackupFile(file){
