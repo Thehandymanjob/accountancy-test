@@ -151,7 +151,7 @@
    const result=await engine.restore(empty);
    const health=await engine.health();
    if(health.totalRecords!==0)throw new Error("Factory Reset verification failed: application records remain in IndexedDB.");
-   return {ok:true,clearedRecords:result.restored,remainingRecords:health.totalRecords,domains:current.domains.length,backupDigest:parsed.pkg.digest};
+   return {ok:true,clearedRecords:current.records.length,remainingRecords:health.totalRecords,domains:current.domains.length,backupDigest:parsed.pkg.digest};
   }
   async function downloadBackup(){
    const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
