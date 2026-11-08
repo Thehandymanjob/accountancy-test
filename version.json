@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "251",
-  "buildId": "THA-251-IDB-ACCOUNTING-COMPARE-DIAGNOSTIC-20261108",
+  "version": "252",
+  "buildId": "THA-252-ACCOUNTING-SNAPSHOT-CONTROL-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 4,
@@ -9,19 +9,20 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "69d3518838b5416cad2974c101681eac18a1d100a35848c9caf4545bfb7c0f73"
+      "sha256": "fb1e908ea41eb6b3f40c609bd46540bc14f0ac43f3b783ed6c24153d0301b75a"
     },
     "version-manager.js": {
-      "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
+      "sha256": "ea459ebdf37904576533c19730598d2543fe176f4f922ffb9fcb92b6c3181017"
     },
     "service-worker.js": {
-      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
+      "sha256": "1b5c6d24e6da2fe2c88c511cbef6e7a9153182c616a576abb1e6d780d8253312"
     },
     "storage-foundation.js": {
-      "sha256": "ee1a6d1a015bb3db6ab2901d8bd9a0180612c79ca9d7aa11c46dbfe6895990f4"
+      "sha256": "c7457145347cbb748c41264cb2bf40796260140edc58823272007e903b256577"
     }
   },
   "releaseNotes": [
+    "v252 adds an explicit, user-confirmed, non-overwriting Accounting snapshot copy from LocalStorage to IndexedDB, with read-back verification. The comparison remains read-only; no existing IndexedDB snapshot is overwritten. The accounting shadow-write queue is exposed so comparison waits for pending writes.",
     "v251 adds a read-only diagnostic comparing Accounting LocalStorage with the IndexedDB appState snapshot. It waits for queued shadow writes and reports exact JSON equality and record counts; it does not modify or migrate user data.",
     "v250 changes the iPhone Projects workspace from a fixed nested scroll container to document-level scrolling, reducing keyboard/focus viewport jumps across all form fields.",
     "v250 exposes the actual project persistence failure (including recovery-lock versus storage-quota errors) instead of a generic message. Project cover photos are compressed to a much smaller size before being stored in LocalStorage.",
