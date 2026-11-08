@@ -4,7 +4,7 @@
 <body><h1>THA v263 — Recovery / Reset Guard Integration — Build 5</h1>
 <p class="note"><b>Isolation:</b> Uses only <code>tha_v263_recovery_lab_idb</code>. Tests the current reset-guard recovery logic against the isolated IndexedDB engine and lab adapter. No app database or LocalStorage is accessed.</p>
 <button id="run">Run recovery integration test</button><pre id="out">Ready.</pre>
-<script src="./storage-idb-v263-reset-guard-lab.js?build=5"></script>
+<script src="./storage-idb-v263-reset-guard-lab-v2.js?build=1"></script>
 <script src="./app-storage-v263-recovery-lab.js?build=5"></script>
 <script src="./v263-recovery-reset-guard-lab.js?build=5"></script>
 <script>
@@ -37,7 +37,7 @@ const raceEngine={};
 for(const name of ["ready","get","readMany","put","remove","transact","mutateMany","reserveCounter","snapshot","restore","health","selfTest","beginResetLock","clearWhileResetLocked","beginResetAndClear","releaseResetLock"]){
  raceEngine[name]=typeof e[name]==="function"?e[name].bind(e):e[name];
 }
-raceEngine.beginResetLock=async()=>{await e.put("accounting","race-window",{amount:777});return e.beginResetLock();};
+const originalBeginResetLock=raceEngine.beginResetLock;\nraceEngine.beginResetLock=async()=>{await e.put("accounting","race-window",{amount:777});return originalBeginResetLock();};
 const raceRecovery=window.HandymanRecoveryV263.createWithDependencies(raceEngine,window.HandymanAppStorageV263Lab);
 const raceBackup=await raceRecovery.createBackup();
 let raceRejected=false;
@@ -45,7 +45,7 @@ try{await raceRecovery.resetFromBackupFile(new File([raceBackup.blob],raceBackup
 catch(x){raceRejected=/database changed before the reset lock/i.test(String(x.message||x));}
 const raceValue=await e.get("accounting","race-window");
 const raceHealth=await e.health();
-result.raceDiagnostics={raceRejected,raceValue,raceTotalRecords:raceHealth.totalRecords,lockApi:typeof e.beginResetLock,clearApi:typeof e.clearWhileResetLocked};
+result.raceDiagnostics={raceRejected,raceValue,raceTotalRecords:raceHealth.totalRecords,lockApi:typeof e.beginResetLock,clearApi:typeof e.clearWhileResetLocked,engineBuild:e.build,engineDatabase:e.databaseName};
 assert("Concurrent write was retained",!!raceValue&&raceValue.amount===777);
 assert("Concurrent write caused reset rejection",raceRejected);
 assert("Concurrent write was not cleared",raceHealth.totalRecords===4);
