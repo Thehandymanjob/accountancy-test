@@ -347,8 +347,8 @@
   async function selfTest() {
     const token = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const domain = "selftest_" + token;
-    const checks = { ready: false, jsonRoundTrip: false, blobRoundTrip: false, atomicWrite: false, concurrentCounterReservation: false, delete: false };
-    const keys = ["json", "blob", "atomic-a", "atomic-b", "counter"];
+    const checks = { ready: false, jsonRoundTrip: false, blobRoundTrip: false, atomicWrite: false, concurrentCounterReservation: false, snapshotRestore: false, delete: false };
+    const keys = ["json", "blob", "atomic-a", "atomic-b", "counter", "snapshot"];
 
     try {
       await ready(); checks.ready = true;
@@ -376,6 +376,16 @@
         numbers.every((value, index) => value === index + 1) &&
         (await get(domain, keys[4])) === 6;
       if (!checks.concurrentCounterReservation) throw new Error("Concurrent counter reservation produced duplicate or missing numbers.");
+      await put(domain, keys[5], { label: "snapshot", attachment: new Blob(["snapshot-binary-v263"], { type: "text/plain" }) });
+      const savedSnapshot = await snapshot([domain]);
+      await put(domain, keys[5], { label: "changed", attachment: new Blob(["different"], { type: "text/plain" }) });
+      const restored = await restore(savedSnapshot);
+      const restoredValue = await get(domain, keys[5]);
+      checks.snapshotRestore = restored.ok && restored.restored === 6 &&
+        restoredValue.label === "snapshot" &&
+        restoredValue.attachment instanceof Blob &&
+        (await restoredValue.attachment.text()) === "snapshot-binary-v263";
+      if (!checks.snapshotRestore) throw new Error("Snapshot restore did not restore exact structured and binary content.");
       await remove(domain, keys[2]);
       checks.delete = (await get(domain, keys[2])) === null;
       if (!checks.delete) throw new Error("Delete test failed.");
