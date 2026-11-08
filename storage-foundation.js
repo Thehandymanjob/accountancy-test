@@ -966,6 +966,34 @@
         if (item.present) localStorage.setItem(item.key, item.value);
       }
 
+      const sameValue = async (a, b) => {
+        if (a === b) return true;
+        if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+        if (a instanceof Date || b instanceof Date) return a instanceof Date && b instanceof Date && a.getTime() === b.getTime();
+        if (a instanceof Blob || b instanceof Blob) {
+          if (!(a instanceof Blob) || !(b instanceof Blob) || a.size !== b.size || a.type !== b.type) return false;
+          if (typeof File !== "undefined" && (a instanceof File || b instanceof File)) {
+            if (!(a instanceof File) || !(b instanceof File) || a.name !== b.name || a.lastModified !== b.lastModified) return false;
+          }
+          const [ab, bb] = await Promise.all([a.arrayBuffer(), b.arrayBuffer()]);
+          const av = new Uint8Array(ab), bv = new Uint8Array(bb);
+          return av.length === bv.length && av.every((byte, index) => byte === bv[index]);
+        }
+        if (a instanceof ArrayBuffer || b instanceof ArrayBuffer || ArrayBuffer.isView(a) || ArrayBuffer.isView(b)) {
+          const av = a instanceof ArrayBuffer ? new Uint8Array(a) : ArrayBuffer.isView(a) ? new Uint8Array(a.buffer, a.byteOffset, a.byteLength) : null;
+          const bv = b instanceof ArrayBuffer ? new Uint8Array(b) : ArrayBuffer.isView(b) ? new Uint8Array(b.buffer, b.byteOffset, b.byteLength) : null;
+          return !!av && !!bv && a.constructor === b.constructor && av.length === bv.length && av.every((byte, index) => byte === bv[index]);
+        }
+        if (Array.isArray(a) || Array.isArray(b)) {
+          if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+          for (let i = 0; i < a.length; i++) if (!await sameValue(a[i], b[i])) return false;
+          return true;
+        }
+        const ak = Object.keys(a).sort(), bk = Object.keys(b).sort();
+        if (ak.length !== bk.length || ak.some((key, index) => key !== bk[index])) return false;
+        for (const key of ak) if (!await sameValue(a[key], b[key])) return false;
+        return true;
+      };
       const verifyTx = db.transaction(names, "readonly");
       const verifyDone = transactionDone(verifyTx);
       const verifiedCounts = {};
@@ -974,6 +1002,11 @@
         const rows = await requestResult(store.getAll());
         if (rows.length !== restoredRows[name].length) {
           throw new Error("Post-restore IndexedDB count verification failed for store: " + name);
+        }
+        for (let index = 0; index < rows.length; index++) {
+          if (!await sameValue(rows[index], restoredRows[name][index])) {
+            throw new Error("Post-restore IndexedDB content verification failed for store: " + name);
+          }
         }
         verifiedCounts[name] = rows.length;
       }
