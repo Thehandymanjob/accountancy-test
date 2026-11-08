@@ -10,7 +10,7 @@
   const DB_VERSION = 1;
   const STORE = "records";
   const META = "metadata";
-  const BUILD = "THA-263-IDB-ONLY-FOUNDATION-1";
+  const BUILD = "THA-263-IDB-ONLY-FOUNDATION-2";
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
