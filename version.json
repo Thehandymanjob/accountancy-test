@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
   "version": "262",
-  "buildId": "THA-262-COMPLETE-PORTABLE-BACKUP-20261108",
+  "buildId": "THA-262-RESTORE-LOG-GUARD-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 5,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "7fa753e95bdf4a1cdbf51cdb1764f0b212542a93d35409829022d0db14b60de2"
+      "sha256": "dcd3a3a2c38557b76c5401b9ded3e9a08bb2b85de880e34ed2b8847bcb1d2ddd"
     },
     "version-manager.js": {
       "sha256": "6fb526f8b8b563315d1234d080c695a08d2ca9f0823358f2d7171de85d9dfee4"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "v262 restore hotfix: suppresses monitor-log writes during portable restore and rollback so LocalStorage verification is not invalidated by diagnostic events. Experimental branch only; requires controlled Safari verification.",
     "v262 portable restore: adds a user-confirmed restore path for complete portable backups, restores all app-prefixed LocalStorage keys and all IndexedDB stores, decodes Blob/File and binary values, and verifies restored record contents with rollback on failure. Experimental branch only; no automatic migration or production release.",
     "v262: Adds a non-destructive comprehensive backup export covering app-namespaced LocalStorage and every IndexedDB store, with explicit lossless encoding for Blob/File and binary values. No restore or migration is performed by export.",
     "v261: Adds deep read-only source-candidate and media metadata auditing across all LocalStorage keys and IndexedDB stores. The audit export no longer writes an activity-log event; no migration, reset, deletion or storage writes.",
