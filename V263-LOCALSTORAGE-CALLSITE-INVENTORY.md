@@ -107,3 +107,20 @@ This is an inventory, not a claim that these call sites have been converted. The
 - Backups export all app domains and binary values; restore validates and commits transactionally.
 - Factory reset backs up and verifies before clearing only the v263 application database.
 - No executable file in the release has a LocalStorage, SessionStorage, or Storage.prototype access.
+
+
+## Imported runtime files and non-runtime labs
+
+The live `index.html` loads two external scripts:
+- `storage-foundation.js` — 26 executable LocalStorage call sites, including inventory, legacy import, portable backup, restore rollback and reset cleanup. This file must be removed from the live script chain after all current callers are replaced by the v263 IndexedDB APIs. It cannot remain as a hidden dependency if the release acceptance criterion is zero LocalStorage access.
+- `version-manager.js` — no LocalStorage references found in the inspected source.
+- `service-worker.js` — no LocalStorage references found in the inspected source.
+
+Additional migration/recovery/lab scripts in the repository contain LocalStorage references, but they are not loaded by the live app entry point. They must be kept out of the v263 runtime script graph. They may remain as historical research tools only if clearly isolated and never imported by the application.
+
+Other inspected files:
+- `accounting-idb-migration.js` — reads legacy LocalStorage; do not load it in v263.
+- `complete-data-coverage-audit.js` — read-only LocalStorage audit tool; do not load it in v263.
+- `source-idb-reconciliation.js` — reads legacy LocalStorage; do not load it in v263.
+- `portable-backup-restore-lab-v262.js` and `storage-foundation-roundtrip-v6.js` — legacy LocalStorage backup/restore tooling; do not load them in v263.
+- `storage-idb-v263.js` — no LocalStorage, SessionStorage or Storage.prototype references found.
