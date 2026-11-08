@@ -21,9 +21,13 @@ async function activateCache(name,pending=false){
  const prior=await c.match(pointerUrl);let priorValue=null;try{priorValue=prior?await prior.clone().json():null;}catch(e){}
  console.info('[THA-PTR] activateCache start',{name,pending,prior:priorValue,stack:(new Error()).stack});
  if(pending){
-  const old=await c.match(pointerUrl),previous=old?(await old.json()).cacheName:null;
-  if(!previous||previous===name||!await caches.has(previous))throw Error('A verified previous app cache is not available; installation was stopped safely.');
-  await c.put(rollbackUrl,new Response(JSON.stringify({previousCache:previous,nextCache:name,version:String(latest?.version||''),buildId:String(latest?.buildId||''),attempts:0,startedAt:Date.now()})));
+  const old=await c.match(pointerUrl);let previous=null;
+  try{previous=old?(await old.json()).cacheName:null;}catch(e){}
+  const candidates=[previous,cacheName(LOCAL_VERSION,LOCAL_BUILD),cacheName(LOCAL_VERSION)].filter((v,i,a)=>v&&v!==name&&a.indexOf(v)===i);
+  let verifiedPrevious=null;
+  for(const candidate of candidates){if(await caches.has(candidate)){verifiedPrevious=candidate;break;}}
+  if(!verifiedPrevious)throw Error('No verified previous app cache exists. The new version was downloaded but activation was stopped safely; app data was not changed.');
+  await c.put(rollbackUrl,new Response(JSON.stringify({previousCache:verifiedPrevious,nextCache:name,version:String(latest?.version||''),buildId:String(latest?.buildId||''),attempts:0,startedAt:Date.now()})));
  }
  await c.put(pointerUrl,new Response(JSON.stringify({cacheName:name})));
  const written=await c.match(pointerUrl);let writtenValue=null;try{writtenValue=written?await written.json():null;}catch(e){}
