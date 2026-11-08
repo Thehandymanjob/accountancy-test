@@ -147,14 +147,31 @@
    const current=await capture();
    const currentPkg=await packageSnapshot(current);
    const currentData={...currentPkg.payload};delete currentData.createdAt;const backupData={...parsed.pkg.payload};delete backupData.createdAt;if(await digest(canonical(currentData))!==await digest(canonical(backupData)))throw new Error("Factory Reset blocked: the selected backup is not an exact snapshot of the current database. Create and save a fresh backup, then select that file.");
-   // Lock every write path and clear the entire database in one engine transaction.
-   // Do not release the lock here: only a separately verified restore may unlock it.
-   if(typeof engine.beginResetAndClear!=="function")throw new Error("Factory Reset blocked: this IndexedDB engine does not support the persistent reset guard.");
-   const result=await engine.beginResetAndClear();
-   if(!result||result.ok!==true||result.locked!==true||result.remainingRecords!==0)throw new Error("Factory Reset failed: the engine did not confirm an active reset lock and an empty database.");
-   const health=await engine.health();
-   if(health.totalRecords!==0)throw new Error("Factory Reset verification failed: application records remain in IndexedDB.");
-   return {ok:true,clearedRecords:current.records.length,remainingRecords:health.totalRecords,domains:current.domains.length,backupDigest:parsed.pkg.digest,resetLocked:true,recoveryRequired:true};
+   // Close the time-of-check/time-of-use race: acquire the persistent lock first,
+   // then compare the current database while all normal write paths are blocked.
+   if(typeof engine.beginResetLock!=="function"||typeof engine.clearWhileResetLocked!=="function")throw new Error("Factory Reset blocked: lock-first reset APIs are unavailable.");
+   const locked=await engine.beginResetLock();
+   if(!locked||locked.ok!==true||locked.locked!==true)throw new Error("Factory Reset blocked: persistent lock could not be verified.");
+   let lockedSnapshot;
+   try {
+    lockedSnapshot=await capture();
+    const lockedPkg=await packageSnapshot(lockedSnapshot);
+    const lockedData={...lockedPkg.payload};delete lockedData.createdAt;
+    const selectedData={...parsed.pkg.payload};delete selectedData.createdAt;
+    const stillExact=await digest(canonical(lockedData))===await digest(canonical(selectedData));
+    if(!stillExact){
+     await engine.releaseResetLock();
+     throw new Error("Factory Reset cancelled: database changed before the reset lock was acquired. No records were cleared; create a fresh backup and retry.");
+    }
+    const cleared=await engine.clearWhileResetLocked();
+    if(!cleared||cleared.ok!==true||cleared.locked!==true||cleared.remainingRecords!==0)throw new Error("Factory Reset failed: locked database clear was not verified.");
+    const health=await engine.health();
+    if(health.totalRecords!==0)throw new Error("Factory Reset verification failed: records remain in IndexedDB.");
+    return {ok:true,clearedRecords:lockedSnapshot.records.length,remainingRecords:0,domains:lockedSnapshot.domains.length,backupDigest:parsed.pkg.digest,resetLocked:true,recoveryRequired:true,lockedSnapshotVerified:true};
+   } catch(error) {
+    // Preserve the lock on unexpected errors. A valid backup restore is the recovery route.
+    throw error;
+   }
   }
   async function downloadBackup(){
    const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
