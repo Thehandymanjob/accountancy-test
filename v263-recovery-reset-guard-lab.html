@@ -33,7 +33,12 @@ const tampered=new File([JSON.stringify(tamperedObj)],"tampered.json",{type:"app
 let tamperRejected=false;try{await r.resetFromBackupFile(tampered)}catch(x){tamperRejected=/SHA-256/.test(String(x.message||x))}
 assert("Tampered backup rejected before reset",tamperRejected&&(await e.health()).totalRecords===3);
 // Simulate a write landing after the first backup comparison but immediately before lock acquisition.
-const raceRecovery=window.HandymanRecoveryV263.createWithDependencies(new Proxy(e,{get(target,property){if(property==="beginResetLock")return async()=>{await target.put("accounting","race-window",{amount:777});return target.beginResetLock();};const value=target[property];return typeof value==="function"?value.bind(target):value;}}),window.HandymanAppStorageV263Lab);
+const raceEngine={};
+for(const name of ["ready","get","readMany","put","remove","transact","mutateMany","reserveCounter","snapshot","restore","health","selfTest","beginResetLock","clearWhileResetLocked","beginResetAndClear","releaseResetLock"]){
+ raceEngine[name]=typeof e[name]==="function"?e[name].bind(e):e[name];
+}
+raceEngine.beginResetLock=async()=>{await e.put("accounting","race-window",{amount:777});return e.beginResetLock();};
+const raceRecovery=window.HandymanRecoveryV263.createWithDependencies(raceEngine,window.HandymanAppStorageV263Lab);
 const raceBackup=await raceRecovery.createBackup();
 let raceRejected=false;
 try{await raceRecovery.resetFromBackupFile(new File([raceBackup.blob],raceBackup.filename,{type:raceBackup.blob.type}));}
@@ -56,7 +61,7 @@ assert("Unknown domain and Blob/Date survive reset recovery",unknown.blob instan
 await e.beginResetAndClear();
 assert("Final lab cleanup clears records and leaves reset lock active",(await e.health()).totalRecords===0);
 result.ok=Object.values(result.checks).every(Boolean);
-}catch(x){result.errors.push(String(x&&x.stack||x));result.ok=false}
+}catch(x){result.errors.push(String(x&&x.message||x)+"\\n"+String(x&&x.stack||""));result.ok=false}
 finally{log();btn.disabled=false}
 };
 })();
