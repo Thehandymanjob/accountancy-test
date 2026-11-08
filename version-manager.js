@@ -4,7 +4,7 @@
 const meta=n=>document.querySelector('meta[name="'+n+'"]')?.content||'';
 const LOCAL_VERSION=meta('app-version'),LOCAL_BUILD=meta('app-build-id');
 const base=new URL('.',document.baseURI),POINTER='tha-test226-active-pointer-v1',pointerUrl=new URL('__tha_test226_active_cache__',base).toString(),rollbackUrl=new URL('__tha_test226_pending_activation__',base).toString();
-const CHANNEL_URL='https://raw.githubusercontent.com/Thehandymanjob/accountancy-test/main/update-channel.json';
+const CHANNEL_URL='https://raw.githubusercontent.com/Thehandymanjob/accountancy-test/release239/update-channel.json';
 const RAW_ROOT='https://raw.githubusercontent.com/Thehandymanjob/accountancy-test/';
 let latest=null,staged=null,busy=false;
 const el=id=>document.getElementById(id);
@@ -21,9 +21,38 @@ async function activateCache(name,pending=false){
  const prior=await c.match(pointerUrl);let priorValue=null;try{priorValue=prior?await prior.clone().json():null;}catch(e){}
  console.info('[THA-PTR] activateCache start',{name,pending,prior:priorValue,stack:(new Error()).stack});
  if(pending){
-  const old=await c.match(pointerUrl),previous=old?(await old.json()).cacheName:null;
-  if(!previous||previous===name||!await caches.has(previous))throw Error('A verified previous app cache is not available; installation was stopped safely.');
-  await c.put(rollbackUrl,new Response(JSON.stringify({previousCache:previous,nextCache:name,version:String(latest?.version||''),buildId:String(latest?.buildId||''),attempts:0,startedAt:Date.now()})));
+  const old=await c.match(pointerUrl);let previous=null;
+  try{previous=old?(await old.json()).cacheName:null;}catch(e){}
+  const candidates=[previous,cacheName(LOCAL_VERSION,LOCAL_BUILD),cacheName(LOCAL_VERSION)].filter((v,i,a)=>v&&v!==name&&a.indexOf(v)===i);
+  let verifiedPrevious=null;
+  for(const candidate of candidates){if(await caches.has(candidate)){verifiedPrevious=candidate;break;}}
+  if(!verifiedPrevious){
+   // Rebuild the currently installed build's rollback cache from its immutable,
+   // previously published commit. This touches CacheStorage only, never app data.
+   const priorCommit='c35257c4e8006ddb7966301b9ec03b6156fc677';
+   const priorRoot=RAW_ROOT+priorCommit+'/';
+   const mr=await fetch(priorRoot+'version.json',{cache:'no-store',credentials:'omit',mode:'cors'});
+   if(!mr.ok)throw Error('No verified previous cache exists and the prior release manifest could not be downloaded; activation was stopped safely.');
+   const priorManifest=await mr.json();
+   if(priorManifest.app!=='The Handyman Accountancy'||String(priorManifest.version)!==String(LOCAL_VERSION)||priorManifest.buildId!==LOCAL_BUILD||!priorManifest.files)throw Error('The immutable prior release does not match the installed build; activation was stopped safely.');
+   const priorName=cacheName(LOCAL_VERSION,LOCAL_BUILD),priorCache=await caches.open(priorName);
+   try{
+    const required=['index.html','version-manager.js','service-worker.js','storage-foundation.js'];
+    for(const asset of required){
+     const expected=String(priorManifest.files[asset]?.sha256||'').toLowerCase();
+     if(!/^[a-f0-9]{64}$/.test(expected))throw Error('Prior release manifest is missing a valid checksum for '+asset+'.');
+     const response=await fetch(priorRoot+asset,{cache:'no-store',credentials:'omit',mode:'cors'});
+     if(!response.ok)throw Error('Could not reconstruct the previous release asset '+asset+'.');
+     const data=await response.arrayBuffer();
+     if((await hash(data)).toLowerCase()!==expected)throw Error('Previous release integrity check failed for '+asset+'.');
+     await priorCache.put(new URL(asset,base),new Response(data,{headers:response.headers}));
+    }
+    await priorCache.put(new URL('version.json',base),new Response(JSON.stringify(priorManifest),{headers:{'Content-Type':'application/json'}}));
+    for(const asset of required)if(!await priorCache.match(new URL(asset,base)))throw Error('Previous release cache is incomplete: '+asset+'.');
+    verifiedPrevious=priorName;
+   }catch(rebuildError){await caches.delete(priorName);throw rebuildError;}
+  }
+  await c.put(rollbackUrl,new Response(JSON.stringify({previousCache:verifiedPrevious,nextCache:name,version:String(latest?.version||''),buildId:String(latest?.buildId||''),attempts:0,startedAt:Date.now()})));
  }
  await c.put(pointerUrl,new Response(JSON.stringify({cacheName:name})));
  const written=await c.match(pointerUrl);let writtenValue=null;try{writtenValue=written?await written.json():null;}catch(e){}
@@ -136,7 +165,7 @@ async function bootstrap(){
   // Waiting workers remain pending until the user explicitly chooses Update Now.
  }catch(e){console.warn('Offline cache setup unavailable; existing app data was not changed.',e);}
 }
-function notes(m){const box=el('appReleaseNotes');if(!box)return;box.textContent='';box.style.display='block';const h=document.createElement('strong');h.textContent='Published version '+m.version+' — What this update includes';box.appendChild(h);const list=Array.isArray(m.releaseNotes)?m.releaseNotes:[];if(list.length){const ul=document.createElement('ul');ul.style.paddingLeft='20px';list.forEach(v=>{const li=document.createElement('li');li.textContent=String(v);ul.appendChild(li);});box.appendChild(ul);}else{const p=document.createElement('p');p.textContent='No release notes supplied.';box.appendChild(p);}}
+function notes(m){const box=el('appReleaseNotes');if(!box)return;box.textContent='';box.style.display='block';const h=document.createElement('strong');h.textContent='Published version '+m.version+' — What this update includes';box.appendChild(h);const list=Array.isArray(m.releaseNotes)?m.releaseNotes.slice(0,1):[];if(list.length){const ul=document.createElement('ul');ul.style.paddingLeft='20px';list.forEach(v=>{const li=document.createElement('li');li.textContent=String(v);ul.appendChild(li);});box.appendChild(ul);}else{const p=document.createElement('p');p.textContent='No release notes supplied.';box.appendChild(p);}}
 window.checkForAppUpdate=async function(){
  if(busy)return;busy=true;latest=null;staged=null;button(false);progress(0,'',false);
  const check=document.querySelector('button[onclick="checkForAppUpdate(true)"]');if(check){check.disabled=true;check.textContent='Checking…';}
@@ -145,7 +174,9 @@ window.checkForAppUpdate=async function(){
   const cr=await fetch(CHANNEL_URL+'?_check='+Date.now(),{cache:'no-store',credentials:'omit',mode:'cors'});if(!cr.ok)throw Error('Update channel HTTP '+cr.status);
   const channel=await cr.json();
   if(channel.app!=='The Handyman Accountancy'||channel.channel!=='test'||!channel.sourceBranch||!/^[a-f0-9]{40}$/i.test(String(channel.sourceCommit||''))||!/^[a-f0-9]{64}$/i.test(String(channel.manifestSha256||'')))throw Error('Invalid update channel manifest.');
-  const root=releaseRoot(channel.sourceBranch);
+  // Pin every release asset to the immutable commit advertised by the channel.
+  // A moving branch URL can briefly serve a different manifest during publication.
+  const root=RAW_ROOT+String(channel.sourceCommit).toLowerCase()+'/';
   const mr=await fetch(root+'version.json?_check='+Date.now(),{cache:'no-store',credentials:'omit',mode:'cors'});if(!mr.ok)throw Error('Release manifest HTTP '+mr.status);
   const manifestBytes=await mr.arrayBuffer();if((await hash(manifestBytes)).toLowerCase()!==String(channel.manifestSha256).toLowerCase())throw Error('Release manifest integrity check failed.');
   const m=JSON.parse(new TextDecoder().decode(manifestBytes));

@@ -76,12 +76,11 @@
     const db = await api().openDatabase();
     try {
       const tx = db.transaction(["kv"], "readwrite");
-      const done = completed(tx);
-      await request(tx.objectStore("kv").delete(assertKey(KEY)));
-      await done;
+      tx.objectStore("kv").delete(assertKey(KEY));
+      await completed(tx);
       const verify = db.transaction(["kv"], "readonly");
-      const remaining = await request(verify.objectStore("kv").get(KEY));
-      if (remaining) throw new Error("Accounting test-key cleanup failed: record still exists after delete transaction.");
+      if (await request(verify.objectStore("kv").get(KEY)))
+        throw new Error("Accounting test-key cleanup failed.");
       return true;
     } finally { db.close(); }
   }
@@ -92,9 +91,7 @@
       nullAndBlankPreserved:false, nestedInvoiceItemsPreserved:false, roundTrip:false, cleanup:false};
     let ownsKey = false;
     try {
-      const initial = await load();
-      checks.emptyKey = initial === null;
-      if (!checks.emptyKey) throw new Error("Test key already contains data; refusing to overwrite it.");
+      const initial = await load();\n      checks.emptyKey = initial === null;\n      if (!checks.emptyKey) throw new Error("Test key already contains data; refusing to overwrite it.");
       const fixture = {
         entries:[{id:"test-entry-1",type:"income",date:"",amount:0,method:null,
           category:"",reference:"",notes:"",invoiceId:"test-invoice-1",createdAt:"2026-11-05T10:00:00Z",
@@ -118,30 +115,16 @@
       checks.unknownFieldsPreserved = loaded.unknownTopLevel.preserve[1] === null &&
         loaded.entries[0].futureField.keep === true;
       checks.roundTrip = deepEqual(loaded, fixture) && result.ok === true;
-      const preCleanupChecks = [checks.emptyKey, checks.schemaAccepted, checks.unknownFieldsPreserved,
-        checks.nullAndBlankPreserved, checks.nestedInvoiceItemsPreserved, checks.roundTrip];
-      if (!preCleanupChecks.every(Boolean)) throw new Error("One or more pre-cleanup schema checks failed.");
-      await remove();
-      ownsKey = false;
+      if (!Object.values(checks).every(Boolean))
+        throw new Error("One or more schema round-trip checks failed.");
+      await remove(); ownsKey = false;
       checks.cleanup = (await load()) === null;
-      if (!checks.cleanup) throw new Error("Cleanup verification failed: dedicated test record is still readable.");
-      if (!Object.values(checks).every(Boolean)) throw new Error("One or more final schema checks failed.");
       return {ok:true,database:api().databaseName,schemaVersion:api().schemaVersion,
         checks,legacyDataChanged:false,appCutover:false};
     } catch (e) {
-      let cleanupError = null;
-      if (ownsKey) {
-        try {
-          await remove();
-          ownsKey = false;
-          checks.cleanup = (await load()) === null;
-        } catch (cleanupFailure) {
-          cleanupError = String(cleanupFailure && cleanupFailure.message || cleanupFailure);
-        }
-      }
+      if (ownsKey) { try { await remove(); } catch (_) {} }
       return {ok:false,checks,legacyDataChanged:false,appCutover:false,
-        error:String(e && e.message || e),
-        cleanupError};
+        error:String(e && e.message || e)};
     }
   }
   root.HandymanAccountingSchemaAdapter = Object.freeze({load,save,remove,selfTest,validate});

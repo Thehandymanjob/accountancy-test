@@ -1,57 +1,41 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "239",
-  "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
-  "releaseDate": "2026-11-03",
+  "version": "262",
+  "buildId": "THA-262-RESTORE-ROLLBACK-REBUILD-20261108",
+  "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
-  "databaseSchema": 2,
+  "databaseSchema": 5,
   "minimumAppVersion": "206",
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "e0875e22072f46c93081ccd68d86ff01b7a88771926e14daed87ffa3831b295c"
+      "sha256": "24289ff2aedcc890c6e6e6393d65d8bba6a84d86db3e69d87e344b055f7d233f"
     },
     "version-manager.js": {
-      "sha256": "64ca40940ddb871bd1e68e073b4cf35ba6fc5106879204c6913f3257162861eb"
+      "sha256": "eab9a7742ce0e20c2e309cb8305950e189225afae555fcab58cf28d898a84d69"
     },
     "service-worker.js": {
-      "sha256": "b678e64953b56ee58ad31313927f90d038a7273e7898dc58bc7dbdb8b25b18e7"
+      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
     },
     "storage-foundation.js": {
-      "sha256": "0286825b4b174861d9fd37d7debc3ad7374649b420de52e2badfb6fc40e43fd6"
+      "sha256": "9d01d7bf0c19e7f9d8c5715a472a3df7ed3f151bec6a8a9f3d7b315cd7dde443"
     }
   },
   "releaseNotes": [
-    "Corrected v239 release package SHA-256 values for all four required app files so the updater can verify and stage the release.",
-    "Invoice status diagnostic: invoice list displays a normalized status and the exact saved status value so Draft-versus-Issued discrepancies can be identified without changing existing invoice records.",
-    "Isolated experimental copy of v226 for the separate accountancy-test repository.",
-    "Accounting, project, contract, factory-reset recovery, and language localStorage keys use the tha_test226_ namespace.",
-    "IndexedDB database and Service Worker CacheStorage names use separate test-only namespaces.",
-    "Update channel and release downloads point only to this test repository.",
-    "Production repository, production data keys, and Final_backup.json were not modified.",
-    "All remaining invoice sequence, diagnostics, report archive, help-draft, and language preference keys were moved into the tha_test226_ namespace.",
-    "Removed the hard-coded minimum invoice number; numbering now starts at 1 when no prior invoice/income number or reserved sequence exists, and otherwise continues from the highest saved or reserved number plus one.",
-    "Corrected numbering: the next number is one greater than the highest existing invoice/income number or reserved sequence; an empty installation starts at 1.",
-    "Invoice number previews no longer reserve or consume a number when the New Invoice form is opened or cancelled; a number is reserved only after a successful save.",
-    "One-time migration removes uncommitted sequence increments from earlier test builds, using the highest persisted invoice or income number as the baseline.",
-    "Factory Reset now clears the invoice sequence so a genuinely fresh local installation starts at invoice number 1.",
-    "One-time test-only cleanup removes only the exact £1 income record numbered 143 with reference ISOLATION TEST; other records are not matched or deleted.",
-    "v229 adds a one-time test-only migration: if there are no saved invoices or income records, reset stale preview/reservation sequence values to zero so the next invoice starts at 1; if saved records exist, preserve the higher reserved sequence and all records.",
-    "Unifies Accounting Records so independent income, expenses, and customer invoices appear in one searchable list.",
-    "Adds a read-only View action for invoices from Records.",
-    "Invoice deletion is now a soft delete: deleted invoices remain visible in Records with a subdued DELETED status and their invoice numbers stay reserved.",
-    "Deleted invoices are excluded from the active Invoices list and cannot be edited or have payment status changed.",
-    "The shared invoice/income numbering logic from v229 is retained.",
-    "Version 231: a newly installed Service Worker no longer activates automatically during app startup.",
-    "A waiting Service Worker is activated only after the user presses Update Now.",
-    "Earlier release notes from v228, v229 and v230 are retained in the update information.",
-    "Version 232 fixes the update failure: version-manager.js now uses the same namespaced active-cache and pending-activation keys as service-worker.js.",
-    "Version 233 adds a non-destructive IndexedDB key-value foundation with verified get, set, remove, key listing, snapshot, migration and comparison APIs. Application records remain on LocalStorage pending staged integration.",
-    "Version 234 adds a safe IndexedDB self-test for write, read, key listing and delete. It uses a temporary test key and confirms legacy LocalStorage data is not changed.",
-    "Version 235 adds a Monitor & Diagnostics control to run the temporary IndexedDB self-test in the browser. It does not migrate or alter existing app records.",
-    "Version 236 fixes a Safari update stall by making Service Worker approval messaging non-blocking after the verified CacheStorage pointer is activated. The app reload no longer waits for Service Worker registration lookup.",
-    "Version 237 fixes the IndexedDB self-test button by exposing its handler explicitly on window, showing immediate test feedback, and restoring the button after completion.",
-    "Version 238 fixes a literal escaped newline after the IndexedDB self-test handler that caused a JavaScript parse error and prevented the Monitor diagnostics script block from executing. Existing LocalStorage records and IndexedDB migration state are unchanged."
+    "v262 recovery hotfix: suppresses monitor-log writes during portable restore and rollback; updater can reconstruct the exact installed v262 rollback cache from its immutable prior release commit after validating SHA-256 checksums, when Safari CacheStorage is empty. Experimental branch only; controlled Safari verification required.",
+    "v262 portable restore: adds a user-confirmed restore path for complete portable backups, restores all app-prefixed LocalStorage keys and all IndexedDB stores, decodes Blob/File and binary values, and verifies restored record contents with rollback on failure. Experimental branch only; no automatic migration or production release.",
+    "v262: Adds a non-destructive comprehensive backup export covering app-namespaced LocalStorage and every IndexedDB store, with explicit lossless encoding for Blob/File and binary values. No restore or migration is performed by export.",
+    "v261: Adds deep read-only source-candidate and media metadata auditing across all LocalStorage keys and IndexedDB stores. The audit export no longer writes an activity-log event; no migration, reset, deletion or storage writes.",
+    "v260: Adds a local, read-only audit of all same-origin LocalStorage keys and IndexedDB records, plus structural source comparison. Exports a JSON report; performs no migration, writes, reset or deletion.",
+    "v259: Marking an invoice as paid waits for the IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. A clear warning is shown if verification fails.",
+    "v258: Marking an invoice as unpaid waits for the IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. A clear warning is shown if verification fails.",
+    "v257: Fix invoice paid-date validation so valid ISO payment dates are accepted.",
+    "v256: Saving or editing an invoice now waits for the queued IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. This includes invoice-linked income when the invoice is marked paid. LocalStorage remains authoritative; no migration or deletion.",
+    "v255: Customer deletion now waits for the queued IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. Customers linked to invoices remain protected from deletion. LocalStorage remains authoritative; no migration or automatic deletion.",
+    "v254: Saving or editing a customer now waits for the queued IndexedDB accounting shadow write and verifies the full accounting snapshot by read-back. LocalStorage remains authoritative; failed IndexedDB verification produces a warning and does not roll back the saved customer. No migration, reset, or data deletion.",
+    "v253: Add Entry awaits the queued IndexedDB shadow write and verifies the stored accounting snapshot by read-back before showing completion. LocalStorage remains authoritative; on an unconfirmed IndexedDB copy, the user receives a warning. No automatic migration, reset, or data deletion.",
+    "v252 adds an explicit, user-confirmed, non-overwriting Accounting snapshot copy from LocalStorage to IndexedDB, with read-back verification.",
+    "v251 adds a read-only diagnostic comparing Accounting LocalStorage with the IndexedDB appState snapshot."
   ],
-  "releaseBranch": "main"
+  "releaseBranch": "release239"
 }
