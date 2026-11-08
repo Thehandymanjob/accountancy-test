@@ -4,7 +4,7 @@
 <body><h1>THA v263 — Portable Backup / Restore / Factory Reset Test</h1>
 <p>Isolated in-memory test only. This page does not open or modify the app's IndexedDB database.</p>
 <button id="run">Run all recovery tests</button><pre id="out">Ready.</pre>
-<script src="./v263-recovery.js"></script>
+<script src="./v263-recovery.js?build=reset-fix-2"></script>
 <script>
 (async function(){
  const out=document.getElementById("out"),run=document.getElementById("run");
@@ -60,7 +60,7 @@
    assert("Date and typed-array values survive round-trip",after.find(x=>x.domain==="accounting").value.when instanceof Date&&after.find(x=>x.domain==="reports").value[0].bytes instanceof Uint16Array);
    const result={ok:Object.values(checks).every(Boolean),checks,errors:[]};
    say("\nRESULT\n"+JSON.stringify(result,null,2));
-  }catch(e){say("\nFATAL: "+(e&&e.stack||e));say("\nPARTIAL RESULT\n"+JSON.stringify({ok:false,checks},null,2));}
+  }catch(e){say("\nFATAL MESSAGE: "+(e&&e.message||String(e)));say("\nFATAL STACK: "+(e&&e.stack||"unavailable"));say("\nPARTIAL RESULT\n"+JSON.stringify({ok:false,checks},null,2));}
   finally{run.disabled=false;}
  };
 })();
