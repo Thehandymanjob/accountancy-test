@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "259",
-  "buildId": "THA-259-VERIFY-PAID-IDB-READBACK-20261108",
+  "version": "260",
+  "buildId": "THA-260-READONLY-STORAGE-AUDIT-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 5,
@@ -9,19 +9,20 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "586c936757e67fb938f0590a267c013d7c6079255138b9f475fc50fb65914dad"
+      "sha256": "d7f7eb7a27beff26cc8c3ee714e8cc88570e9496a3982223e5809f9b8ab8b3f5"
     },
     "version-manager.js": {
-      "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
+      "sha256": "98aca33449cda25d8a6d890bd33c8d7c91dc058498d0ab96ca57986799d5266e"
     },
     "service-worker.js": {
-      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
+      "sha256": "b678e64953b56ee58ad31313927f90d038a7273e7898dc58bc7dbdb8b25b18e7"
     },
     "storage-foundation.js": {
-      "sha256": "ee1a6d1a015bb3db6ab2901d8bd9a0180612c79ca9d7aa11c46dbfe6895990f4"
+      "sha256": "5f65868c7d6edc5cb602360e412aab8dedd5764171fede02cd7c56597b8abc88"
     }
   },
   "releaseNotes": [
+    "v260: Adds a local, read-only audit of all same-origin LocalStorage keys and IndexedDB records, plus structural source comparison. Exports a JSON report; performs no migration, writes, reset or deletion.",
     "v259: Marking an invoice as paid waits for the IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. A clear warning is shown if verification fails.",
     "v258: Marking an invoice as unpaid waits for the IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. A clear warning is shown if verification fails.",
     "v257: Fix invoice paid-date validation so valid ISO payment dates are accepted.",
