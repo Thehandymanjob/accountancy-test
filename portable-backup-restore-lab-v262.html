@@ -19,7 +19,10 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;border-radius:10px;
 <h1>THA v262 — Portable Backup / Restore Lab</h1>
 <div class="notice"><strong>Isolated test only.</strong> This page uses a separate IndexedDB database (<code>the_handyman_accountancy_restore_lab_v262</code>) and a separate LocalStorage prefix (<code>tha_restore_lab_</code>). It does not read, change, or delete the app's real accountancy data.</div>
 <p>This test seeds sample records in every IndexedDB store, including Blob, File, ArrayBuffer, TypedArray, Date and Undefined values. It exports a portable backup, deliberately changes the lab data, restores the backup, and checks that the original values return.</p>
-<button id="run">Run isolated backup / restore test</button>
+<button id="run">Run synthetic round-trip test</button>
+<label for="backupFile">Select the actual v262 JSON backup</label>
+<input id="backupFile" type="file" accept=".json,application/json" style="display:block;width:100%;margin:10px 0">
+<button id="runActual">Test actual backup in isolated lab</button>
 <button id="cleanup">Delete isolated lab data</button>
 <p class="small">Do not run this page as a substitute for a real backup. It tests the restore mechanism against synthetic data only.</p>
 <pre id="result">Ready. No test has been run.</pre>
@@ -86,6 +89,34 @@ document.getElementById("run").addEventListener("click",async()=>{
   if(localStorage.getItem(prefix+"accounting_v1")!=="{\"entries\":[{\"id\":\"sample-income\",\"amount\":123.45}],\"customers\":[{\"id\":\"sample-customer\"}]}")throw new Error("Invalid package changed LocalStorage data");
   log({overall:"PASS",database:H.databaseName,localStorageRoundTrip:"PASS",unrelatedKeyPreserved:"PASS",allIndexedDBStores:restored.indexedDBCounts,fullRecordVerification:"PASS (internal restore check)",binaryTypes:"Blob / File / ArrayBuffer / TypedArray / Date / Undefined included",invalidPackageRejectedWithoutMutation:"PASS",exportMedia:backup.media,cleanup:"Use Delete isolated lab data when finished."});
  }catch(e){log({overall:"FAIL",error:String(e&&e.message||e),warning:"Only the isolated lab database/prefix are involved. Do not run a test on the live app data."});}
+ finally{button.disabled=false;}
+});
+document.getElementById("runActual").addEventListener("click",async()=>{
+ const button=document.getElementById("runActual"),file=document.getElementById("backupFile").files[0];
+ if(!file){log("Select the JSON backup file first.");return;}
+ button.disabled=true;log("Reading backup and preparing isolated restore…");
+ try{
+  const raw=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error||new Error("Could not read selected file"));reader.readAsText(file);});
+  const original=JSON.parse(raw);
+  if(!original||original.format!=="the-handyman-portable-complete-backup"||original.formatVersion!==1)throw new Error("This is not a supported v262 portable complete backup.");
+  const isolated=JSON.parse(JSON.stringify(original));
+  isolated.source.database=H.databaseName;
+  isolated.indexedDB.database=H.databaseName;
+  isolated.localStorage.records=original.localStorage.records.map((item,index)=>({...item,key:prefix+"import_"+index+"_"+encodeURIComponent(item.key)}));
+  isolated.localStorage.count=isolated.localStorage.records.length;
+  await clearStores();
+  for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith(prefix))localStorage.removeItem(k);}
+  const sentinelBefore=localStorage.getItem(sentinelKey);
+  const result=await H.restorePortableBackup(isolated);
+  if(!result.ok)throw new Error("Isolated restore did not report success.");
+  for(const item of isolated.localStorage.records){
+   const actual=localStorage.getItem(item.key);
+   if(item.present?actual!==item.value:actual!==null)throw new Error("Imported LocalStorage value mismatch: "+item.key);
+  }
+  if(localStorage.getItem(sentinelKey)!==sentinelBefore)throw new Error("Unrelated origin key changed.");
+  const counts=await readCounts();
+  log({overall:"PASS",test:"Actual user backup restored into isolated lab database",sourceDatabase:original.source.database,targetDatabase:H.databaseName,backupFileBytes:file.size,localStorageRecordsVerified:isolated.localStorage.records.length,indexedDBStoreCounts:counts,fullIndexedDBRecordContent:"PASS (verified inside restore method)",binaryMediaMetadata:original.media||null,unrelatedOriginData:"PRESERVED",productionDatabaseTouched:false,productionLocalStoragePrefixesTouched:false,cleanup:"Use Delete isolated lab data when finished."});
+ }catch(e){log({overall:"FAIL",error:String(e&&e.message||e),note:"Only the isolated lab database and tha_restore_lab_ prefix are used. The live app database is not targeted."});}
  finally{button.disabled=false;}
 });
 document.getElementById("cleanup").addEventListener("click",async()=>{const b=document.getElementById("cleanup");b.disabled=true;try{log(await deleteLab());}catch(e){log({cleanup:"FAILED",error:String(e&&e.message||e)});}finally{b.disabled=false;}});
