@@ -1,15 +1,15 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "250",
-  "buildId": "THA-250-STORAGE-ERROR-DIAGNOSTICS-IMAGE-COMPRESSION-IOS-SCROLL-20261105",
-  "releaseDate": "2026-11-05",
+  "version": "251",
+  "buildId": "THA-251-IDB-ACCOUNTING-COMPARE-DIAGNOSTIC-20261108",
+  "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 4,
   "minimumAppVersion": "206",
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "f831fcb8753203dc607a72db1f1c23326a557acd3319a531388c4a47a0a648f2"
+      "sha256": "69d3518838b5416cad2974c101681eac18a1d100a35848c9caf4545bfb7c0f73"
     },
     "version-manager.js": {
       "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
@@ -18,10 +18,11 @@
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
     },
     "storage-foundation.js": {
-      "sha256": "9d7082e12f72f378adeba2479848dd873004aae833d8493de4d6c0269d46e9c6"
+      "sha256": "ee1a6d1a015bb3db6ab2901d8bd9a0180612c79ca9d7aa11c46dbfe6895990f4"
     }
   },
   "releaseNotes": [
+    "v251 adds a read-only diagnostic comparing Accounting LocalStorage with the IndexedDB appState snapshot. It waits for queued shadow writes and reports exact JSON equality and record counts; it does not modify or migrate user data.",
     "v250 changes the iPhone Projects workspace from a fixed nested scroll container to document-level scrolling, reducing keyboard/focus viewport jumps across all form fields.",
     "v250 exposes the actual project persistence failure (including recovery-lock versus storage-quota errors) instead of a generic message. Project cover photos are compressed to a much smaller size before being stored in LocalStorage.",
     "v249 stabilizes the entire New Project form on iPhone Safari: disables autofill/autocorrect on every project field and removes nested scrolling from the workspace so the page uses one scroll container while the keyboard is open.",
