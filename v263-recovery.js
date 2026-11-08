@@ -146,7 +146,7 @@
    const parsed=await readFile(file);
    const current=await capture();
    const currentPkg=await packageSnapshot(current);
-   if(currentPkg.digest!==parsed.pkg.digest)throw new Error("Factory Reset blocked: the selected backup is not an exact snapshot of the current database. Create and save a fresh backup, then select that file.");
+   const currentData={...currentPkg.payload};delete currentData.createdAt;const backupData={...parsed.pkg.payload};delete backupData.createdAt;if(await digest(canonical(currentData))!==await digest(canonical(backupData)))throw new Error("Factory Reset blocked: the selected backup is not an exact snapshot of the current database. Create and save a fresh backup, then select that file.");
    const empty={format:SNAPSHOT_FORMAT,database:DB,createdAt:new Date().toISOString(),domains:current.domains,records:[]};
    const result=await engine.restore(empty);
    const health=await engine.health();
