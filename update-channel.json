@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "254",
-  "buildId": "THA-254-SAVE-CUSTOMER-IDB-READBACK-VERIFY-20261108",
-  "manifestSha256": "9811f7c075dbbcaba84f89dd0ea0fc9caf8f65c3dc1e5a59d7a034c88a8cb583",
-  "updatedAt": "2026-11-08T08:38:45.109Z",
-  "note": "Test v254: Customer save/edit awaits the IndexedDB accounting shadow write and verifies exact full-snapshot read-back; LocalStorage remains authoritative. No migration or deletion.",
-  "sourceCommit": "b6540b7607d034ff758e253eb832ddd065581815"
+  "version": "255",
+  "buildId": "THA-255-DELETE-CUSTOMER-IDB-READBACK-VERIFY-20261108",
+  "manifestSha256": "f57640c4d2b85c14c677620e6231941c0a108a1c0be61d42c5999d6912ba2521",
+  "updatedAt": "2026-11-08T08:48:25.175Z",
+  "note": "Test v255: Customer deletion awaits the IndexedDB accounting shadow write and verifies exact full-snapshot read-back. Invoice-linked customers remain protected. LocalStorage remains authoritative; no migration or automatic data deletion.",
+  "sourceCommit": "1058592c029d4275a8dfcbb9ae5051c476b235dd"
 }
