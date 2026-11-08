@@ -3,9 +3,9 @@
   "channel": "test",
   "sourceBranch": "release239",
   "version": "262",
-  "buildId": "THA-262-RESTORE-UPDATER-RECOVERY-20261108",
-  "manifestSha256": "030fd9656af199cd580dd5594199ab3196541f8ae7e16bd07a2871510f9c865f",
-  "updatedAt": "2026-11-08T19:20:00Z",
-  "note": "Test v262 restore and updater recovery hotfix. Experimental branch only; verify in Safari before restoring user data.",
-  "sourceCommit": "3523e19ad678a07e753aedb7383f6a403d0bd777"
+  "buildId": "THA-262-RESTORE-ROLLBACK-REBUILD-20261108",
+  "manifestSha256": "ee42cbaa19357b68383e732e643b6b34aeccda3381b332d6b39e815a3e6fba2a",
+  "updatedAt": "2026-11-08T19:35:00Z",
+  "note": "Test v262 restore and rollback-cache reconstruction hotfix. Experimental branch only; verify Safari before restoring user data.",
+  "sourceCommit": "fefb667b7764c6b6c392460f7c731eb5302faa03"
 }
