@@ -145,7 +145,9 @@ window.checkForAppUpdate=async function(){
   const cr=await fetch(CHANNEL_URL+'?_check='+Date.now(),{cache:'no-store',credentials:'omit',mode:'cors'});if(!cr.ok)throw Error('Update channel HTTP '+cr.status);
   const channel=await cr.json();
   if(channel.app!=='The Handyman Accountancy'||channel.channel!=='test'||!channel.sourceBranch||!/^[a-f0-9]{40}$/i.test(String(channel.sourceCommit||''))||!/^[a-f0-9]{64}$/i.test(String(channel.manifestSha256||'')))throw Error('Invalid update channel manifest.');
-  const root=releaseRoot(channel.sourceBranch);
+  // Pin every release asset to the immutable commit advertised by the channel.
+  // A moving branch URL can briefly serve a different manifest during publication.
+  const root=RAW_ROOT+String(channel.sourceCommit).toLowerCase()+'/';
   const mr=await fetch(root+'version.json?_check='+Date.now(),{cache:'no-store',credentials:'omit',mode:'cors'});if(!mr.ok)throw Error('Release manifest HTTP '+mr.status);
   const manifestBytes=await mr.arrayBuffer();if((await hash(manifestBytes)).toLowerCase()!==String(channel.manifestSha256).toLowerCase())throw Error('Release manifest integrity check failed.');
   const m=JSON.parse(new TextDecoder().decode(manifestBytes));
