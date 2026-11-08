@@ -26,7 +26,32 @@ async function activateCache(name,pending=false){
   const candidates=[previous,cacheName(LOCAL_VERSION,LOCAL_BUILD),cacheName(LOCAL_VERSION)].filter((v,i,a)=>v&&v!==name&&a.indexOf(v)===i);
   let verifiedPrevious=null;
   for(const candidate of candidates){if(await caches.has(candidate)){verifiedPrevious=candidate;break;}}
-  if(!verifiedPrevious)throw Error('No verified previous app cache exists. The new version was downloaded but activation was stopped safely; app data was not changed.');
+  if(!verifiedPrevious){
+   // Rebuild the currently installed build's rollback cache from its immutable,
+   // previously published commit. This touches CacheStorage only, never app data.
+   const priorCommit='c35257c4e8006ddb7966301b9ec03b6156fc677';
+   const priorRoot=RAW_ROOT+priorCommit+'/';
+   const mr=await fetch(priorRoot+'version.json',{cache:'no-store',credentials:'omit',mode:'cors'});
+   if(!mr.ok)throw Error('No verified previous cache exists and the prior release manifest could not be downloaded; activation was stopped safely.');
+   const priorManifest=await mr.json();
+   if(priorManifest.app!=='The Handyman Accountancy'||String(priorManifest.version)!==String(LOCAL_VERSION)||priorManifest.buildId!==LOCAL_BUILD||!priorManifest.files)throw Error('The immutable prior release does not match the installed build; activation was stopped safely.');
+   const priorName=cacheName(LOCAL_VERSION,LOCAL_BUILD),priorCache=await caches.open(priorName);
+   try{
+    const required=['index.html','version-manager.js','service-worker.js','storage-foundation.js'];
+    for(const asset of required){
+     const expected=String(priorManifest.files[asset]?.sha256||'').toLowerCase();
+     if(!/^[a-f0-9]{64}$/.test(expected))throw Error('Prior release manifest is missing a valid checksum for '+asset+'.');
+     const response=await fetch(priorRoot+asset,{cache:'no-store',credentials:'omit',mode:'cors'});
+     if(!response.ok)throw Error('Could not reconstruct the previous release asset '+asset+'.');
+     const data=await response.arrayBuffer();
+     if((await hash(data)).toLowerCase()!==expected)throw Error('Previous release integrity check failed for '+asset+'.');
+     await priorCache.put(new URL(asset,base),new Response(data,{headers:response.headers}));
+    }
+    await priorCache.put(new URL('version.json',base),new Response(JSON.stringify(priorManifest),{headers:{'Content-Type':'application/json'}}));
+    for(const asset of required)if(!await priorCache.match(new URL(asset,base)))throw Error('Previous release cache is incomplete: '+asset+'.');
+    verifiedPrevious=priorName;
+   }catch(rebuildError){await caches.delete(priorName);throw rebuildError;}
+  }
   await c.put(rollbackUrl,new Response(JSON.stringify({previousCache:verifiedPrevious,nextCache:name,version:String(latest?.version||''),buildId:String(latest?.buildId||''),attempts:0,startedAt:Date.now()})));
  }
  await c.put(pointerUrl,new Response(JSON.stringify({cacheName:name})));
