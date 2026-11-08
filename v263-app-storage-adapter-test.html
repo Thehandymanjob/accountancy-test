@@ -14,12 +14,12 @@
   let original=null,restored=false;
   const report={ok:false,build:null,checks:{engineReady:false,adapterReady:false,emptyDefaults:false,writeVerified:false,readVerified:false,restoreVerified:false},errors:[]};
   try{
-   const init=await app.initialize();report.engineReady=true;report.build=init.build;report.adapterReady=init.mode==="indexeddb-only"&&init.legacyImport===false;
+   const init=await app.initialize();report.checks.engineReady=true;report.build=init.build;report.checks.adapterReady=init.mode==="indexeddb-only"&&init.legacyImport===false;
    const names=app.domains;original=await window.HandymanStorageV263.snapshot(names);
    const initial=await app.readAll();
-   report.emptyDefaults=initial.ok&&initial.emptyDatabase&&Array.isArray(initial.state.accounting.entries)&&Array.isArray(initial.state.projects.projects);
+   report.checks.emptyDefaults=initial.ok&&initial.emptyDatabase&&Array.isArray(initial.state.accounting.entries)&&Array.isArray(initial.state.projects.projects);
    const sample={entries:[{id:"v263-adapter-temporary",type:"income",amount:1}],customers:[],invoices:[],settings:{adapterTest:true}};
-   await app.write("accounting",sample);report.writeVerified=true;
+   await app.write("accounting",sample);report.checks.writeVerified=true;
    const read=await app.read("accounting");
    report.readVerified=JSON.stringify(read)===JSON.stringify(sample);
    if(!report.readVerified)throw new Error("Accounting read-back differs from temporary test value.");
