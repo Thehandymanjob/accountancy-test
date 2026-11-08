@@ -72,15 +72,18 @@
     request.onerror = () => reject(request.error || new Error("IndexedDB request failed."));
   });
   const transactionDone = tx => new Promise((resolve, reject) => {
+    let requestError = null;
     tx.oncomplete = resolve;
     tx.onabort = () => {
-      const error = tx.error;
+      const error = tx.error || requestError;
       reject(new Error("IndexedDB transaction aborted" +
         (error ? " [" + error.name + "]: " + error.message : " without a transaction error.")));
     };
-    // Request errors bubble to the transaction. Let the transaction finish its
-    // abort sequence so the caller receives the definitive abort cause.
-    tx.onerror = () => {};
+    // Request errors bubble to the transaction. Capture the originating request
+    // error, but allow IndexedDB to complete the abort sequence.
+    tx.onerror = event => {
+      if (event && event.target && event.target.error) requestError = event.target.error;
+    };
   });
 
   function openDatabase() {
