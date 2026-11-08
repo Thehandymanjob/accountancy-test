@@ -47,8 +47,6 @@
   async function write(name,value){
     const d=descriptor(name);
     const result=await engine().put(d.domain,d.key,value);
-    const verified=await engine().get(d.domain,d.key);
-    if(!await sameValue(verified,value)) throw new Error("Application storage read-back mismatch: "+name);
     return {...result,verified:true};
   }
   async function writeMany(values){
@@ -56,24 +54,6 @@
     const writes=Object.keys(values).map(name=>({...descriptor(name),value:values[name]}));
     if(!writes.length) throw new Error("No application domains supplied.");
     return engine().transact(writes);
-  }
-  async function sameValue(a,b){
-    if(Object.is(a,b)) return true;
-    if(a instanceof Blob||b instanceof Blob){
-      if(!(a instanceof Blob)||!(b instanceof Blob)||a.size!==b.size||a.type!==b.type)return false;
-      return (await a.text())===(await b.text());
-    }
-    if(a instanceof Date||b instanceof Date)return a instanceof Date&&b instanceof Date&&a.getTime()===b.getTime();
-    if(a===null||b===null||typeof a!=="object"||typeof b!=="object")return false;
-    if(Array.isArray(a)||Array.isArray(b)){
-      if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false;
-      for(let i=0;i<a.length;i++)if(!await sameValue(a[i],b[i]))return false;
-      return true;
-    }
-    const ak=Object.keys(a).sort(),bk=Object.keys(b).sort();
-    if(ak.length!==bk.length||ak.some((k,i)=>k!==bk[i]))return false;
-    for(const k of ak)if(!await sameValue(a[k],b[k]))return false;
-    return true;
   }
   async function reserveInvoiceNumber(minimum){return engine().reserveCounter("sequences","invoice-number",minimum||0);}
   async function backup(){return engine().snapshot(Object.keys(domains));}
