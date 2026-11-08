@@ -4,8 +4,8 @@
   "sourceBranch": "release239",
   "version": "262",
   "buildId": "THA-262-COMPLETE-PORTABLE-BACKUP-20261108",
-  "manifestSha256": "ad1a5c317775135efeddbb990038cbb5a9448fc62e9c4c4f51b2b6ac69edf927",
-  "updatedAt": "2026-11-08T18:00:00Z",
-  "note": "Test v262: complete portable backup export and user-confirmed restore are connected. Restore replaces app-prefixed LocalStorage keys and all IndexedDB stores with content verification and rollback. Experimental branch only; live Safari restore still requires controlled testing.",
+  "manifestSha256": "87471c60c0ddaa030702b4e650e9c146dafd5559b5830bad1cc9047895903fd6",
+  "updatedAt": "2026-11-08T18:10:00Z",
+  "note": "Test v262: complete portable backup export and user-confirmed restore are connected. Restore replaces app-prefixed LocalStorage keys and all IndexedDB stores with full record-content verification and rollback. Experimental branch only; live Safari restore still requires controlled testing.",
   "sourceCommit": "c35257c4e8006ddb7966301b9ec03b6156fc6772"
 }
