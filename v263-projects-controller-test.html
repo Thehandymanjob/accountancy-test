@@ -7,6 +7,16 @@
  const button=document.getElementById("run"),out=document.getElementById("out"),names=window.HandymanAppStorageV263.domains;
  const checks={engineReady:false,controllerReady:false,emptyInitialState:false,addProject:false,updateProject:false,addSubproject:false,updateSubproject:false,saveDirectory:false,saveLedgerRecord:false,blobMediaRoundTrip:false,deleteOperations:false,backupRestore:false};
  const report={ok:false,build:"THA-263-PROJECTS-1",checks,errors:[],noLocalStorageAccess:true};
+ const equal=async(a,b,seen=new WeakMap())=>{
+  if(Object.is(a,b))return true;
+  if(a===null||b===null||typeof a!=="object"||typeof b!=="object")return false;
+  let paired=seen.get(a);if(paired&&paired.has(b))return true;if(!paired){paired=new WeakSet();seen.set(a,paired)}paired.add(b);
+  if(a instanceof Blob||b instanceof Blob){if(!(a instanceof Blob)||!(b instanceof Blob)||a.size!==b.size||a.type!==b.type)return false;const [x,y]=await Promise.all([a.arrayBuffer(),b.arrayBuffer()]);const ax=new Uint8Array(x),by=new Uint8Array(y);return ax.length===by.length&&ax.every((v,i)=>v===by[i])}
+  if(a instanceof Date||b instanceof Date)return a instanceof Date&&b instanceof Date&&a.getTime()===b.getTime();
+  if(Array.isArray(a)||Array.isArray(b)){if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return false;for(let i=0;i<a.length;i++)if(!(await equal(a[i],b[i],seen)))return false;return true}
+  const ak=Object.keys(a).sort(),bk=Object.keys(b).sort();if(ak.length!==bk.length||ak.some((k,i)=>k!==bk[i]))return false;
+  for(const k of ak)if(!(await equal(a[k],b[k],seen)))return false;return true;
+ };
  const log=()=>out.textContent=JSON.stringify(report,null,2);
  button.addEventListener("click",async()=>{
   button.disabled=true;let snapshot=null;
@@ -36,7 +46,7 @@
    state=await window.HandymanProjectsV263.load();checks.deleteOperations=state.projects.length===0&&state.contractors.length===0;
   }catch(e){report.errors.push(String(e&&e.message||e))}
   finally{
-   if(snapshot){try{const restored=await window.HandymanStorageV263.restore(snapshot);const after=await window.HandymanStorageV263.snapshot(names);checks.backupRestore=restored.ok===true&&await window.HandymanStorageV263.valuesEqual(after.records.map(x=>({id:x.id,value:x.value})),snapshot.records.map(x=>({id:x.id,value:x.value})));if(!checks.backupRestore)report.errors.push("Original application-domain snapshot was not restored exactly.")}catch(e){report.errors.push("Snapshot restore failed: "+String(e&&e.message||e))}}
+   if(snapshot){try{const restored=await window.HandymanStorageV263.restore(snapshot);const after=await window.HandymanStorageV263.snapshot(names);checks.backupRestore=restored.ok===true&&await equal(after.records.map(x=>({id:x.id,value:x.value})),snapshot.records.map(x=>({id:x.id,value:x.value})));if(!checks.backupRestore)report.errors.push("Original application-domain snapshot was not restored exactly.")}catch(e){report.errors.push("Snapshot restore failed: "+String(e&&e.message||e))}}
    else report.errors.push("No snapshot was captured; no domain writes were attempted.");
    report.ok=Object.values(checks).every(Boolean)&&report.errors.length===0;log();button.disabled=false;
   }
