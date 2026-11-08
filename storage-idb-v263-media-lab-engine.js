@@ -546,6 +546,6 @@
   root.HandymanStorageV263 = Object.freeze({
     databaseName: DB_NAME, schemaVersion: DB_VERSION, build: BUILD,
     ready, get, readMany, put, remove, transact, mutateMany, reserveCounter,
-    snapshot, restore, beginResetLock, clearWhileResetLocked, releaseResetLock, health, selfTest
+    snapshot, restore, beginResetLock, clearWhileResetLocked, releaseResetLock, health, selfTest, valuesEqual
   });
 })(window);
