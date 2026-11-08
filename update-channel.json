@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "260",
-  "buildId": "THA-260-READONLY-STORAGE-AUDIT-20261108",
-  "manifestSha256": "485e3685474c9041137ee60b1ed63ca115194fbad8b6e4e06ce68657e355958e",
+  "version": "261",
+  "buildId": "THA-261-DEEP-READONLY-STORAGE-AUDIT-20261108",
+  "manifestSha256": "cb86b860536995569111513fc378de8e2210de0774fe2f57f9e26d168ec6bc59",
   "updatedAt": "2026-11-08",
-  "note": "Test v260: immutable release commit and verified SHA-256 hashes for all release assets.",
-  "sourceCommit": "62cb0f5e9b84f112aa8508cfc97093ca52249056"
+  "note": "Test v261: strict read-only deep source and media audit; no storage writes.",
+  "sourceCommit": "705bae28b52926d26950374b1cb309ae4981e1c4"
 }
