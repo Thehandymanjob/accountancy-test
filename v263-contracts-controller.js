@@ -27,7 +27,7 @@
   const result=await storage().write("contracts",next);
   if(!result||result.ok!==true)throw new Error("Contracts state write was not confirmed.");
   const verified=normalize(await storage().read("contracts"));
-  if(verified.contracts.length!==next.contracts.length||verified.contracts.some((c,i)=>c.id!==next.contracts[i].id))throw new Error("Contracts state verification failed after save.");
+  if(!root.HandymanStorageV263||typeof root.HandymanStorageV263.valuesEqual!=="function"||!(await root.HandymanStorageV263.valuesEqual(verified,next)))throw new Error("Contracts state full-content verification failed after save.");
   return {ok:true,state:verified};
  }
  async function update(mutator){
