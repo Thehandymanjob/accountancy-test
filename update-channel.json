@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "252",
-  "buildId": "THA-252-ACCOUNTING-SNAPSHOT-CONTROL-20261108",
-  "manifestSha256": "842258876249c11ac4945cc3e6399338fac9623f5d4f80efd37c49cbd6153c8b",
-  "updatedAt": "2026-11-08T08:30:00Z",
-  "note": "Test v252: explicit confirmed accounting snapshot creation in IndexedDB without overwriting an existing snapshot; read-only comparison waits for queued writes. Asset SHA-256 checksums verified.",
-  "sourceCommit": "cbefd68a03fb7f0464f43fc8ca941780ba704881"
+  "version": "253",
+  "buildId": "THA-253-ADD-ENTRY-IDB-READBACK-VERIFY-20261108",
+  "manifestSha256": "5d9842543bd9a5fa05936acee177838fbcb1485e22355bcafca31e7a998bf3df",
+  "updatedAt": "2026-11-08T08:45:00Z",
+  "note": "Test v253: Add Entry awaits queued IndexedDB shadow write and verifies exact read-back; LocalStorage remains authoritative. No migration or deletion.",
+  "sourceCommit": "4814c07ecc176cdc6f3df6868336ca8860d5294f"
 }
