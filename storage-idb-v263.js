@@ -301,12 +301,40 @@
   }
 
   async function reserveCounter(domain, key, minimum) {
+    const item = validateDescriptor(domain, key);
+    const floor = Number(minimum) || 0;
+    const db = await openDatabase();
+    const stamp = new Date().toISOString();
     let reserved;
-    const result = await mutateMany([{ domain, key, initialValue: 0 }], rows => {
-      reserved = Math.max(Number(rows[0].value) || 0, Number(minimum) || 0) + 1;
-      return [reserved];
-    });
-    return { ok: result.ok, value: reserved };
+    try {
+      const tx = db.transaction([STORE], "readwrite");
+      const done = transactionDone(tx);
+      const store = tx.objectStore(STORE);
+      const request = store.get(item.id);
+      let operationError = null;
+      request.onsuccess = () => {
+        try {
+          const current = request.result ? request.result.value : 0;
+          reserved = Math.max(Number(current) || 0, floor) + 1;
+          validateValue(reserved);
+          store.put({ ...item, value: reserved, updatedAt: stamp });
+        } catch (error) {
+          operationError = error;
+          try { tx.abort(); } catch (_) {}
+        }
+      };
+      try { await done; } catch (error) {
+        if (operationError) throw operationError;
+        throw error;
+      }
+      if (operationError) throw operationError;
+      const check = await get(domain, key);
+      if (check !== reserved) {
+        throw new Error("IndexedDB counter read-back mismatch for " + domain + "/" + key +
+          " (expected " + String(reserved) + ", received " + String(check) + ")");
+      }
+      return { ok: true, value: reserved };
+    } finally { db.close(); }
   }
 
   async function snapshot(domains) {
