@@ -130,10 +130,18 @@
       const tx = db.transaction([META], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(META);
-      const current = await requestResult(store.get("schema"));
-      if (current && current.version !== 1) throw new Error("Unexpected v263 schema metadata.");
-      if (!current) store.put({ key: "schema", version: 1, database: DB_NAME, build: BUILD, createdAt: new Date().toISOString() });
-      await done;
+      const request = store.get("schema");
+      let validationError = null;
+      request.onsuccess = () => {
+        const current = request.result;
+        if (current && current.version !== 1) {
+          validationError = new Error("Unexpected v263 schema metadata.");
+          try { tx.abort(); } catch (_) {}
+          return;
+        }
+        if (!current) store.put({ key: "schema", version: 1, database: DB_NAME, build: BUILD, createdAt: new Date().toISOString() });
+      };
+      try { await done; } catch (error) { if (validationError) throw validationError; throw error; }
       return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION, build: BUILD };
     } finally { db.close(); }
   }
@@ -242,20 +250,46 @@
       const tx = db.transaction([STORE], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
-      const currentRows = await Promise.all(prepared.map(x => requestResult(store.get(x.id))));
-      const current = currentRows.map((row, i) => ({
-        domain: prepared[i].domain,
-        key: prepared[i].key,
-        value: row ? row.value : clone(prepared[i].initialValue)
-      }));
-      const next = updater(clone(current));
-      if (next && typeof next.then === "function") throw new Error("IndexedDB mutation callback must be synchronous.");
-      if (!Array.isArray(next) || next.length !== prepared.length) throw new Error("Mutation must return one value per descriptor.");
-      for (let i = 0; i < prepared.length; i++) {
-        validateValue(next[i]);
-        store.put({ id: prepared[i].id, domain: prepared[i].domain, key: prepared[i].key, value: next[i], updatedAt: stamp });
+      const currentRows = new Array(prepared.length);
+      let received = 0;
+      let next;
+      let mutationError = null;
+
+      // Keep every operation that touches this transaction inside IndexedDB
+      // request callbacks. Safari may auto-commit a transaction across an
+      // awaited Promise continuation, even when another request is expected.
+      const requests = prepared.map((item, index) => {
+        const request = store.get(item.id);
+        request.onsuccess = () => {
+          currentRows[index] = request.result || null;
+          received++;
+          if (received !== prepared.length) return;
+          try {
+            const current = currentRows.map((row, i) => ({
+              domain: prepared[i].domain,
+              key: prepared[i].key,
+              value: row ? row.value : clone(prepared[i].initialValue)
+            }));
+            next = updater(clone(current));
+            if (next && typeof next.then === "function") throw new Error("IndexedDB mutation callback must be synchronous.");
+            if (!Array.isArray(next) || next.length !== prepared.length) throw new Error("Mutation must return one value per descriptor.");
+            // Validate every value before issuing the first write, preventing partial batches.
+            for (const value of next) validateValue(value);
+            for (let i = 0; i < prepared.length; i++) {
+              store.put({ id: prepared[i].id, domain: prepared[i].domain, key: prepared[i].key, value: next[i], updatedAt: stamp });
+            }
+          } catch (error) {
+            mutationError = error;
+            try { tx.abort(); } catch (_) {}
+          }
+        };
+      });
+
+      try { await done; } catch (error) {
+        if (mutationError) throw mutationError;
+        throw error;
       }
-      await done;
+      if (mutationError) throw mutationError;
       const verified = await readMany(prepared);
       for (let i = 0; i < prepared.length; i++) {
         if (!(await valuesEqual(verified.records[i].value, next[i]))) {
@@ -311,10 +345,24 @@
       const tx = db.transaction([STORE], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
-      const existing = await requestResult(store.getAll());
-      for (const row of existing) if (domains.includes(row.domain)) store.delete(row.id);
-      for (const row of prepared) store.put({ ...row, updatedAt: new Date().toISOString() });
-      await done;
+      const request = store.getAll();
+      let mutationError = null;
+      request.onsuccess = () => {
+        try {
+          const existing = request.result || [];
+          for (const row of existing) if (domains.includes(row.domain)) store.delete(row.id);
+          const stamp = new Date().toISOString();
+          for (const row of prepared) store.put({ ...row, updatedAt: stamp });
+        } catch (error) {
+          mutationError = error;
+          try { tx.abort(); } catch (_) {}
+        }
+      };
+      try { await done; } catch (error) {
+        if (mutationError) throw mutationError;
+        throw error;
+      }
+      if (mutationError) throw mutationError;
       const verify = await snapshot(domains);
       const expected = prepared.slice().sort((a, b) => a.id.localeCompare(b.id));
       if (verify.records.length !== expected.length) throw new Error("IndexedDB restore record-count verification failed.");
