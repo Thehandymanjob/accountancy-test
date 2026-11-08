@@ -4,8 +4,8 @@
   "sourceBranch": "release239",
   "version": "260",
   "buildId": "THA-260-READONLY-STORAGE-AUDIT-20261108",
-  "manifestSha256": "99caa74df9897eb57957d90af428ffb54c03abebd1d1a04de16e9d5dfbce73d9",
+  "manifestSha256": "d7e4338875021c8e2887a072815e86cbdfd3edd3ec50cfbb2e3cbc52bcc3111c",
   "updatedAt": "2026-11-08",
-  "note": "Test v260: release files are fetched from the immutable source commit to prevent moving-branch manifest mismatches.",
-  "sourceCommit": "2a1f3e9e3370104f1d3a23056e05245d9ef93fae"
+  "note": "Test v260: updater fetches the release manifest and all assets from the immutable source commit.",
+  "sourceCommit": "34b66f3f1a594504af5c51bda4e1886bd224dfc5"
 }
