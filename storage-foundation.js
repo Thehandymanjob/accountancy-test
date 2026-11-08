@@ -949,6 +949,102 @@
     } finally { db.close(); }
   }
 
+  // Lossless, non-destructive export of app-owned LocalStorage plus every
+  // IndexedDB store. Binary values are encoded explicitly; no restore is performed.
+  async function exportPortableBackup() {
+    const appKeyPattern = /^(tha_test226_|tha_restore_test_v1_|tha_v206_)/;
+    const local = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && appKeyPattern.test(key)) {
+        const value = localStorage.getItem(key);
+        local.push({ key, present: value !== null, value });
+      }
+    }
+    for (const key of LEGACY_KEYS) {
+      if (!local.some(item => item.key === key)) local.push({ key, present: false, value: null });
+    }
+    local.sort((a, b) => a.key.localeCompare(b.key));
+
+    const names = [...STORES, KV_STORE];
+    const db = await openDatabase();
+    let rawStores;
+    try {
+      const tx = db.transaction(names, "readonly");
+      const done = transactionDone(tx);
+      rawStores = {};
+      for (const name of names) rawStores[name] = await requestResult(tx.objectStore(name).getAll());
+      await done;
+    } finally { db.close(); }
+
+    const bytesToBase64 = bytes => {
+      let binary = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    };
+    const encode = async value => {
+      if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+      if (typeof value === "undefined") return { __thaType: "Undefined" };
+      if (value instanceof Blob) {
+        const buffer = await value.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        return {
+          __thaType: typeof File !== "undefined" && value instanceof File ? "File" : "Blob",
+          mimeType: value.type || "",
+          size: value.size,
+          name: typeof File !== "undefined" && value instanceof File ? value.name : undefined,
+          lastModified: typeof File !== "undefined" && value instanceof File ? value.lastModified : undefined,
+          base64: bytesToBase64(bytes)
+        };
+      }
+      if (value instanceof ArrayBuffer) return { __thaType: "ArrayBuffer", base64: bytesToBase64(new Uint8Array(value)) };
+      if (ArrayBuffer.isView(value)) {
+        return { __thaType: "TypedArray", constructor: value.constructor.name,
+          base64: bytesToBase64(new Uint8Array(value.buffer, value.byteOffset, value.byteLength)) };
+      }
+      if (value instanceof Date) return { __thaType: "Date", value: value.toISOString() };
+      if (Array.isArray(value)) return Promise.all(value.map(encode));
+      if (typeof value === "object") {
+        const out = {};
+        for (const key of Object.keys(value)) out[key] = await encode(value[key]);
+        return out;
+      }
+      throw new Error("Unsupported value type in IndexedDB backup: " + typeof value);
+    };
+
+    const encodedStores = {};
+    for (const name of names) encodedStores[name] = await encode(rawStores[name]);
+    const counts = Object.fromEntries(names.map(name => [name, rawStores[name].length]));
+    const media = { blobCount: 0, binaryCount: 0, binaryBytes: 0 };
+    const inspect = value => {
+      if (!value || typeof value !== "object") return;
+      if (value.__thaType === "Blob" || value.__thaType === "File") {
+        media.blobCount++; media.binaryBytes += Number(value.size) || 0; return;
+      }
+      if (value.__thaType === "ArrayBuffer" || value.__thaType === "TypedArray") {
+        media.binaryCount++;
+        try { media.binaryBytes += atob(value.base64 || "").length; } catch (_) {}
+        return;
+      }
+      if (Array.isArray(value)) value.forEach(inspect);
+      else Object.values(value).forEach(inspect);
+    };
+    inspect(encodedStores);
+    return {
+      app: "The Handyman Accountancy",
+      format: "the-handyman-portable-complete-backup",
+      formatVersion: 1,
+      exportedAt: new Date().toISOString(),
+      source: { database: DB_NAME, schemaVersion: DB_VERSION, localStorageScope: "app namespace prefixes only" },
+      localStorage: { count: local.length, records: local },
+      indexedDB: { database: DB_NAME, schemaVersion: DB_VERSION, stores: names, counts, data: encodedStores },
+      media
+    };
+  }
+
   async function status() {
     const db = await openDatabase();
     try {
