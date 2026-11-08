@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "252",
-  "buildId": "THA-252-ACCOUNTING-SNAPSHOT-CONTROL-20261108",
+  "version": "253",
+  "buildId": "THA-253-ADD-ENTRY-IDB-READBACK-VERIFY-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 4,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "3fcd496dbe4e086d7874d4c34bee008532bcb70ec573fb04d11819562ffdd78f"
+      "sha256": "e1e212eb0e6269bfd9b79622f37063e28342eedef20a56c03b944602242b6a3c"
     },
     "version-manager.js": {
       "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "v253: Add Entry now awaits the queued IndexedDB shadow write and verifies the stored accounting snapshot by read-back before showing completion. LocalStorage remains authoritative; on an unconfirmed IndexedDB copy, the user receives a warning. No automatic migration, reset, or data deletion.",
     "v252 adds an explicit, user-confirmed, non-overwriting Accounting snapshot copy from LocalStorage to IndexedDB, with read-back verification. The comparison remains read-only; no existing IndexedDB snapshot is overwritten. The accounting shadow-write queue is exposed so comparison waits for pending writes.",
     "v251 adds a read-only diagnostic comparing Accounting LocalStorage with the IndexedDB appState snapshot. It waits for queued shadow writes and reports exact JSON equality and record counts; it does not modify or migrate user data.",
     "v250 changes the iPhone Projects workspace from a fixed nested scroll container to document-level scrolling, reducing keyboard/focus viewport jumps across all form fields.",
