@@ -1123,6 +1123,7 @@ if(window.HandymanStorageFoundation&&typeof window.HandymanStorageFoundation.wri
   window.__thaAccountingIdbShadowOk=false;window.__thaAccountingIdbShadowError=String(error&&error.message||error);
   if(typeof logMonitorEvent==='function')logMonitorEvent('storage','accounting_idb_shadow_failed','indexeddb','accounting','failed',{message:window.__thaAccountingIdbShadowError});
  });
+ window.__thaAccountingIdbShadowQueue=thaAccountingIdbShadowQueue;
 }
 setStatus(`Saved successfully · ${db.entries.length} entr${db.entries.length===1?'y':'ies'} stored on this device.`);return true}catch(e){window.__thaAccountingSaveOk=false;storageAvailable=false;if(typeof logMonitorEvent==='function')logMonitorEvent('storage','accounting_persist_failed','storage',KEY,'failed',{message:String(e.message||e),name:String(e.name||'Error')});setStatus('Could not save to this browser. Open the site directly in Safari and check that Private Browsing is off. Download a backup before closing this page.', 'error');alert('Save failed. Browser storage is unavailable. Open this site directly in Safari (not an in-app preview), make sure Private Browsing is off, and try again.');return false}}
 const ACCOUNTING_PAGE_TITLES={accountancyHome:'Accountancy',home:'Dashboard',entry:'Add Entry',records:'Records',invoices:'Invoices',customers:'Customers',report:'Reports',settings:'Settings',backup:'Backup & Restore',profileGuide:'Profile & Logo',helpHub:'Help',userGuide:'User Guide',softwareUpdate:'Software Update',monitor:'Monitor & Diagnostics',factoryResetPage:'Factory Reset'};
