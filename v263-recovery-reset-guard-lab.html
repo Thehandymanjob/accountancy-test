@@ -44,7 +44,11 @@ let raceRejected=false;
 try{await raceRecovery.resetFromBackupFile(new File([raceBackup.blob],raceBackup.filename,{type:raceBackup.blob.type}));}
 catch(x){raceRejected=/database changed before the reset lock/i.test(String(x.message||x));}
 const raceValue=await e.get("accounting","race-window");
-assert("Concurrent write between comparison and lock prevents reset and preserves data",raceRejected&&raceValue&&raceValue.amount===777&&(await e.health()).totalRecords===4);
+const raceHealth=await e.health();
+result.raceDiagnostics={raceRejected,raceValue,raceTotalRecords:raceHealth.totalRecords,lockApi:typeof e.beginResetLock,clearApi:typeof e.clearWhileResetLocked};
+assert("Concurrent write was retained",!!raceValue&&raceValue.amount===777);
+assert("Concurrent write caused reset rejection",raceRejected);
+assert("Concurrent write was not cleared",raceHealth.totalRecords===4);
 assert("Mismatch path safely releases reset lock",await e.put("diagnostics","after-race",{ok:true}).then(x=>x.ok));
 const freshBackup=await r.createBackup();
 const freshFile=new File([freshBackup.blob],freshBackup.filename,{type:freshBackup.blob.type});
