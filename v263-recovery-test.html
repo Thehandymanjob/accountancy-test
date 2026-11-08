@@ -13,10 +13,10 @@
  const assert=(name,condition)=>{checks[name]=!!condition;say((condition?"PASS: ":"FAIL: ")+name);if(!condition)throw new Error(name);};
  function makeEngine(){
   let records=[
-   {domain:"accounting",key:"state",value:{customers:[{id:"c1",name:"Test"}],entries:[{id:"e1",amount:42}],when:new Date("2026-11-08T10:00:00Z")}},
-   {domain:"projects",key:"state",value:{projects:[{id:"p1",photos:[new Blob(["photo-binary"],{type:"image/png"})]}],logo:new Blob(["logo-binary"],{type:"image/png"})}},
-   {domain:"contracts",key:"state",value:{contracts:[{id:"k1",attachment:new File(["contract-file"],"contract.pdf",{type:"application/pdf",lastModified:123456})}]}},
-   {domain:"reports",key:"archive",value:[{id:"r1",bytes:new Uint16Array([10,20,30]),buffer:new Uint8Array([1,2,3]).buffer}]}
+   {id:"accounting:state",domain:"accounting",key:"state",value:{customers:[{id:"c1",name:"Test"}],entries:[{id:"e1",amount:42}],when:new Date("2026-11-08T10:00:00Z")}},
+   {id:"projects:state",domain:"projects",key:"state",value:{projects:[{id:"p1",photos:[new Blob(["photo-binary"],{type:"image/png"})]}],logo:new Blob(["logo-binary"],{type:"image/png"})}},
+   {id:"contracts:state",domain:"contracts",key:"state",value:{contracts:[{id:"k1",attachment:new File(["contract-file"],"contract.pdf",{type:"application/pdf",lastModified:123456})}]}},
+   {id:"reports:archive",domain:"reports",key:"archive",value:[{id:"r1",bytes:new Uint16Array([10,20,30]),buffer:new Uint8Array([1,2,3]).buffer}]}
   ];
   const copy=x=>structuredClone(x);
   return {
