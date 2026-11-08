@@ -708,6 +708,59 @@
         language:localStorageKeys.filter(k=>/language/i.test(k)),
         recovery:localStorageKeys.filter(k=>/recovery|restore|baseline|factory_reset/i.test(k))
       };
+      const sourceCandidates = [];
+      const mediaCandidates = [];
+      const scanMedia = (node, sourceKey, path, depth) => {
+        if (!node || typeof node !== "object" || depth > 10) return;
+        if (Array.isArray(node)) { node.forEach((value,index)=>scanMedia(value,sourceKey,path+"["+index+"]",depth+1)); return; }
+        for (const [field,value] of Object.entries(node)) {
+          const nextPath = path ? path+"."+field : field;
+          if (typeof value === "string" && /(logo|photo|image|receipt|attachment|signature|document|file|report)/i.test(field)) {
+            const isDataUrl = /^data:[^;,]+(?:;[^,]*)?,/i.test(value);
+            mediaCandidates.push({ source:sourceKey, path:nextPath, field, bytes:byteLength(value), dataUrl:isDataUrl, looksLikeBase64:!isDataUrl && value.length>256 && /^[A-Za-z0-9+/=\\s]+$/.test(value.slice(0,512)) });
+          } else if (value && typeof value === "object") scanMedia(value,sourceKey,nextPath,depth+1);
+        }
+      };
+      for (const [key,raw] of Object.entries(local)) {
+        if (!/(project|contract|account|invoice|receipt|logo|image|photo|report|asset)/i.test(key)) continue;
+        const parsed = safeJson(raw);
+        const value = parsed.valid ? parsed.value : null;
+        let summary = null;
+        if (value !== null) {
+          summary = summarizeTree(value);
+          const root = Array.isArray(value) ? value : (value && typeof value === "object" ? value : {});
+          const arrayCounts = {};
+          for (const name of ["projects","projectList","contracts","invoices","entries","customers","receipts","expenses","reports","workers","partners","contractors","companies","companyJobs"]) {
+            if (Array.isArray(root[name])) arrayCounts[name] = root[name].length;
+          }
+          summary = { ...summary, topLevelArrayCounts:arrayCounts, topLevelFields:Object.keys(root).sort() };
+          scanMedia(value,key,"",0);
+        }
+        sourceCandidates.push({ key, bytes:byteLength(raw), digest:digest(raw), jsonValid:parsed.valid,
+          parsedType:parsed.valid ? (Array.isArray(value)?"array":value===null?"null":typeof value) : "string", summary });
+      }
+      const indexedMediaBefore = mediaCandidates.length;
+      for (const storeName of STORES) {
+        const rows = await readAll(storeName);
+        rows.forEach((row,index)=>scanMedia(row,"indexedDB:"+storeName,"record["+index+"]",0));
+      }
+      const indexedMedia = mediaCandidates.slice(indexedMediaBefore);
+      const mediaBySource = {};
+      for (const item of mediaCandidates) {
+        const key = item.source;
+        if (!mediaBySource[key]) mediaBySource[key] = { fields:0, bytes:0, dataUrls:0 };
+        mediaBySource[key].fields++;
+        mediaBySource[key].bytes += item.bytes;
+        if (item.dataUrl) mediaBySource[key].dataUrls++;
+      }
+      const deepSourceAudit = {
+        build:"deep-source-audit-v1",
+        candidateCount:sourceCandidates.length,
+        sourceCandidates,
+        mediaInventory:{ fieldCount:mediaCandidates.length, indexedDBFieldCount:indexedMedia.length,
+          bySource:mediaBySource, fields:mediaCandidates },
+        safety:"Metadata only. No raw values, image data, file contents, contact details or free-text payloads are returned."
+      };
       const kvRows=await readAll(KV_STORE);
       const snapshotCounts={total:snapshots.length,present:snapshots.filter(x=>x.present).length,
         byLegacyKey:Object.fromEntries([...new Set(snapshots.map(x=>x.legacyKey))].sort().map(key=>[key,snapshots.filter(x=>x.legacyKey===key).length]))};
@@ -718,6 +771,7 @@
         indexedDBAudit:{kvCount:kvRows.length,kvKeys:kvRows.map(x=>x.key).sort(),snapshotCounts},
         localStorageSources:{projects:safeLocalSummary(projectsLocal),contracts:safeLocalSummary(contractsLocal),
           monitorLog:safeLocalSummary(local[PREFIX+"monitor_log_v1"]??null)},
+        deepSourceAudit,
         projects:projectComparison,projectFieldComparison,
         projectsPackage:{present:kvProjects!==null,bytes:kvProjects===null?0:byteLength(kvProjects),digest:kvProjects===null?null:digest(kvProjects),
           jsonValid:parsedPackage?parsedPackage.valid:null,summary:packageSummary},
