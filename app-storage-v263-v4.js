@@ -45,7 +45,8 @@
     const rows=await engine().readMany(names.map(descriptor));
     const result={};
     for(const row of rows.records){
-      const logical=names.find(name=>descriptor(name).domain===row.domain);\n      if(logical) result[logical]=row.value===null?domains[logical].fallback():row.value;
+      const logical=names.find(name=>descriptor(name).domain===row.domain);
+      if(logical) result[logical]=row.value===null?domains[logical].fallback():row.value;
     }
     return {ok:true,emptyDatabase:rows.records.every(row=>row.value===null),state:result};
   }
