@@ -15,6 +15,7 @@ async function rejected(p){try{await p;return false;}catch(x){return /abort|tran
 button.onclick=async()=>{button.disabled=true;result.checks={};result.errors=[];log();
 try{
 await e.ready();
+await e.beginResetAndClear();
 await e.releaseResetLock();
 await e.transact([{domain:"guardtest",key:"seed",value:{n:1}},{domain:"guardtest",key:"counter",value:0}]);
 const snap=await e.snapshot(["guardtest"]);
