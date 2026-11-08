@@ -14,7 +14,7 @@ button{padding:12px 18px;border:0;border-radius:10px;background:#f2c94c;font-wei
 </head>
 <body><main>
 <h1>The Handyman — Safe Recovery Check</h1>
-<p class="note"><strong>Read-only check.</strong> This page does not change LocalStorage, IndexedDB, CacheStorage, or the app data. Do not run Restore from this page.</p>
+<p class="note"><strong>Read-only check.</strong> This page does not change LocalStorage, IndexedDB, CacheStorage, or app data. It lists IndexedDB database names, versions, object stores, and record counts. Do not run Restore from this page.</p>
 <button id="run">Run read-only check</button>
 <pre id="out">Waiting…</pre>
 </main>
@@ -22,7 +22,7 @@ button{padding:12px 18px;border:0;border-radius:10px;background:#f2c94c;font-wei
 (async()=>{
  const out=document.getElementById('out');
  const run=async()=>{
-  const report={page:location.href,checkedAt:new Date().toISOString(),serviceWorker:{supported:('serviceWorker'in navigator),controller:!!navigator.serviceWorker?.controller,controllerScript:navigator.serviceWorker?.controller?.scriptURL||null},cacheStorage:{supported:('caches'in window),names:[]},localStorage:{readable:false,appKeys:[]},indexedDB:{supported:('indexedDB'in window)}};
+  const report={page:location.href,checkedAt:new Date().toISOString(),serviceWorker:{supported:('serviceWorker'in navigator),controller:!!navigator.serviceWorker?.controller,controllerScript:navigator.serviceWorker?.controller?.scriptURL||null},cacheStorage:{supported:('caches'in window),names:[]},localStorage:{readable:false,appKeys:[]},indexedDB:{supported:('indexedDB'in window),enumerationAvailable:typeof indexedDB.databases==='function',databases:[]}};
   try{
    report.localStorage.readable=true;
    for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&(/^(tha_test226_|handyman_)/).test(k))report.localStorage.appKeys.push(k);}
@@ -30,18 +30,54 @@ button{padding:12px 18px;border:0;border-radius:10px;background:#f2c94c;font-wei
   try{
    const names=await caches.keys();report.cacheStorage.names=names;
    for(const n of names){
-    if(n==='tha-test226-active-pointer-v1'){
+    if(n==='tha-test226-active-pointer-v1'||n==='tha-active-pointer-v1'){
      const c=await caches.open(n),keys=await c.keys(),items=[];
      for(const req of keys){const res=await c.match(req);let body=null;try{body=await res.clone().json()}catch(e){body='non-json'}items.push({url:req.url,value:body});}
-     report.cacheStorage.pointerItems=items;
+     report.cacheStorage.pointerItems=report.cacheStorage.pointerItems||[];
+     report.cacheStorage.pointerItems.push(...items);
     }
-    if(n.startsWith('tha-test226-app-v')){
+    if(n.startsWith('tha-test226-app-v')||n.startsWith('tha-app-v')){
      const c=await caches.open(n),keys=await c.keys();
      report.cacheStorage.appCaches=report.cacheStorage.appCaches||[];
      report.cacheStorage.appCaches.push({name:n,entryCount:keys.length,entries:keys.map(k=>new URL(k.url).pathname)});
     }
    }
   }catch(e){report.cacheStorage.error=String(e);}
+  try{
+   if(typeof indexedDB.databases==='function'){
+    const dbs=await indexedDB.databases();
+    for(const info of dbs){
+     if(!info.name)continue;
+     const item={name:info.name,version:info.version??null,objectStores:[]};
+     try{
+      const db=await new Promise((resolve,reject)=>{
+       const req=indexedDB.open(info.name);
+       req.onsuccess=()=>resolve(req.result);
+       req.onerror=()=>reject(req.error||new Error('IndexedDB open failed'));
+       req.onblocked=()=>reject(new Error('IndexedDB open blocked'));
+      });
+      item.version=db.version;
+      const stores=Array.from(db.objectStoreNames);
+      for(const storeName of stores){
+       try{
+        const count=await new Promise((resolve,reject)=>{
+         const tx=db.transaction([storeName],'readonly');
+         const req=tx.objectStore(storeName).count();
+         req.onsuccess=()=>resolve(req.result);
+         req.onerror=()=>reject(req.error||new Error('count failed'));
+         tx.onabort=()=>reject(tx.error||new Error('readonly transaction aborted'));
+        });
+        item.objectStores.push({name:storeName,recordCount:count});
+       }catch(e){item.objectStores.push({name:storeName,error:String(e)});}
+      }
+      db.close();
+     }catch(e){item.error=String(e);}
+     report.indexedDB.databases.push(item);
+    }
+   }else{
+    report.indexedDB.note='This Safari version does not expose indexedDB.databases(); database names cannot be enumerated safely from this page.';
+   }
+  }catch(e){report.indexedDB.error=String(e);}
   out.textContent=JSON.stringify(report,null,2);
  };
  document.getElementById('run').addEventListener('click',run);
