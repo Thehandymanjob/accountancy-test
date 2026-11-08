@@ -330,8 +330,8 @@
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
       let request;
-      guardWrite(tx, () => { request = store.get(item.id);
       let operationError = null;
+      guardWrite(tx, () => { request = store.get(item.id);
       request.onsuccess = () => {
         try {
           const current = request.result ? request.result.value : 0;
