@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "259",
-  "buildId": "THA-259-VERIFY-PAID-IDB-READBACK-20261108",
-  "manifestSha256": "e51797421e6b2b1a6881fdbe86ec9260250ef7207f427613996eb2474db0f01f",
+  "version": "260",
+  "buildId": "THA-260-READONLY-STORAGE-AUDIT-20261108",
+  "manifestSha256": "d7ef6842b0beb38988199b977452dd4051174b94f7294f4b1a9a08fe6fd77272",
   "updatedAt": "2026-11-08",
-  "note": "Test v259: Paid and unpaid invoice status changes now await the IndexedDB accounting shadow write and verify the full accounting snapshot by read-back. LocalStorage remains authoritative; no migration or deletion.",
-  "sourceCommit": "6de40dbb5f555ffd819332698e5e29943a39b7e8"
+  "note": "Test v260: Adds a read-only full LocalStorage and IndexedDB inventory plus source comparison report. No migration, reset, writes or deletion.",
+  "sourceCommit": "ad53d1fce57e568fcf1307787846cc5d376f4e90"
 }
