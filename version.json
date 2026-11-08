@@ -9,10 +9,10 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "7b08e35aab27ea964b23b1c818e3620fcf5bc21304dd58e9fde60c125cb407af"
+      "sha256": "dcd3a3a2c38557b76c5401b9ded3e9a08bb2b85de880e34ed2b8847bcb1d2ddd"
     },
     "version-manager.js": {
-      "sha256": "4d3927060d0f92db635a592a62a32d5b74bfe8d4756c41f2aa80bace9b6f5ce5"
+      "sha256": "ff143d88637126144f3f5c12ffe0c95722dec33c041f9129c2323827df56b79e"
     },
     "service-worker.js": {
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
