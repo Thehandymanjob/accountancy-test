@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>THA Record Comparison Audit</title>
+<style>
+body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;margin:0;background:#f4f5f7;color:#17202a}main{max-width:850px;margin:auto;padding:20px}section{background:white;border-radius:14px;padding:18px;margin:14px 0}button{padding:13px 18px;border:0;border-radius:10px;background:#155eef;color:white;font-size:16px;font-weight:600}button:disabled{opacity:.5}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#111827;color:#e5e7eb;padding:12px;border-radius:10px;max-height:50vh;overflow:auto}.muted{color:#596579;font-size:14px}.warn{color:#9a3412}
+</style></head><body><main>
+<h2>THA – Full Record Comparison</h2>
+<p class="muted">Read-only audit. Reads every record from every IndexedDB database visible on this origin and calculates a SHA-256 hash for each complete record. It does not write, delete, migrate, clear, or modify app data.</p>
+<section><button id="run">Run full record comparison</button><p id="status" class="muted">Ready. Keep this page open until the audit finishes.</p><progress id="bar" max="100" value="0" style="width:100%"></progress></section>
+<section><h3>Report</h3><pre id="out">No report yet.</pre><button id="download" disabled>Download JSON report</button></section>
+<p class="muted warn">This audit reads record contents in memory to calculate hashes. The downloaded report contains identifiers, hashes, counts and limited metadata, not full record values or image contents.</p>
+</main><script>
+(()=> {
+const $=id=>document.getElementById(id), enc=new TextEncoder();
+const canonical=v=>{
+ if(v===null||typeof v!=="object") return v;
+ if(v instanceof Date) return {$date:v.toISOString()};
+ if(typeof Blob!=="undefined" && v instanceof Blob) return {$blob:{type:v.type,size:v.size}};
+ if(v instanceof ArrayBuffer) return {$arrayBuffer:Array.from(new Uint8Array(v))};
+ if(ArrayBuffer.isView(v)) return {$typed:v.constructor.name,values:Array.from(new Uint8Array(v.buffer,v.byteOffset,v.byteLength))};
+ if(Array.isArray(v)) return v.map(canonical);
+ const o={}; for(const k of Object.keys(v).sort()) o[k]=canonical(v[k]); return o;
+};
+const stable=v=>JSON.stringify(canonical(v));
+const hash=async v=>{
+ const b=await crypto.subtle.digest("SHA-256",enc.encode(stable(v)));
+ return Array.from(new Uint8Array(b),x=>x.toString(16).padStart(2,"0")).join("");
+};
+const safeKey=k=>{try{return typeof k==="string"?k:JSON.stringify(k)}catch{return String(k)}};
+const summarize=v=>{
+ if(v===null||typeof v!=="object") return typeof v;
+ const keys=Object.keys(v).slice(0,30);
+ const out={}; for(const k of keys){const x=v[k];out[k]=x===null?null:Array.isArray(x)?("Array("+x.length+")"):x instanceof Blob?("Blob("+x.size+")"):typeof x==="string"?(x.length>180?"[string "+x.length+" chars]":x):typeof x==="object"?"Object":x;}
+ return out;
+};
+async function readDB(info,progress){
+ return new Promise((resolve,reject)=>{
+  const req=indexedDB.open(info.name);
+  req.onerror=()=>reject(new Error(info.name+": "+(req.error?.message||"open failed")));
+  req.onupgradeneeded=()=>{try{req.transaction.abort()}catch{} reject(new Error(info.name+": unexpected upgrade blocked for safety"))};
+  req.onsuccess=()=>{
+   const db=req.result, stores=[];
+   try{
+    const names=Array.from(db.objectStoreNames);
+    if(!names.length){db.close();resolve({name:info.name,version:db.version,stores:[],totalRecords:0});return}
+    const tx=db.transaction(names,"readonly"); let remaining=names.length, failed=false;
+    for(const name of names){
+     const store=tx.objectStore(name), result={name,count:0,records:[]}; stores.push(result);
+     const c=store.openCursor();
+     c.onerror=()=>{if(!failed){failed=true;try{tx.abort()}catch{};db.close();reject(new Error(info.name+"/"+name+": cursor failed"))}};
+     c.onsuccess=async()=>{
+      const cur=c.result;
+      if(cur){
+       try{
+        const record=cur.value;
+        result.records.push({key:safeKey(cur.primaryKey),hash:await hash(record),summary:summarize(record)});
+        result.count++; progress();
+        cur.continue();
+       }catch(e){if(!failed){failed=true;try{tx.abort()}catch{};db.close();reject(e)}}
+      }else{remaining--;if(remaining===0&&!failed){db.close();resolve({name:info.name,version:db.version,stores,totalRecords:stores.reduce((a,s)=>a+s.count,0)})}}
+     };
+    }
+   }catch(e){db.close();reject(e)}
+  };
+ });
+}
+let report=null;
+$("run").onclick=async()=>{
+ $("run").disabled=true;$("download").disabled=true;$("out").textContent="Running…";$("status").textContent="Enumerating databases…";$("bar").value=0;
+ try{
+  if(!indexedDB.databases) throw new Error("This browser does not support IndexedDB database enumeration.");
+  const infos=await indexedDB.databases();let done=0,total=0;
+  const localStorageHashes=[];
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i),v=localStorage.getItem(k);localStorageHashes.push({key:k,bytes:enc.encode(v??"").length,hash:await hash(v)});}
+  const dbs=[];
+  for(const info of infos.filter(x=>x.name)){
+   $("status").textContent="Reading "+info.name+"…";
+   const db=await readDB(info,()=>{done++;$("bar").value=Math.min(99,done/Math.max(1,total)*100)});
+   total+=db.totalRecords;dbs.push(db);
+  }
+  const comparisons=[];
+  const storeNames=[...new Set(dbs.flatMap(db=>db.stores.map(s=>s.name)))].sort();
+  for(const storeName of storeNames){
+   const present=dbs.map(db=>({db:db.name,store:db.stores.find(s=>s.name===storeName)})).filter(x=>x.store);
+   if(present.length<2) continue;
+   for(let i=0;i<present.length;i++) for(let j=i+1;j<present.length;j++){
+    const A=present[i],B=present[j],am=new Map(A.store.records.map(r=>[r.key,r.hash])),bm=new Map(B.store.records.map(r=>[r.key,r.hash]));
+    const common=[...am.keys()].filter(k=>bm.has(k));
+    const same=common.filter(k=>am.get(k)===bm.get(k)),different=common.filter(k=>am.get(k)!==bm.get(k));
+    comparisons.push({store:storeName,databaseA:A.db,countA:A.store.count,databaseB:B.db,countB:B.store.count,commonKeyCount:common.length,exactMatchCount:same.length,differentContentCount:different.length,onlyInA:[...am.keys()].filter(k=>!bm.has(k)),onlyInB:[...bm.keys()].filter(k=>!am.has(k)),differentKeys:different});
+   }
+  }
+  report={auditType:"full-record-sha256-comparison",startedAt:new Date().toISOString(),origin:location.origin,readOnly:true,localStorage:{keyCount:localStorageHashes.length,items:localStorageHashes},indexedDB:{enumerationAvailable:true,databases:dbs.map(db=>({...db,stores:db.stores.map(s=>({...s,recordHashes:s.records,records:undefined}))})),errors:[]},comparisons,finishedAt:new Date().toISOString(),status:"completed"};
+  $("bar").value=100;$("status").textContent="Audit finished. No app data was changed.";$("out").textContent=JSON.stringify({status:report.status,localStorageKeys:report.localStorage.keyCount,databases:dbs.map(x=>({name:x.name,totalRecords:x.totalRecords,stores:x.stores.map(s=>({name:s.name,count:s.count}))})),comparisons},null,2);$("download").disabled=false;
+ }catch(e){$("status").textContent="Audit failed: "+e.message;$("out").textContent=String(e.stack||e);$("bar").value=0}
+ finally{$("run").disabled=false}
+};
+$("download").onclick=()=>{if(!report)return;const blob=new Blob([JSON.stringify(report)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="tha-full-record-comparison-"+new Date().toISOString().replace(/[:.]/g,"-")+".json";a.click();setTimeout(()=>URL.revokeObjectURL(url),3000)};
+})();
+</script></body></html>
