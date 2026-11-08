@@ -19,6 +19,21 @@
   state.settings={businessName:"",ownerName:"",...state.settings};
   return state;
  }
+ async function firstDifference(a,b,path="$",seen=new WeakMap()){
+  if(Object.is(a,b))return null;
+  if(a===null||b===null||typeof a!=="object"||typeof b!=="object")return path+" primitive/value mismatch ("+typeof a+" vs "+typeof b+")";
+  let paired=seen.get(a);if(paired&&paired.has(b))return null;if(!paired){paired=new WeakSet();seen.set(a,paired);}paired.add(b);
+  if(a instanceof Blob||b instanceof Blob){
+   if(!(a instanceof Blob)||!(b instanceof Blob))return path+" Blob type mismatch";
+   if(a.size!==b.size||a.type!==b.type)return path+" Blob metadata mismatch ("+a.size+"/"+a.type+" vs "+b.size+"/"+b.type+")";
+   if(typeof File!=="undefined"&&(a instanceof File||b instanceof File)&&(!(a instanceof File)||!(b instanceof File)||a.name!==b.name||a.lastModified!==b.lastModified))return path+" File metadata/type mismatch ("+(a.constructor&&a.constructor.name)+"/"+(a.name||"")+" vs "+(b.constructor&&b.constructor.name)+"/"+(b.name||"")+")";
+   const [x,y]=await Promise.all([a.arrayBuffer(),b.arrayBuffer()]);const X=new Uint8Array(x),Y=new Uint8Array(y);if(X.length!==Y.length)return path+" Blob byte-length mismatch";for(let i=0;i<X.length;i++)if(X[i]!==Y[i])return path+" Blob byte mismatch at "+i;return null;
+  }
+  if(a instanceof Date||b instanceof Date)return a instanceof Date&&b instanceof Date&&a.getTime()===b.getTime()?null:path+" Date mismatch";
+  if(Array.isArray(a)||Array.isArray(b)){if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length)return path+" array shape mismatch";for(let i=0;i<a.length;i++){const d=await firstDifference(a[i],b[i],path+"["+i+"]",seen);if(d)return d;}return null;}
+  const ak=Object.keys(a).sort(),bk=Object.keys(b).sort();if(ak.length!==bk.length||ak.some((k,i)=>k!==bk[i]))return path+" object keys mismatch ("+ak.join(",")+" vs "+bk.join(",")+")";
+  for(const k of ak){const d=await firstDifference(a[k],b[k],path+"."+k,seen);if(d)return d;}return null;
+ }
  async function initialize(){await storage().initialize();return load();}
  async function load(){return normalize(await storage().read("accounting"));}
  async function save(value){
@@ -26,7 +41,7 @@
   const result=await storage().write("accounting",state);
   if(!result||result.ok!==true)throw new Error("Accounting state write was not confirmed.");
   const verified=normalize(await storage().read("accounting"));
-  if(!root.HandymanStorageV263||typeof root.HandymanStorageV263.valuesEqual!=="function"||!(await root.HandymanStorageV263.valuesEqual(verified,state)))throw new Error("Accounting state full-content verification failed after save.");
+  if(!root.HandymanStorageV263||typeof root.HandymanStorageV263.valuesEqual!=="function")throw new Error("Accounting verification engine is unavailable.");if(!(await root.HandymanStorageV263.valuesEqual(verified,state))){const difference=await firstDifference(verified,state);throw new Error("Accounting full-content verification failed after save: "+(difference||"comparator mismatch without a located field difference"));}
   return {ok:true,state:verified};
  }
  async function update(mutator){
