@@ -73,8 +73,14 @@
   });
   const transactionDone = tx => new Promise((resolve, reject) => {
     tx.oncomplete = resolve;
-    tx.onabort = () => reject(tx.error || new Error("IndexedDB transaction aborted."));
-    tx.onerror = () => reject(tx.error || new Error("IndexedDB transaction failed."));
+    tx.onabort = () => {
+      const error = tx.error;
+      reject(new Error("IndexedDB transaction aborted" +
+        (error ? " [" + error.name + "]: " + error.message : " without a transaction error.")));
+    };
+    // Request errors bubble to the transaction. Let the transaction finish its
+    // abort sequence so the caller receives the definitive abort cause.
+    tx.onerror = () => {};
   });
 
   function openDatabase() {
@@ -424,6 +430,7 @@
     const token = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const domain = "selftest_" + token;
     const checks = { ready: false, jsonRoundTrip: false, blobRoundTrip: false, atomicWrite: false, concurrentCounterReservation: false, snapshotRestore: false, delete: false };
+    const stepErrors = {};
     const keys = ["json", "blob", "atomic-a", "atomic-b", "counter", "snapshot"];
 
     try {
@@ -467,7 +474,8 @@
       if (!checks.delete) throw new Error("Delete test failed.");
       return { ok: Object.values(checks).every(Boolean), database: DB_NAME, build: BUILD, checks, noLocalStorageAccess: true, appCutover: false };
     } catch (error) {
-      return { ok: false, database: DB_NAME, build: BUILD, checks, error: String(error.message || error), appCutover: false };
+      const detail = String(error && error.message || error);
+      return { ok: false, database: DB_NAME, build: BUILD, checks, error: detail, stepErrors, appCutover: false };
     } finally {
       for (const key of keys) { try { await remove(domain, key); } catch (_) {} }
     }
