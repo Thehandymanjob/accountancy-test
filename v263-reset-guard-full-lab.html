@@ -23,7 +23,7 @@ assert("Reset sets persistent lock and clears every record",reset.ok&&reset.rema
 const tests=[
 ["put is blocked",()=>e.put("guardtest","put",{n:2})],
 ["remove is blocked",()=>e.remove("guardtest","seed")],
-["transact is blocked",()=>e.transact([{domain:"guardtest",key:"tx",{n:3}}])],
+["transact is blocked",()=>e.transact([{domain:"guardtest",key:"tx",value:{n:3}}])],
 ["mutateMany is blocked",()=>e.mutateMany([{domain:"guardtest",key:"seed",initialValue:{n:0}}],()=>[{n:4}])],
 ["reserveCounter is blocked",()=>e.reserveCounter("guardtest","counter",0)]
 ];
