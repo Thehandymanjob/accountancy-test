@@ -4,8 +4,8 @@
   "sourceBranch": "release239",
   "version": "262",
   "buildId": "THA-262-COMPLETE-PORTABLE-BACKUP-20261108",
-  "manifestSha256": "23fe67d1088791c89f3b70f07cdead2509d1ba6840434c8c36f83834bbeef08a",
-  "updatedAt": "2026-11-08T11:04:00Z",
-  "note": "Test v262: fixes portable backup export API exposure; comprehensive export only, no restore or migration.",
-  "sourceCommit": "b282d1f48197a890e7e4e4d5147ba772b45b82b7"
+  "manifestSha256": "6281f82a1a03ca9330351b32db7469bff53f8944a7dfb83116cdd235a0178bd6",
+  "updatedAt": "2026-11-08T15:35:00Z",
+  "note": "Test v262: fixed index version/build metadata and refreshed immutable manifest hash; backup export only, no restore or migration.",
+  "sourceCommit": "e8c02234c9065ef1ceba9677611edf8f202bbc64"
 }
