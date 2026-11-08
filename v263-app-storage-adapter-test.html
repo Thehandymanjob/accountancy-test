@@ -21,7 +21,7 @@
    const sample={entries:[{id:"v263-adapter-temporary",type:"income",amount:1}],customers:[],invoices:[],settings:{adapterTest:true}};
    await app.write("accounting",sample);report.checks.writeVerified=true;
    const read=await app.read("accounting");
-   report.readVerified=JSON.stringify(read)===JSON.stringify(sample);
+   report.checks.readVerified=JSON.stringify(read)===JSON.stringify(sample);
    if(!report.readVerified)throw new Error("Accounting read-back differs from temporary test value.");
   }catch(error){report.errors.push(String(error&&error.message||error))}
   finally{
