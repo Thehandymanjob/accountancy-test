@@ -16,7 +16,7 @@
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id),log=$('log'),status=$('status');let results=[];
-function record(name,ok,detail){results.push({name,ok:!!ok,detail:detail||''});log.textContent=results.map((x,i)=>(x.ok?'PASS':'FAIL')+' '+(i+1)+'. '+x.name+(x.detail?' — '+x.detail:'')).join('\\n');}
+function record(name,ok,detail){results.push({name,ok:!!ok,detail:detail||''});log.textContent=results.map((x,i)=>(x.ok?'PASS':'FAIL')+' '+(i+1)+'. '+x.name+(x.detail?' — '+x.detail:'')).join('\n');}
 const equal=async(a,b)=>window.HandymanStorageV263.valuesEqual(a,b);
 async function run(){
  results=[];log.textContent='Starting…';status.textContent='Running';
@@ -26,7 +26,8 @@ async function run(){
   const health=await HandymanAppStorageV263.health();
   record('Database initially empty and unlocked',health.ok===true&&health.resetLocked===false);
   const pngBytes=new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0]);
-  const blob=new Blob([pngBytes],{type:'image/png'});\n  const file=new File([pngBytes],'lab-receipt.png',{type:'image/png',lastModified:1731067200000});
+  const blob=new Blob([pngBytes],{type:'image/png'});
+  const file=new File([pngBytes],'lab-receipt.png',{type:'image/png',lastModified:1731067200000});
   const imageData='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB';
   const account={entries:[{id:'entry-1',type:'expense',date:'2026-11-08',amount:17.25,receiptImage:imageData,receiptBlob:blob,receiptFile:file}],customers:[{id:'cust-1',name:'Lab Customer'}],invoices:[{id:'inv-1',number:501,customerId:'cust-1',attachment:blob}],customExpenseCategories:['Lab materials'],settings:{businessName:'Lab Builder',logo:blob,extra:{keep:true}}};
   await HandymanAccountingV263.save(account);
@@ -44,7 +45,8 @@ async function run(){
   record('Sub-project ledger write preserves existing media',pUpdated.projects[0].subprojects[0].expenses.length===2&&await equal(pUpdated.projects[0].photo,blob));
   const contracts={contracts:[{id:'contract-1',customerId:'cust-1',html:'<p>Lab</p>',logo:blob,signature:{data:imageData,file},attachment:{name:'signed.pdf',type:'application/pdf',data:'data:application/pdf;base64,JVBERi0x',blob}}],futureField:{retain:42}};
   await HandymanContractsV263.save(contracts);
-  const cRead=await HandymanContractsV263.load();\n  record('Contracts full round-trip incl. attachment File and unknown fields',await equal(cRead,contracts)&&cRead.contracts[0].signature.file instanceof File);
+  const cRead=await HandymanContractsV263.load();
+  record('Contracts full round-trip incl. attachment File and unknown fields',await equal(cRead,contracts)&&cRead.contracts[0].signature.file instanceof File);
   await HandymanContractsV263.updateContract('contract-1',{status:'signed'});
   record('Contract update preserves attachment', (await HandymanContractsV263.get('contract-1')).status==='signed'&&await equal((await HandymanContractsV263.get('contract-1')).logo,blob));
   const lang=await HandymanSupportV263.setLanguage('fa','v263-lab');
@@ -68,7 +70,7 @@ async function run(){
  status.textContent=passed===total?'PASS '+passed+'/'+total:'FAIL '+passed+'/'+total;
  const report={ok:passed===total,build:'THA-263-MEDIA-INTEGRATION-LAB-1',database:'tha_v263_media_integration_lab_idb',checkedAt:new Date().toISOString(),passed,total,results};
  const out=document.createElement('button');out.textContent='Copy report';out.style.marginTop='12px';out.onclick=async()=>{try{await navigator.clipboard.writeText(JSON.stringify(report,null,2));out.textContent='Copied'}catch(e){out.textContent='Copy unavailable — select report text'}};if(!document.getElementById('copyReport')){out.id='copyReport';document.querySelector('main').appendChild(out)}
- log.textContent+='\\n\\nJSON REPORT\\n'+JSON.stringify(report,null,2);
+ log.textContent+='\n\nJSON REPORT\n'+JSON.stringify(report,null,2);
 }
 $('run').addEventListener('click',run);
 })();
