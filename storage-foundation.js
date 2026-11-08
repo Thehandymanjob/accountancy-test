@@ -712,6 +712,14 @@
       const mediaCandidates = [];
       const scanMedia = (node, sourceKey, path, depth) => {
         if (!node || typeof node !== "object" || depth > 10) return;
+        if (typeof Blob !== "undefined" && node instanceof Blob) {
+          mediaCandidates.push({ source:sourceKey, path:path||"(blob)", field:"Blob", bytes:node.size, mimeType:node.type||"", dataUrl:false, binary:true });
+          return;
+        }
+        if (ArrayBuffer.isView(node)) {
+          mediaCandidates.push({ source:sourceKey, path:path||"(binary-view)", field:node.constructor&&node.constructor.name||"BinaryView", bytes:node.byteLength, dataUrl:false, binary:true });
+          return;
+        }
         if (Array.isArray(node)) { node.forEach((value,index)=>scanMedia(value,sourceKey,path+"["+index+"]",depth+1)); return; }
         for (const [field,value] of Object.entries(node)) {
           const nextPath = path ? path+"."+field : field;
