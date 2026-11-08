@@ -65,7 +65,7 @@ async function run(){
   record('Backup manifest covers every registered domain',backup&&Array.isArray(backup.records)&&Array.isArray(backup.domains)&&HandymanAppStorageV263.domains.every(name=>backup.domains.includes(name)),String(backup&&backup.domains&&backup.domains.length)+' domains; '+String(backup&&backup.records&&backup.records.length)+' stored records');
   const before=await HandymanStorageV263.health();
   record('Final health check succeeds without reset lock',before.ok===true&&before.resetLocked===false);
- }catch(e){record('Unexpected test exception',false,(e&&e.stack)||String(e));}
+ }catch(e){const msg=e&&e.message?e.message:String(e);record('Unexpected test exception',false,msg+'\\n'+((e&&e.stack)||''));}
  const passed=results.filter(x=>x.ok).length,total=results.length;
  status.textContent=passed===total?'PASS '+passed+'/'+total:'FAIL '+passed+'/'+total;
  const report={ok:passed===total,build:'THA-263-MEDIA-INTEGRATION-LAB-1',database:'tha_v263_media_integration_lab_idb',checkedAt:new Date().toISOString(),passed,total,results};
