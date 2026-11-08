@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "261",
-  "buildId": "THA-261-DEEP-READONLY-STORAGE-AUDIT-20261108",
-  "manifestSha256": "90ab509221e108578807615e824f6473e826ad5b8e6aea9e729286c904f223f6",
+  "version": "262",
+  "buildId": "THA-262-COMPLETE-PORTABLE-BACKUP-20261108",
+  "manifestSha256": "6e6eb9cd92bf5d8384ebd01584463b2bcb0d8ef28942d570d3632b7f8c8e3907",
   "updatedAt": "2026-11-08T00:00:00Z",
-  "note": "Test v261: immutable release assets and corrected release239 updater channel; deep read-only storage audit, no migration or data deletion.",
-  "sourceCommit": "13b49b21a9d6d9eb51de9c2cd59eba5b278448d7"
+  "note": "Test v262: comprehensive portable backup export for app-namespaced LocalStorage and IndexedDB including binary media. Export only; no restore or migration.",
+  "sourceCommit": "a382f7c2e7bfb704083017e69327661d86708b4d"
 }
