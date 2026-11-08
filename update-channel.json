@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "253",
-  "buildId": "THA-253-ADD-ENTRY-IDB-READBACK-VERIFY-20261108",
-  "manifestSha256": "5d9842543bd9a5fa05936acee177838fbcb1485e22355bcafca31e7a998bf3df",
-  "updatedAt": "2026-11-08T08:45:00Z",
-  "note": "Test v253: Add Entry awaits queued IndexedDB shadow write and verifies exact read-back; LocalStorage remains authoritative. No migration or deletion.",
-  "sourceCommit": "4814c07ecc176cdc6f3df6868336ca8860d5294f"
+  "version": "254",
+  "buildId": "THA-254-SAVE-CUSTOMER-IDB-READBACK-VERIFY-20261108",
+  "manifestSha256": "9811f7c075dbbcaba84f89dd0ea0fc9caf8f65c3dc1e5a59d7a034c88a8cb583",
+  "updatedAt": "2026-11-08T08:38:45.109Z",
+  "note": "Test v254: Customer save/edit awaits the IndexedDB accounting shadow write and verifies exact full-snapshot read-back; LocalStorage remains authoritative. No migration or deletion.",
+  "sourceCommit": "b6540b7607d034ff758e253eb832ddd065581815"
 }
