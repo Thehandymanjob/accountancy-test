@@ -3,9 +3,9 @@
   "channel": "test",
   "sourceBranch": "release239",
   "version": "262",
-  "buildId": "THA-262-RESTORE-LOG-GUARD-20261108",
-  "manifestSha256": "501921aedc703f4dbff1ed8018efae390fa981bfe5ee6bf8bfd0f88a1a78bd14",
-  "updatedAt": "2026-11-08T19:00:00Z",
-  "note": "Test v262 restore hotfix: monitor logging is suppressed during portable restore and rollback. Experimental branch only; controlled Safari verification still required.",
-  "sourceCommit": "813107ac49981470ce3187e06bf8f07c1fe41bde"
+  "buildId": "THA-262-RESTORE-UPDATER-RECOVERY-20261108",
+  "manifestSha256": "71b3fe5acb239cfc96b8bc9d681cd036a0cc4b859af3c7d6f353c48290c317db",
+  "updatedAt": "2026-11-08T19:20:00Z",
+  "note": "Test v262 restore and updater recovery hotfix. Experimental branch only; verify in Safari before restoring user data.",
+  "sourceCommit": "7b38e718659ef338ac2c3893c9ba978d21f6da5c"
 }
