@@ -2,10 +2,10 @@
   "app": "The Handyman Accountancy",
   "channel": "test",
   "sourceBranch": "release239",
-  "version": "250",
-  "buildId": "THA-250-STORAGE-ERROR-DIAGNOSTICS-IMAGE-COMPRESSION-IOS-SCROLL-20261105",
-  "manifestSha256": "18d0f55db004eafbda5937b4a921d6f77125bd860c1fa4cb3b35c02b3bf07718",
-  "updatedAt": "2026-11-06T00:10:00Z",
-  "note": "Test v250: explicit project storage failure diagnosis, smaller project cover photos, and document-level iPhone scrolling.",
-  "sourceCommit": "dfab229a42878bee8c3670cacedbf88168de9892"
+  "version": "251",
+  "buildId": "THA-251-IDB-ACCOUNTING-COMPARE-DIAGNOSTIC-20261108",
+  "manifestSha256": "7df34295c347415b99608fe130a0603c42925a48062335d5694006baf49edc6b",
+  "updatedAt": "2026-11-08T00:00:00Z",
+  "note": "Test v251: read-only accounting LocalStorage vs IndexedDB comparison diagnostic; all app asset hashes verified.",
+  "sourceCommit": "c2930181ffc5bf4d0f1b29afa278861fd26b9b1b"
 }
