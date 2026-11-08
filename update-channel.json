@@ -7,5 +7,5 @@
   "manifestSha256": "030fd9656af199cd580dd5594199ab3196541f8ae7e16bd07a2871510f9c865f",
   "updatedAt": "2026-11-08T19:20:00Z",
   "note": "Test v262 restore and updater recovery hotfix. Experimental branch only; verify in Safari before restoring user data.",
-  "sourceCommit": "8a929061d2be3bb7e21a6cf85e54f943271da691"
+  "sourceCommit": "3523e19ad678a07e753aedb7383f6a403d0bd777"
 }
