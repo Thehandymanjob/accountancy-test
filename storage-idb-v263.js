@@ -308,8 +308,9 @@
   async function selfTest() {
     const token = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const domain = "selftest_" + token;
-    const checks = { ready: false, jsonRoundTrip: false, blobRoundTrip: false, atomicWrite: false, delete: false, localStorageAccessed: false };
-    const keys = ["json", "blob", "atomic-a", "atomic-b"];
+    const checks = { ready: false, jsonRoundTrip: false, blobRoundTrip: false, atomicWrite: false, concurrentCounterReservation: false, delete: false };
+    const keys = ["json", "blob", "atomic-a", "atomic-b", "counter"];
+
     try {
       await ready(); checks.ready = true;
       const sample = { n: 7, text: "test", empty: "", nested: [1, null, false] };
@@ -330,10 +331,16 @@
       const pair = await readMany([{ domain, key: keys[2] }, { domain, key: keys[3] }]);
       checks.atomicWrite = pair.records[0].value.value === "A" && pair.records[1].value.value === "B";
       if (!checks.atomicWrite) throw new Error("Atomic write test failed.");
+      const reservations = await Promise.all(Array.from({ length: 6 }, () => reserveCounter(domain, keys[4], 0)));
+      const numbers = reservations.map(x => x.value).sort((a, b) => a - b);
+      checks.concurrentCounterReservation = numbers.length === 6 &&
+        numbers.every((value, index) => value === index + 1) &&
+        (await get(domain, keys[4])) === 6;
+      if (!checks.concurrentCounterReservation) throw new Error("Concurrent counter reservation produced duplicate or missing numbers.");
       await remove(domain, keys[2]);
       checks.delete = (await get(domain, keys[2])) === null;
       if (!checks.delete) throw new Error("Delete test failed.");
-      return { ok: Object.values(checks).every(Boolean), database: DB_NAME, build: BUILD, checks, appCutover: false };
+      return { ok: Object.values(checks).every(Boolean), database: DB_NAME, build: BUILD, checks, noLocalStorageAccess: true, appCutover: false };
     } catch (error) {
       return { ok: false, database: DB_NAME, build: BUILD, checks, error: String(error.message || error), appCutover: false };
     } finally {
