@@ -425,6 +425,41 @@
     } finally { db.close(); }
   }
 
+  async function beginResetLock() {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([META], "readwrite");
+      const done = transactionDone(tx);
+      tx.objectStore(META).put({key:"resetLock",active:true,updatedAt:new Date().toISOString()});
+      await done;
+      const check = db.transaction([META], "readonly");
+      const lock = await requestResult(check.objectStore(META).get("resetLock"));
+      await transactionDone(check);
+      if (!lock || lock.active !== true) throw new Error("Could not verify persistent reset lock.");
+      return {ok:true,locked:true};
+    } finally { db.close(); }
+  }
+  async function clearWhileResetLocked() {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([STORE, META], "readwrite");
+      const done = transactionDone(tx);
+      const request = tx.objectStore(META).get("resetLock");
+      request.onsuccess = () => {
+        if (!request.result || request.result.active !== true) { try { tx.abort(); } catch (_) {} return; }
+        tx.objectStore(STORE).clear();
+      };
+      await done;
+      const verify = db.transaction([STORE, META], "readonly");
+      const [rows, lock] = await Promise.all([
+        requestResult(verify.objectStore(STORE).getAll()),
+        requestResult(verify.objectStore(META).get("resetLock"))
+      ]);
+      await transactionDone(verify);
+      if (rows.length || !lock || !lock.active) throw new Error("Locked clear verification failed.");
+      return {ok:true,remainingRecords:0,locked:true};
+    } finally { db.close(); }
+  }
   async function beginResetAndClear() {
     const db = await openDatabase();
     try {
@@ -526,6 +561,6 @@
   root.HandymanStorageV263Lab = Object.freeze({
     databaseName: DB_NAME, schemaVersion: DB_VERSION, build: BUILD,
     ready, get, readMany, put, remove, transact, mutateMany, reserveCounter,
-    snapshot, restore, beginResetAndClear, releaseResetLock, health, selfTest
+    snapshot, restore, beginResetLock, clearWhileResetLocked, beginResetAndClear, releaseResetLock, health, selfTest
   });
 })(window);
