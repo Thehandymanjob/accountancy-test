@@ -26,11 +26,7 @@
   const result=await storage().write("accounting",state);
   if(!result||result.ok!==true)throw new Error("Accounting state write was not confirmed.");
   const verified=normalize(await storage().read("accounting"));
-  if(!root.HandymanStorageV263||!(await root.HandymanStorageV263.valuesEqual?.(verified,state))) {
-   // The adapter's write operation already performs a structured-clone read-back check.
-   // This additional check uses a canonical JSON representation for app-owned JSON state.
-   if(JSON.stringify(verified)!==JSON.stringify(state))throw new Error("Accounting state verification failed after save.");
-  }
+  if(!root.HandymanStorageV263||typeof root.HandymanStorageV263.valuesEqual!=="function"||!(await root.HandymanStorageV263.valuesEqual(verified,state)))throw new Error("Accounting state full-content verification failed after save.");
   return {ok:true,state:verified};
  }
  async function update(mutator){
