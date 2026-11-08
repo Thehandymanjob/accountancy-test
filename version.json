@@ -9,16 +9,16 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "d7f7eb7a27beff26cc8c3ee714e8cc88570e9496a3982223e5809f9b8ab8b3f5"
+      "sha256": "97e930081c7b7317cd4d3cf0cf1ab3e3b64867b77fccf89fb9a0c2ac80e72874"
     },
     "version-manager.js": {
-      "sha256": "709ed0cfd507e0c022640cf4834df7b0aafb0991012fa8fad69553010ff92f18"
+      "sha256": "b91aec057c63923eb8703dcbea8b83ece9cd0ca687922628d60bb7f3bf2c4e77"
     },
     "service-worker.js": {
-      "sha256": "b678e64953b56ee58ad31313927f90d038a7273e7898dc58bc7dbdb8b25b18e7"
+      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
     },
     "storage-foundation.js": {
-      "sha256": "5f65868c7d6edc5cb602360e412aab8dedd5764171fede02cd7c56597b8abc88"
+      "sha256": "ee1a6d1a015bb3db6ab2901d8bd9a0180612c79ca9d7aa11c46dbfe6895990f4"
     }
   },
   "releaseNotes": [
