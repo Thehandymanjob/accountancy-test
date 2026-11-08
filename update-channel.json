@@ -1,11 +1,11 @@
 {
   "app": "The Handyman Accountancy",
   "channel": "test",
-  "sourceBranch": "main",
-  "version": "239",
-  "buildId": "THA-239-INVOICE-STATUS-DIAGNOSTIC-20261103",
-  "manifestSha256": "7fa3fa80451c1bd38baffe4b8638411ddc4253c45053e9b31323456c9c4fc038",
-  "updatedAt": "2026-11-03T20:09:31.168Z",
-  "note": "Test v239: corrected SHA-256 values for all required release assets; update package integrity checks now match the published files.",
-  "sourceCommit": "9e34dc8cd4480c93a7a5495b33f5921812a598d9"
+  "sourceBranch": "release239",
+  "version": "261",
+  "buildId": "THA-261-DEEP-READONLY-STORAGE-AUDIT-20261108",
+  "manifestSha256": "90ab509221e108578807615e824f6473e826ad5b8e6aea9e729286c904f223f6",
+  "updatedAt": "2026-11-08T00:00:00Z",
+  "note": "Test v261: immutable release assets and corrected release239 updater channel; deep read-only storage audit, no migration or data deletion.",
+  "sourceCommit": "13b49b21a9d6d9eb51de9c2cd59eba5b278448d7"
 }
