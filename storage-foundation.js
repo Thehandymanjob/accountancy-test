@@ -1060,7 +1060,7 @@
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
     putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkAddAcrossStoresVerified, bulkWriteAcrossStores,
-    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, exportCompleteBackup, restoreCompleteBackup, clearIndexedDBData, readAppState, writeAppState, writeAppStatesAtomically, status,
+    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, exportPortableBackup, exportCompleteBackup, restoreCompleteBackup, clearIndexedDBData, readAppState, writeAppState, writeAppStatesAtomically, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
