@@ -1,6 +1,6 @@
 # THA v263 — IndexedDB-only cutover plan
 
-Status: foundation added; application cutover NOT performed.
+Status: foundation self-test PASS (Build 3); application cutover NOT performed.
 Candidate source: `main`, based on the v262 source tree.
 New module: `storage-idb-v263.js`
 New database: `the_handyman_accountancy_v263_idb`
