@@ -147,11 +147,14 @@
    const current=await capture();
    const currentPkg=await packageSnapshot(current);
    const currentData={...currentPkg.payload};delete currentData.createdAt;const backupData={...parsed.pkg.payload};delete backupData.createdAt;if(await digest(canonical(currentData))!==await digest(canonical(backupData)))throw new Error("Factory Reset blocked: the selected backup is not an exact snapshot of the current database. Create and save a fresh backup, then select that file.");
-   const empty={format:SNAPSHOT_FORMAT,database:DB,createdAt:new Date().toISOString(),domains:current.domains,records:[]};
-   const result=await engine.restore(empty);
+   // Lock every write path and clear the entire database in one engine transaction.
+   // Do not release the lock here: only a separately verified restore may unlock it.
+   if(typeof engine.beginResetAndClear!=="function")throw new Error("Factory Reset blocked: this IndexedDB engine does not support the persistent reset guard.");
+   const result=await engine.beginResetAndClear();
+   if(!result||result.ok!==true||result.locked!==true||result.remainingRecords!==0)throw new Error("Factory Reset failed: the engine did not confirm an active reset lock and an empty database.");
    const health=await engine.health();
    if(health.totalRecords!==0)throw new Error("Factory Reset verification failed: application records remain in IndexedDB.");
-   return {ok:true,clearedRecords:current.records.length,remainingRecords:health.totalRecords,domains:current.domains.length,backupDigest:parsed.pkg.digest};
+   return {ok:true,clearedRecords:current.records.length,remainingRecords:health.totalRecords,domains:current.domains.length,backupDigest:parsed.pkg.digest,resetLocked:true,recoveryRequired:true};
   }
   async function downloadBackup(){
    const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
