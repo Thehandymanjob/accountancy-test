@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
   "version": "262",
-  "buildId": "THA-262-RESTORE-LOG-GUARD-20261108",
+  "buildId": "THA-262-RESTORE-UPDATER-RECOVERY-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 5,
@@ -9,10 +9,10 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "dcd3a3a2c38557b76c5401b9ded3e9a08bb2b85de880e34ed2b8847bcb1d2ddd"
+      "sha256": "7b08e35aab27ea964b23b1c818e3620fcf5bc21304dd58e9fde60c125cb407af"
     },
     "version-manager.js": {
-      "sha256": "6fb526f8b8b563315d1234d080c695a08d2ca9f0823358f2d7171de85d9dfee4"
+      "sha256": "4d3927060d0f92db635a592a62a32d5b74bfe8d4756c41f2aa80bace9b6f5ce5"
     },
     "service-worker.js": {
       "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
@@ -22,7 +22,7 @@
     }
   },
   "releaseNotes": [
-    "v262 restore hotfix: suppresses monitor-log writes during portable restore and rollback so LocalStorage verification is not invalidated by diagnostic events. Experimental branch only; requires controlled Safari verification.",
+    "v262 restore/update hotfix: suppresses monitor-log writes during portable restore and rollback; updater can recover its rollback pointer from a verified installed cache if the stored pointer is stale. Experimental branch only; controlled Safari verification required.",
     "v262 portable restore: adds a user-confirmed restore path for complete portable backups, restores all app-prefixed LocalStorage keys and all IndexedDB stores, decodes Blob/File and binary values, and verifies restored record contents with rollback on failure. Experimental branch only; no automatic migration or production release.",
     "v262: Adds a non-destructive comprehensive backup export covering app-namespaced LocalStorage and every IndexedDB store, with explicit lossless encoding for Blob/File and binary values. No restore or migration is performed by export.",
     "v261: Adds deep read-only source-candidate and media metadata auditing across all LocalStorage keys and IndexedDB stores. The audit export no longer writes an activity-log event; no migration, reset, deletion or storage writes.",
