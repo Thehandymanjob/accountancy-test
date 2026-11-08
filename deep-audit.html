@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>THA Deep Read-only Storage Audit</title>
+<style>
+body{font:16px -apple-system,BlinkMacSystemFont,Arial,sans-serif;margin:0;padding:18px;background:#f5f6f8;color:#17202a}
+main{max-width:850px;margin:auto}h1{font-size:22px}p{line-height:1.45}.panel{background:white;border:1px solid #d9dee7;border-radius:12px;padding:15px;margin:12px 0}
+button{background:#174ea6;color:white;border:0;border-radius:9px;padding:13px 16px;font-size:16px;font-weight:600}button:disabled{opacity:.5}
+#status{font-weight:600}#progress{height:9px;background:#e5e7eb;border-radius:9px;overflow:hidden}#bar{height:100%;width:0;background:#16834a}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#111827;color:#e5e7eb;padding:12px;border-radius:8px;max-height:55vh;overflow:auto}
+.small{font-size:13px;color:#536171}
+</style></head>
+<body><main>
+<h1>THA — Deep Read-only Storage Audit</h1>
+<div class="panel"><p><b>Read-only inspection.</b> This page reads LocalStorage and every IndexedDB database visible to this origin. It does not write, delete, migrate, clear, or modify records. It counts every record and samples up to 8 records per store. It also computes record fingerprints to help compare stores.</p>
+<p class="small">Keep this page open until it finishes. Large image records may take longer to scan.</p>
+<button id="run">Run deep read-only audit</button>
+<p id="status">Ready</p><div id="progress"><div id="bar"></div></div><p id="detail" class="small"></p>
+<button id="download" disabled>Download JSON report</button>
+</div>
+<div class="panel"><b>Live report</b><pre id="out">No audit started.</pre></div>
+<script>
+(()=> {
+const $=id=>document.getElementById(id);
+let report=null, done=0, total=1;
+const setStatus=(s,d='')=>{$('status').textContent=s;$('detail').textContent=d;$('bar').style.width=Math.min(100,done/total*100)+'%'};
+const emit=()=>{$('out').textContent=JSON.stringify(report,null,2)};
+const fnv=s=>{let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return ('00000000'+(h>>>0).toString(16)).slice(-8)};
+function mediaScan(value,path='$',out={dataUrlCount:0,blobCount:0,approxBytes:0,examplePaths:[]},seen=new WeakSet()){
+ if(typeof value==='string'){if(value.startsWith('data:')){out.dataUrlCount++;out.approxBytes+=value.length;if(out.examplePaths.length<12)out.examplePaths.push(path)}return out}
+ if(!value||typeof value!=='object')return out;
+ if(typeof Blob!=='undefined'&&value instanceof Blob){out.blobCount++;out.approxBytes+=value.size;if(out.examplePaths.length<12)out.examplePaths.push(path);return out}
+ if(seen.has(value))return out;seen.add(value);
+ if(Array.isArray(value)){for(let i=0;i<value.length;i++)mediaScan(value[i],path+'['+i+']',out,seen)}
+ else for(const k of Object.keys(value))mediaScan(value[k],path+'.'+k,out,seen);
+ return out
+}
+function safeSummary(v){
+ if(!v||typeof v!=='object')return {rootType:v===null?'null':typeof v};
+ const o={};for(const k of Object.keys(v).slice(0,35)){
+  const x=v[k];
+  if(['photo','logo','receiptImage','image','file','blob','raw','value'].includes(k)&&typeof x==='string'&&x.length>300){o[k]='[omitted media/string '+x.length+' chars]';continue}
+  if(x===null||['string','number','boolean'].includes(typeof x))o[k]=typeof x==='string'&&x.length>240?x.slice(0,240)+'…':x;
+  else if(Array.isArray(x))o[k]='Array('+x.length+')';
+  else if(typeof x==='object')o[k]='Object';
+ }
+ return o
+}
+async function scanLocal(){
+ const items=[];for(let i=0;i<localStorage.length;i++){
+  const key=localStorage.key(i),raw=localStorage.getItem(key);let parsed,valid=true;
+  try{parsed=JSON.parse(raw)}catch(e){valid=false}
+  items.push({key,byteLength:new Blob([raw]).size,validJson:valid,rootType:valid?(parsed===null?'null':Array.isArray(parsed)?'array':typeof parsed):'invalid',media:valid?mediaScan(parsed):null});
+ }
+ return {keyCount:items.length,items}
+}
+function openExisting(name){
+ return new Promise((resolve,reject)=>{
+  let req;try{req=indexedDB.open(name)}catch(e){reject(e);return}
+  req.onupgradeneeded=()=>{try{req.transaction.abort()}catch(e){} reject(new Error('Database unexpectedly required upgrade; audit stopped to avoid creating/changing it.'))};
+  req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Open failed'));
+  req.onblocked=()=>reject(new Error('Database open blocked'));
+ })
+}
+function scanStore(db,storeName){
+ return new Promise((resolve,reject)=>{
+  let tx,store;try{tx=db.transaction(storeName,'readonly');store=tx.objectStore(storeName)}catch(e){reject(e);return}
+  const result={name:storeName,count:0,sampledRecords:0,fieldNames:[],samples:[],idIndex:[],media:{dataUrlCount:0,blobCount:0,approxBytes:0,examplePaths:[]},fingerprint:'811c9dc5'};
+  let hash=2166136261, cursorReq;
+  try{cursorReq=store.openCursor()}catch(e){reject(e);return}
+  cursorReq.onsuccess=()=>{
+   const c=cursorReq.result;if(!c)return;
+   result.count++;
+   const v=c.value;
+   if(result.sampledRecords<8){
+    result.sampledRecords++;result.samples.push({primaryKey:c.primaryKey,summary:safeSummary(v)});
+    if(v&&typeof v==='object'){for(const k of Object.keys(v))if(!result.fieldNames.includes(k)&&result.fieldNames.length<60)result.fieldNames.push(k)}
+   }
+   const identity=v&&typeof v==='object'?(v.id??v.key??v.legacyKey??c.primaryKey):c.primaryKey;
+   if(result.idIndex.length<10000)result.idIndex.push(String(identity));
+   const m=mediaScan(v);
+   result.media.dataUrlCount+=m.dataUrlCount;result.media.blobCount+=m.blobCount;result.media.approxBytes+=m.approxBytes;
+   for(const p of m.examplePaths)if(result.media.examplePaths.length<12)result.media.examplePaths.push(p);
+   let serial;try{serial=JSON.stringify(v)}catch(e){serial='[unserializable]'}
+   const s=String(c.primaryKey)+'|'+serial;
+   for(let i=0;i<s.length;i++){hash^=s.charCodeAt(i);hash=Math.imul(hash,16777619)}
+   c.continue();
+  };
+  cursorReq.onerror=()=>reject(cursorReq.error||new Error('Cursor failed'));
+  tx.oncomplete=()=>{result.fingerprint=('00000000'+(hash>>>0).toString(16)).slice(-8);resolve(result)};
+  tx.onerror=()=>reject(tx.error||new Error('Read transaction failed'));tx.onabort=()=>reject(tx.error||new Error('Read transaction aborted'));
+ })
+}
+async function run(){
+ $('run').disabled=true;$('download').disabled=true;done=0;total=3;report={auditType:'deep-read-only-storage-audit',startedAt:new Date().toISOString(),origin:location.origin,localStorage:null,indexedDB:{enumerationAvailable:false,databases:[],errors:[]},comparisonNotes:[]};emit();
+ try{
+  setStatus('Scanning LocalStorage…');report.localStorage=await scanLocal();done++;emit();
+  if(!indexedDB.databases)throw new Error('This browser does not support IndexedDB database enumeration.');
+  setStatus('Enumerating IndexedDB databases…');const dbs=await indexedDB.databases();report.indexedDB.enumerationAvailable=true;
+  const names=dbs.filter(x=>x.name).map(x=>({name:x.name,version:x.version}));report.indexedDB.discoveredDatabaseNames=names;
+  total=2+names.length;done++;emit();
+  for(const meta of names){
+   setStatus('Opening database '+meta.name+'…');
+   let db;
+   try{
+    db=await openExisting(meta.name);
+    const stores=Array.from(db.objectStoreNames);const entry={name:meta.name,reportedVersion:meta.version,actualVersion:db.version,stores:[],totalRecords:0};
+    report.indexedDB.databases.push(entry);emit();
+    for(const sn of stores){
+     setStatus('Reading '+meta.name+' / '+sn+'…','Read-only cursor; counting every record and sampling up to 8.');
+     try{const st=await scanStore(db,sn);entry.totalRecords+=st.count;entry.stores.push(st)}
+     catch(e){entry.stores.push({name:sn,error:String(e)})}
+     emit();
+    }
+    db.close();
+   }catch(e){if(db)db.close();report.indexedDB.errors.push({name:meta.name,error:String(e)})}
+   done++;emit();setStatus('Completed '+meta.name);
+  }
+  const byName=new Map(report.indexedDB.databases.map(d=>[d.name,d]));
+  const domains=['accountingEntries','customers','invoices','projects','projectReceipts','projectExpenses','partners','contractors','workers','contracts','legacySnapshots','records','kv'];
+  for(const domain of domains){
+   const hits=[];for(const d of report.indexedDB.databases)for(const s of d.stores||[])if(s.name===domain)hits.push({database:d.name,count:s.count,fingerprint:s.fingerprint});
+   if(hits.length>1)report.comparisonNotes.push({store:domain,databases:hits,matchingFingerprintGroups:Object.values(hits.reduce((a,x)=>(a[x.fingerprint]=(a[x.fingerprint]||[]).concat(x.database),a),{})).filter(g=>g.length>1)});
+  }
+  report.finishedAt=new Date().toISOString();report.status=report.indexedDB.errors.length?'completed-with-errors':'completed';emit();setStatus('Audit finished',report.status);$('download').disabled=false;
+ }catch(e){report.error=String(e);report.finishedAt=new Date().toISOString();report.status='incomplete';emit();setStatus('Audit stopped with an error',String(e));$('download').disabled=false}
+ finally{$('run').disabled=false}
+}
+$('run').addEventListener('click',run);
+$('download').addEventListener('click',()=>{
+ if(!report)return;const blob=new Blob([JSON.stringify(report,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='tha-deep-read-only-audit-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1500)
+});
+})();
+</script></main></body></html>
