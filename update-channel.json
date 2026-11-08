@@ -3,9 +3,9 @@
   "channel": "test",
   "sourceBranch": "release239",
   "version": "262",
-  "buildId": "THA-262-COMPLETE-PORTABLE-BACKUP-20261108",
-  "manifestSha256": "87471c60c0ddaa030702b4e650e9c146dafd5559b5830bad1cc9047895903fd6",
-  "updatedAt": "2026-11-08T18:10:00Z",
-  "note": "Test v262: complete portable backup export and user-confirmed restore are connected. Restore replaces app-prefixed LocalStorage keys and all IndexedDB stores with full record-content verification and rollback. Experimental branch only; live Safari restore still requires controlled testing.",
-  "sourceCommit": "c35257c4e8006ddb7966301b9ec03b6156fc6772"
+  "buildId": "THA-262-RESTORE-LOG-GUARD-20261108",
+  "manifestSha256": "501921aedc703f4dbff1ed8018efae390fa981bfe5ee6bf8bfd0f88a1a78bd14",
+  "updatedAt": "2026-11-08T19:00:00Z",
+  "note": "Test v262 restore hotfix: monitor logging is suppressed during portable restore and rollback. Experimental branch only; controlled Safari verification still required.",
+  "sourceCommit": "813107ac49981470ce3187e06bf8f07c1fe41bde"
 }
