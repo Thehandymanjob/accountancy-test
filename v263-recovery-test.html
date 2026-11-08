@@ -22,7 +22,7 @@
   return {
    async health(){const counts={};for(const r of records)counts[r.domain]=(counts[r.domain]||0)+1;return {ok:true,totalRecords:records.length,counts};},
    async snapshot(domains){return {format:"tha-v263-indexeddb-snapshot-v1",database:"the_handyman_accountancy_v263_idb",createdAt:new Date().toISOString(),domains:[...domains].sort(),records:copy(records.filter(r=>domains.includes(r.domain))).sort((a,b)=>a.id.localeCompare(b.id))};},
-   async restore(pkg){records=records.filter(r=>!pkg.domains.includes(r.domain));for(const r of pkg.records)records.push(copy(r));return {ok:true,restored:pkg.records.length,domains:pkg.domains};},
+   async restore(pkg){records=records.filter(r=>!pkg.domains.includes(r.domain));for(const r of pkg.records)records.push({...copy(r),id:r.domain+":"+encodeURIComponent(r.key)});return {ok:true,restored:pkg.records.length,domains:pkg.domains};},
    async getRecords(){return copy(records);}
   };
  }
