@@ -29,13 +29,14 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;border-radius:10px;
 "use strict";
 const H=window.HandymanStorageFoundation, out=document.getElementById("result");
 const prefix="tha_restore_lab_";
-const sentinelKey="tha_restore_lab_sentinel_external";
+const sentinelKey="unrelated_origin_key_v262";
 const log=value=>{out.textContent=typeof value==="string"?value:JSON.stringify(value,null,2)};
 function txDone(tx){return new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error||new Error("Transaction failed"));tx.onabort=()=>reject(tx.error||new Error("Transaction aborted"));});}
 async function clearStores(){const db=await H.openDatabase();try{const names=H.stores,tx=db.transaction(names,"readwrite"),done=txDone(tx);for(const n of names)tx.objectStore(n).clear();await done;}finally{db.close();}}
 async function deleteLab(){await clearStores();for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith(prefix))localStorage.removeItem(k);}return {ok:true,database:H.databaseName,prefix,remainingLocalKeys:Array.from({length:localStorage.length},(_,i)=>localStorage.key(i)).filter(k=>k&&k.startsWith(prefix)).length};}
 async function seed(){
  await clearStores();
+ for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith(prefix))localStorage.removeItem(k);}
  localStorage.setItem(prefix+"accounting_v1",JSON.stringify({entries:[{id:"sample-income",amount:123.45}],customers:[{id:"sample-customer"}]}));
  localStorage.setItem(prefix+"media_v1","data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pS8AAAAASUVORK5CYII=");
  localStorage.setItem(sentinelKey,"keep-this-unrelated-key");
