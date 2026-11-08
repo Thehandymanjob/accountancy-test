@@ -63,7 +63,7 @@ async function run(){
   await HandymanSupportV263.save('factoryResetRecovery',{state:'protected',snapshot:{blob}});
   record('Recovery metadata round-trip', (await HandymanSupportV263.load('recovery')).backupId==='backup-1'&&await equal((await HandymanSupportV263.load('factoryResetRecovery')).snapshot.blob,blob));
   const backup=await HandymanAppStorageV263.backup();
-  record('Backup manifest covers every registered domain',backup&&Array.isArray(backup.records)&&Array.isArray(backup.domains)&&HandymanAppStorageV263.domains.every(name=>backup.domains.includes(name)),String(backup&&backup.domains&&backup.domains.length)+' domains; '+String(backup&&backup.records&&backup.records.length)+' stored records');
+  record('Backup manifest covers every registered domain',backup&&Array.isArray(backup.records)&&Array.isArray(backup.domains)&&HandymanAppStorageV263.domains.map(name=>name.replace(/[A-Z]/g,letter=>"_"+letter.toLowerCase())).every(name=>backup.domains.includes(name)),String(backup&&backup.domains&&backup.domains.length)+' domains; '+String(backup&&backup.records&&backup.records.length)+' stored records');
   const before=await HandymanStorageV263.health();
   record('Final health check succeeds without reset lock',before.ok===true&&before.resetLocked===false);
  }catch(e){const msg=(e&&e.message)||String(e)||'Unknown error';record('Unexpected test exception',false,msg+' | name='+(e&&e.name||'')+' | stack='+((e&&e.stack)||''));}
