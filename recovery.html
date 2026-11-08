@@ -1,117 +1,39 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Handyman Read-only Data Audit</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Handyman Safe Storage Audit</title>
 <style>
-body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:20px;background:#f3f5f8;color:#172033}
-main{max-width:850px;margin:auto;background:white;border-radius:18px;padding:20px;box-shadow:0 4px 24px #0001}
-h1{font-size:22px}.note{background:#fff4d6;padding:12px;border-radius:10px;line-height:1.5}
-pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#111827;color:#e5e7eb;padding:14px;border-radius:10px;font-size:12px}
-button{padding:12px 18px;border:0;border-radius:10px;background:#f2c94c;font-weight:700;font-size:16px}
-</style></head>
-<body><main>
-<h1>The Handyman — Read-only Data Audit</h1>
-<p class="note"><strong>READ ONLY.</strong> This audit reads LocalStorage and IndexedDB only. It does not write, migrate, delete, restore, or alter app data. It reports record counts, field names, selected business fields, and embedded media counts/bytes. Do not run Restore or Reset.</p>
-<button id="run">Run read-only audit</button><pre id="out">Checking…</pre>
-</main>
-<script>
-(async()=>{
-const out=document.getElementById('out');
-const safe=(v)=>{try{return JSON.parse(JSON.stringify(v));}catch(e){return String(v)}};
-function mediaScan(root){
- let count=0,bytes=0,blobCount=0,paths=[];
- const seen=new Set();
- function walk(v,path,depth){
-  if(depth>12||v==null)return;
-  if(typeof v==='string'){
-   if(/^data:(image|application\\/pdf|application\\/octet-stream)\\//i.test(v)||/^data:image\\//i.test(v)){
-    count++;bytes+=new Blob([v]).size;if(paths.length<30)paths.push(path);
-   }
-   return;
-  }
-  if(typeof Blob!=='undefined'&&v instanceof Blob){blobCount++;bytes+=v.size;if(paths.length<30)paths.push(path);return;}
-  if(typeof v!=='object'||seen.has(v))return;seen.add(v);
-  if(Array.isArray(v)){v.forEach((x,i)=>walk(x,path+'['+i+']',depth+1));}
-  else Object.keys(v).forEach(k=>walk(v[k],path+'.'+k,depth+1));
- }
- walk(root,'$',0);return {dataUrlCount:count,blobCount,approxBytes:bytes,examplePaths:paths};
+body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;margin:0;padding:18px;background:#f3f5f8;color:#172033}main{max-width:850px;margin:auto;background:white;border-radius:16px;padding:18px;box-shadow:0 4px 24px #0001}h1{font-size:21px}.note{background:#fff4d6;padding:12px;border-radius:10px;line-height:1.5}#status{font-weight:700;padding:10px;background:#e8f0ff;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#111827;color:#e5e7eb;padding:12px;border-radius:10px;font-size:12px}button{padding:12px 18px;border:0;border-radius:10px;background:#f2c94c;font-weight:700;font-size:16px}
+</style></head><body><main>
+<h1>The Handyman — Safe Storage Audit</h1>
+<p class="note"><b>READ ONLY.</b> No data is written, changed, migrated, restored, or deleted. This lighter audit counts every store but samples at most 8 records per store to identify fields and media. Progress is displayed as it runs.</p>
+<div id="status">Ready</div><p><button id="run">Run read-only audit</button></p><pre id="out">No report yet.</pre>
+</main><script>
+(()=>{
+const status=document.getElementById('status'),out=document.getElementById('out'),btn=document.getElementById('run');
+let report=null;
+function progress(s){status.textContent=s;if(report)out.textContent=JSON.stringify(report,null,2);}
+function scanMedia(root){
+ let dataUrlCount=0,blobCount=0,approxBytes=0,paths=[];const seen=new Set();
+ function walk(v,p,d){if(d>8||v==null)return;if(typeof v==='string'){if(v.startsWith('data:image/')||v.startsWith('data:application/pdf')||v.startsWith('data:application/octet-stream')){dataUrlCount++;approxBytes+=v.length;if(paths.length<8)paths.push(p);}return;}
+ if(typeof Blob!=='undefined'&&v instanceof Blob){blobCount++;approxBytes+=v.size;if(paths.length<8)paths.push(p);return;}
+ if(typeof v!=='object'||seen.has(v))return;seen.add(v);if(Array.isArray(v)){for(let i=0;i<Math.min(v.length,30);i++)walk(v[i],p+'['+i+']',d+1);}else{for(const k of Object.keys(v).slice(0,100))walk(v[k],p+'.'+k,d+1);}}
+ walk(root,'$',0);return {dataUrlCount,blobCount,approxBytes,examplePaths:paths};
 }
-function recordSummary(rows){
- const fields=new Set(),examples=[];
- for(const r of rows){if(r&&typeof r==='object'&&!Array.isArray(r))Object.keys(r).forEach(k=>fields.add(k));}
+function summarize(rows){const fields=new Set(),examples=[];for(const r of rows){if(r&&typeof r==='object')Object.keys(r).forEach(k=>fields.add(k));}
  const re=/(name|title|price|amount|total|number|date|type|status|customer|project|receipt|invoice|category|description|image|logo|file|media|id)/i;
- for(const r of rows.slice(0,12)){
-  if(!r||typeof r!=='object')continue;
-  const e={};
-  for(const [k,v] of Object.entries(r)){
-   if(!re.test(k))continue;
-   if(v===null||['string','number','boolean'].includes(typeof v)){
-    const s=String(v);e[k]=s.length>180?s.slice(0,180)+'…':v;
-   }else if(Array.isArray(v))e[k]='Array('+v.length+')';
-   else if(typeof v==='object')e[k]='Object';
-  }
-  examples.push(e);
- }
- return {recordCount:rows.length,fieldNames:[...fields].sort(),selectedFieldExamples:examples,media:mediaScan(rows)};
+ for(const r of rows.slice(0,5)){if(!r||typeof r!=='object')continue;const e={};for(const [k,v] of Object.entries(r)){if(!re.test(k))continue;if(v===null||['string','number','boolean'].includes(typeof v)){const s=String(v);e[k]=s.length>120?s.slice(0,120)+'…':v;}else e[k]=Array.isArray(v)?'Array('+v.length+')':'Object';}examples.push(e);}
+ return {sampledRecords:rows.length,fieldNames:[...fields].sort(),examples,media:scanMedia(rows)};
 }
-async function openDb(name){
- return await new Promise((resolve,reject)=>{
-  const req=indexedDB.open(name);
-  req.onsuccess=()=>resolve(req.result);
-  req.onerror=()=>reject(req.error||new Error('open failed'));
-  req.onblocked=()=>reject(new Error('open blocked'));
- });
-}
-async function readStore(db,name){
- return await new Promise((resolve,reject)=>{
-  const tx=db.transaction([name],'readonly'),req=tx.objectStore(name).getAll();
-  req.onsuccess=()=>resolve(req.result||[]);
-  req.onerror=()=>reject(req.error||new Error('getAll failed'));
-  tx.onabort=()=>reject(tx.error||new Error('readonly transaction aborted'));
- });
-}
-async function run(){
- const report={auditType:'read-only-no-writes',checkedAt:new Date().toISOString(),origin:location.origin,localStorage:{},indexedDB:{enumerationAvailable:typeof indexedDB.databases==='function',databases:[]},mediaTotals:{dataUrlCount:0,blobCount:0,approxBytes:0}};
- try{
-  const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&(/^(tha_test226_|handyman_)/).test(k))keys.push(k);}
-  report.localStorage.keyCount=keys.length;report.localStorage.items=[];
-  for(const key of keys){
-   const raw=localStorage.getItem(key)||'';let parsed=null,validJson=false;
-   try{parsed=JSON.parse(raw);validJson=true;}catch(e){}
-   const shape=parsed&&typeof parsed==='object'?Array.isArray(parsed)?{rootType:'array',length:parsed.length}: {rootType:'object',topLevelKeys:Object.keys(parsed).sort()}: {rootType:parsed===null?'null':typeof parsed};
-   const media=mediaScan(parsed??raw);
-   report.localStorage.items.push({key,byteLength:new Blob([raw]).size,validJson,...shape,media});
-   report.mediaTotals.dataUrlCount+=media.dataUrlCount;report.mediaTotals.blobCount+=media.blobCount;report.mediaTotals.approxBytes+=media.approxBytes;
-  }
- }catch(e){report.localStorage.error=String(e);}
- try{
-  const infos=typeof indexedDB.databases==='function'?await indexedDB.databases():[];
-  const wanted=new Set(['the_handyman_accountancy_test226','the_handyman_accountancy_roundtrip_v6','the_handyman_accountancy_v250_idb']);
-  const chosen=infos.filter(x=>x.name&&wanted.has(x.name));
-  for(const info of chosen){
-   const dbReport={name:info.name,version:info.version??null,stores:[]};
-   try{
-    const db=await openDb(info.name);dbReport.version=db.version;
-    for(const storeName of Array.from(db.objectStoreNames)){
-     try{
-      const rows=await readStore(db,storeName);
-      const summary=recordSummary(rows);
-      dbReport.stores.push({name:storeName,...summary});
-      report.mediaTotals.dataUrlCount+=summary.media.dataUrlCount;
-      report.mediaTotals.blobCount+=summary.media.blobCount;
-      report.mediaTotals.approxBytes+=summary.media.approxBytes;
-     }catch(e){dbReport.stores.push({name:storeName,error:String(e)});}
-    }
-    db.close();
-   }catch(e){dbReport.error=String(e);}
-   report.indexedDB.databases.push(dbReport);
-  }
-  report.indexedDB.discoveredDatabaseNames=infos.map(x=>({name:x.name,version:x.version??null}));
-  if(!infos.length)report.indexedDB.note='No IndexedDB databases were enumerated.';
- }catch(e){report.indexedDB.error=String(e);}
- out.textContent=JSON.stringify(report,null,2);
-}
-document.getElementById('run').addEventListener('click',run);await run();
+function request(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('IndexedDB request failed'));});}
+async function sampleStore(db,name){const tx=db.transaction([name],'readonly'),store=tx.objectStore(name);const count=await request(store.count());const rows=await new Promise((resolve,reject)=>{const arr=[],req=store.openCursor();req.onerror=()=>reject(req.error||new Error('cursor failed'));req.onsuccess=()=>{const c=req.result;if(!c||arr.length>=8){resolve(arr);return;}arr.push(c.value);c.continue();};});return {count,...summarize(rows)};}
+async function openDb(name){return new Promise((resolve,reject)=>{const req=indexedDB.open(name);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('open failed'));req.onblocked=()=>reject(new Error('open blocked'));});}
+async function run(){btn.disabled=true;report={auditType:'read-only-progressive-sampled-audit',checkedAt:new Date().toISOString(),origin:location.origin,localStorage:{},indexedDB:{enumerationAvailable:typeof indexedDB.databases==='function',databases:[]},mediaTotals:{sampledDataUrlCount:0,sampledBlobCount:0,sampledApproxBytes:0}};out.textContent='Audit started…';
+ try{progress('Step 1/3 — Reading LocalStorage…');const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&(/^(tha_test226_|handyman_)/).test(k))keys.push(k);}report.localStorage.keyCount=keys.length;report.localStorage.items=[];
+ for(const key of keys){const raw=localStorage.getItem(key)||'';let parsed=null,validJson=false;try{parsed=JSON.parse(raw);validJson=true;}catch(e){}const shape=parsed&&typeof parsed==='object'?(Array.isArray(parsed)?{rootType:'array',length:parsed.length}:{rootType:'object',topLevelKeys:Object.keys(parsed).slice(0,60)}):{rootType:parsed===null?'null':typeof parsed};const media=scanMedia(parsed??raw);report.localStorage.items.push({key,byteLength:new Blob([raw]).size,validJson,...shape,media});report.mediaTotals.sampledDataUrlCount+=media.dataUrlCount;report.mediaTotals.sampledBlobCount+=media.blobCount;report.mediaTotals.sampledApproxBytes+=media.approxBytes;}progress('Step 2/3 — LocalStorage complete. Enumerating IndexedDB…');
+ const infos=typeof indexedDB.databases==='function'?await indexedDB.databases():[];report.indexedDB.discoveredDatabaseNames=infos.map(x=>({name:x.name,version:x.version??null}));const wanted=new Set(['the_handyman_accountancy_test226','the_handyman_accountancy_roundtrip_v6','the_handyman_accountancy_v250_idb']);const chosen=infos.filter(x=>x.name&&wanted.has(x.name));let dbi=0;
+ for(const info of chosen){dbi++;const dr={name:info.name,reportedVersion:info.version??null,stores:[]};report.indexedDB.databases.push(dr);progress('Step 3/3 — Reading database '+dbi+'/'+chosen.length+': '+info.name);
+ try{const db=await openDb(info.name);dr.actualVersion=db.version;const stores=Array.from(db.objectStoreNames);for(let i=0;i<stores.length;i++){const sn=stores[i];progress('Step 3/3 — '+info.name+' · store '+(i+1)+'/'+stores.length+': '+sn);try{const s=await sampleStore(db,sn);dr.stores.push({name:sn,...s});report.mediaTotals.sampledDataUrlCount+=s.media.dataUrlCount;report.mediaTotals.sampledBlobCount+=s.media.blobCount;report.mediaTotals.sampledApproxBytes+=s.media.approxBytes;}catch(e){dr.stores.push({name:sn,error:String(e)});}out.textContent=JSON.stringify(report,null,2);}db.close();}catch(e){dr.error=String(e);}}
+ report.finishedAt=new Date().toISOString();progress('Complete — read-only audit finished.');}catch(e){report.fatalError=String(e);progress('Stopped with error — partial report is shown below.');}finally{btn.disabled=false;out.textContent=JSON.stringify(report,null,2);}}
+btn.addEventListener('click',run);run();
 })();
 </script></body></html>
