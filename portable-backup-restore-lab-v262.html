@@ -99,10 +99,7 @@ document.getElementById("runActual").addEventListener("click",async()=>{
   const raw=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error||new Error("Could not read selected file"));reader.readAsText(file);});
   const original=JSON.parse(raw);
   if(!original||original.format!=="the-handyman-portable-complete-backup"||original.formatVersion!==1)throw new Error("This is not a supported v262 portable complete backup.");
-  const isolated=JSON.parse(JSON.stringify(original));
-  isolated.source.database=H.databaseName;
-  isolated.indexedDB.database=H.databaseName;
-  isolated.localStorage.records=original.localStorage.records.map((item,index)=>({...item,key:prefix+"import_"+index+"_"+encodeURIComponent(item.key)}));
+  const isolated={...original,source:{...original.source,database:H.databaseName},indexedDB:{...original.indexedDB,database:H.databaseName},localStorage:{...original.localStorage,records:original.localStorage.records.map((item,index)=>({...item,key:prefix+"import_"+index+"_"+encodeURIComponent(item.key)}))}};
   isolated.localStorage.count=isolated.localStorage.records.length;
   await clearStores();
   for(let i=localStorage.length-1;i>=0;i--){const k=localStorage.key(i);if(k&&k.startsWith(prefix))localStorage.removeItem(k);}
