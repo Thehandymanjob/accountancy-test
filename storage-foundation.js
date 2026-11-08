@@ -821,6 +821,215 @@
 
   // Replace every store in one read/write transaction. Invalid packages are
   // rejected before any mutation; transaction failure rolls the replacement back.
+  // Restore the portable export format produced by exportPortableBackup().
+  // The IndexedDB replacement is one transaction. LocalStorage is then replaced
+  // with an in-memory rollback snapshot; if either phase fails, both stores are
+  // restored to their pre-restore state as far as the browser permits.
+  async function restorePortableBackup(packageValue) {
+    if (!packageValue || typeof packageValue !== "object" ||
+        packageValue.format !== "the-handyman-portable-complete-backup" ||
+        packageValue.formatVersion !== 1 ||
+        packageValue.app !== "The Handyman Accountancy") {
+      throw new Error("Unsupported or invalid portable backup package.");
+    }
+    if (!packageValue.source || packageValue.source.database !== DB_NAME ||
+        packageValue.source.schemaVersion !== DB_VERSION) {
+      throw new Error("Backup database or schema version does not match this application.");
+    }
+    const names = [...STORES, KV_STORE];
+    const idb = packageValue.indexedDB;
+    if (!idb || idb.database !== DB_NAME || idb.schemaVersion !== DB_VERSION ||
+        !Array.isArray(idb.stores) || names.length !== idb.stores.length ||
+        names.some(name => !idb.stores.includes(name)) ||
+        !idb.data || typeof idb.data !== "object") {
+      throw new Error("Backup IndexedDB manifest does not match this application.");
+    }
+    const prefixes = ["handyman_", "tha_test226_", "tha_restore_test_v1_", "tha_v206_"];
+    const localRecords = packageValue.localStorage && packageValue.localStorage.records;
+    if (!packageValue.localStorage || !Array.isArray(localRecords) ||
+        packageValue.localStorage.count !== localRecords.length) {
+      throw new Error("Backup LocalStorage section is missing or has an invalid count.");
+    }
+    const localSeen = new Set();
+    for (const item of localRecords) {
+      if (!item || typeof item.key !== "string" ||
+          !prefixes.some(prefix => item.key.startsWith(prefix)) ||
+          typeof item.present !== "boolean" ||
+          (item.present && typeof item.value !== "string") ||
+          (!item.present && item.value !== null) ||
+          localSeen.has(item.key)) {
+        throw new Error("Invalid or duplicate LocalStorage backup record.");
+      }
+      localSeen.add(item.key);
+    }
+
+    const decodeBase64 = value => {
+      const binary = atob(value || "");
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    };
+    const typedConstructors = {
+      Int8Array, Uint8Array, Uint8ClampedArray, Int16Array, Uint16Array,
+      Int32Array, Uint32Array, Float32Array, Float64Array
+    };
+    if (typeof BigInt64Array !== "undefined") typedConstructors.BigInt64Array = BigInt64Array;
+    if (typeof BigUint64Array !== "undefined") typedConstructors.BigUint64Array = BigUint64Array;
+    const decode = value => {
+      if (value === null || typeof value !== "object") return value;
+      if (Array.isArray(value)) return value.map(decode);
+      if (value.__thaType === "Undefined") return undefined;
+      if (value.__thaType === "Date") {
+        const date = new Date(value.value);
+        if (Number.isNaN(date.getTime())) throw new Error("Invalid Date value in backup.");
+        return date;
+      }
+      if (value.__thaType === "ArrayBuffer") return decodeBase64(value.base64).buffer;
+      if (value.__thaType === "TypedArray") {
+        const bytes = decodeBase64(value.base64);
+        if (value.constructor === "DataView") return new DataView(bytes.buffer);
+        const Constructor = typedConstructors[value.constructor];
+        if (!Constructor || bytes.byteLength % Constructor.BYTES_PER_ELEMENT !== 0) {
+          throw new Error("Unsupported or invalid typed array in backup.");
+        }
+        return new Constructor(bytes.buffer);
+      }
+      if (value.__thaType === "Blob" || value.__thaType === "File") {
+        const blob = new Blob([decodeBase64(value.base64)], { type: value.mimeType || "" });
+        if (value.size !== blob.size) throw new Error("Binary media size verification failed during backup decoding.");
+        if (value.__thaType === "File") {
+          if (typeof File === "undefined") return blob;
+          return new File([blob], value.name || "restored-file", {
+            type: value.mimeType || "", lastModified: Number(value.lastModified) || 0
+          });
+        }
+        return blob;
+      }
+      const out = {};
+      for (const key of Object.keys(value)) out[key] = decode(value[key]);
+      return out;
+    };
+
+    const restoredRows = {};
+    for (const name of names) {
+      const encoded = idb.data[name];
+      if (!Array.isArray(encoded)) throw new Error("Backup is missing IndexedDB store: " + name);
+      const expectedCount = idb.counts && idb.counts[name];
+      if (!Number.isInteger(expectedCount) || expectedCount !== encoded.length) {
+        throw new Error("IndexedDB backup count mismatch for store: " + name);
+      }
+      restoredRows[name] = decode(encoded);
+      const seen = new Set();
+      for (const row of restoredRows[name]) {
+        if (!row || typeof row !== "object" || Array.isArray(row)) {
+          throw new Error("Invalid record in IndexedDB store: " + name);
+        }
+        const key = name === KV_STORE ? row.key : row.id;
+        if ((typeof key !== "string" && !(typeof key === "number" && Number.isFinite(key))) ||
+            String(key).trim() === "") throw new Error("Invalid record key in IndexedDB store: " + name);
+        const normalized = typeof key + ":" + String(key);
+        if (seen.has(normalized)) throw new Error("Duplicate record key in IndexedDB store: " + name);
+        seen.add(normalized);
+      }
+    }
+
+    const db = await openDatabase();
+    let oldRows = {};
+    let oldLocal = [];
+    let localCommitStarted = false;
+    let idbCommitStarted = false;
+    try {
+      const readTx = db.transaction(names, "readonly");
+      const readDone = transactionDone(readTx);
+      for (const name of names) oldRows[name] = await requestResult(readTx.objectStore(name).getAll());
+      await readDone;
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && prefixes.some(prefix => key.startsWith(prefix))) {
+          oldLocal.push({ key, value: localStorage.getItem(key) });
+        }
+      }
+
+      const writeTx = db.transaction(names, "readwrite");
+      const writeDone = transactionDone(writeTx);
+      idbCommitStarted = true;
+      for (const name of names) {
+        const store = writeTx.objectStore(name);
+        store.clear();
+        for (const row of restoredRows[name]) store.put(row);
+      }
+      await writeDone;
+
+      localCommitStarted = true;
+      for (const item of oldLocal) localStorage.removeItem(item.key);
+      for (const item of localRecords) {
+        if (item.present) localStorage.setItem(item.key, item.value);
+      }
+
+      const verifyTx = db.transaction(names, "readonly");
+      const verifyDone = transactionDone(verifyTx);
+      const verifiedCounts = {};
+      for (const name of names) {
+        const store = verifyTx.objectStore(name);
+        const rows = await requestResult(store.getAll());
+        if (rows.length !== restoredRows[name].length) {
+          throw new Error("Post-restore IndexedDB count verification failed for store: " + name);
+        }
+        verifiedCounts[name] = rows.length;
+      }
+      await verifyDone;
+      for (const item of localRecords) {
+        const actual = localStorage.getItem(item.key);
+        if (item.present ? actual !== item.value : actual !== null) {
+          throw new Error("Post-restore LocalStorage verification failed for key: " + item.key);
+        }
+      }
+      return {
+        ok: true, format: packageValue.format, database: DB_NAME,
+        schemaVersion: DB_VERSION, localStorageRecords: localRecords.length,
+        indexedDBCounts: verifiedCounts, rollbackAvailableDuringRestore: true
+      };
+    } catch (error) {
+      let rollbackErrors = [];
+      if (localCommitStarted) {
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && prefixes.some(prefix => key.startsWith(prefix))) localStorage.removeItem(key);
+          }
+          for (const item of oldLocal) localStorage.setItem(item.key, item.value);
+          for (const item of oldLocal) {
+            if (localStorage.getItem(item.key) !== item.value) throw new Error("LocalStorage rollback verification failed.");
+          }
+        } catch (rollbackError) { rollbackErrors.push("LocalStorage rollback: " + rollbackError.message); }
+      }
+      if (idbCommitStarted) {
+        try {
+          const rollbackTx = db.transaction(names, "readwrite");
+          const rollbackDone = transactionDone(rollbackTx);
+          for (const name of names) {
+            const store = rollbackTx.objectStore(name);
+            store.clear();
+            for (const row of oldRows[name]) store.put(row);
+          }
+          await rollbackDone;
+          for (const name of names) {
+            const checkTx = db.transaction([name], "readonly");
+            const checkDone = transactionDone(checkTx);
+            const count = await requestResult(checkTx.objectStore(name).count());
+            await checkDone;
+            if (count !== oldRows[name].length) throw new Error("IndexedDB rollback count verification failed for " + name);
+          }
+        } catch (rollbackError) { rollbackErrors.push("IndexedDB rollback: " + rollbackError.message); }
+      }
+      if (rollbackErrors.length) {
+        throw new Error((error && error.message ? error.message : "Portable restore failed.") +
+          " CRITICAL: rollback could not be fully verified. " + rollbackErrors.join("; "));
+      }
+      throw error;
+    } finally { db.close(); }
+  }
+
   async function restoreCompleteBackup(packageValue) {
     if (!packageValue || typeof packageValue !== "object" ||
         packageValue.format !== "the-handyman-indexeddb-backup" ||
@@ -1060,7 +1269,7 @@
   window.HandymanStorageFoundation = Object.freeze({
     openDatabase, get, set, remove, keys,
     putRecord, getRecord, getAllRecords, countRecords, deleteRecord, bulkPutRecords, bulkAddAcrossStores, bulkAddAcrossStoresVerified, bulkWriteAcrossStores,
-    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, exportPortableBackup, exportCompleteBackup, restoreCompleteBackup, clearIndexedDBData, readAppState, writeAppState, writeAppStatesAtomically, status,
+    snapshotLegacyData, migrateLegacyData, verifyMigration, selfTest, inspectStorageInventory, inspectMigrationSources, exportPortableBackup, restorePortableBackup, exportCompleteBackup, restoreCompleteBackup, clearIndexedDBData, readAppState, writeAppState, writeAppStatesAtomically, status,
     legacyKeys: LEGACY_KEYS.slice(),
     stores: [...STORES, KV_STORE], databaseName: DB_NAME, schemaVersion: DB_VERSION
   });
