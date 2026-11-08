@@ -22,7 +22,7 @@
    await app.write("accounting",sample);report.checks.writeVerified=true;
    const read=await app.read("accounting");
    report.checks.readVerified=JSON.stringify(read)===JSON.stringify(sample);
-   if(!report.readVerified)throw new Error("Accounting read-back differs from temporary test value.");
+   if(!report.checks.readVerified)throw new Error("Accounting read-back differs from temporary test value.");
   }catch(error){report.errors.push(String(error&&error.message||error))}
   finally{
    if(original){
