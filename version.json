@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "260",
-  "buildId": "THA-260-READONLY-STORAGE-AUDIT-20261108",
+  "version": "261",
+  "buildId": "THA-261-DEEP-READONLY-STORAGE-AUDIT-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 5,
@@ -9,19 +9,20 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "97e930081c7b7317cd4d3cf0cf1ab3e3b64867b77fccf89fb9a0c2ac80e72874"
+      "sha256": "190efa48312d251f78fbe0e0da9e5323fe8db6f68e8435f786c6975ccd7f2b0a"
     },
     "version-manager.js": {
-      "sha256": "b91aec057c63923eb8703dcbea8b83ece9cd0ca687922628d60bb7f3bf2c4e77"
+      "sha256": "7875b511202bd3a83a4fe23f5bf598a9b85b66f57be27ef566488ed400d65a56"
     },
     "service-worker.js": {
-      "sha256": "ab4dd1aa6e9b91001a49f5a3718ed3cb8cba322dee454a4f0fb82a4275360dfc"
+      "sha256": "601815849ae79f4ee4464fa63c46b02f31e2d013a70a5a44fef35b6ab0e192ee"
     },
     "storage-foundation.js": {
-      "sha256": "ee1a6d1a015bb3db6ab2901d8bd9a0180612c79ca9d7aa11c46dbfe6895990f4"
+      "sha256": "5631225f706c5bd2b629ad92dc539395ff9a1272fe77fc6cc5b7eea0ae79837e"
     }
   },
   "releaseNotes": [
+    "v261: Adds deep read-only source-candidate and media metadata auditing across all LocalStorage keys and IndexedDB stores. The audit export no longer writes an activity-log event; no migration, reset, deletion or storage writes.",
     "v260: Adds a local, read-only audit of all same-origin LocalStorage keys and IndexedDB records, plus structural source comparison. Exports a JSON report; performs no migration, writes, reset or deletion.",
     "v259: Marking an invoice as paid waits for the IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. A clear warning is shown if verification fails.",
     "v258: Marking an invoice as unpaid waits for the IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. A clear warning is shown if verification fails.",
