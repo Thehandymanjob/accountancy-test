@@ -34,14 +34,14 @@
    state=await window.HandymanContractsV263.load();checks.addQuotation=state.contracts.length===2&&state.contracts.some(c=>c.documentType==="quotation");
    await window.HandymanContractsV263.updateContract("v263-contract-test",{title:"Updated Work Contract",price:"1350",updated:"2026-11-08T01:00:00.000Z"});
    const item=await window.HandymanContractsV263.get("v263-contract-test");checks.updateContract=item.title==="Updated Work Contract"&&item.price==="1350"&&item.customLegacyField.keep===true;
-   checks.getContract=item.id==="v263-contract-test"&&(await item.attachment.text())==="contract-attachment-v263";
+   checks.getContract=item.id==="v263-contract-test";checks.blobAttachmentRoundTrip=item.attachment instanceof Blob&&(await item.attachment.text())==="contract-attachment-v263";
    let duplicateBlocked=false,missingBlocked=false;
    try{await window.HandymanContractsV263.add({id:"v263-contract-test",title:"Duplicate"});}catch(e){duplicateBlocked=true}
    try{await window.HandymanContractsV263.remove("not-a-contract");}catch(e){missingBlocked=true}
    checks.validationGuards=duplicateBlocked&&missingBlocked;
    await window.HandymanContractsV263.remove("v263-contract-test");
    state=await window.HandymanContractsV263.load();checks.deleteContract=state.contracts.length===1&&state.contracts[0].id==="v263-quotation-test";
-   checks.blobAttachmentRoundTrip=(await window.HandymanContractsV263.get("v263-contract-test"))===null;
+   
   }catch(e){report.errors.push(String(e&&e.message||e))}
   finally{
    if(snapshot){try{const restored=await window.HandymanStorageV263.restore(snapshot);const after=await window.HandymanStorageV263.snapshot(names);checks.backupRestore=restored.ok===true&&await equal(after.records.map(x=>({id:x.id,value:x.value})),snapshot.records.map(x=>({id:x.id,value:x.value})));if(!checks.backupRestore)report.errors.push("Original application-domain snapshot was not restored exactly.")}catch(e){report.errors.push("Snapshot restore failed: "+String(e&&e.message||e))}}
