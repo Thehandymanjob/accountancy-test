@@ -10,7 +10,7 @@
   const DB_VERSION = 1;
   const STORE = "records";
   const META = "metadata";
-  const BUILD = "THA-263-IDB-ONLY-FOUNDATION-2";
+  const BUILD = "THA-263-IDB-ONLY-FOUNDATION-3";
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
@@ -337,11 +337,10 @@
         throw error;
       }
       if (operationError) throw operationError;
-      const check = await get(domain, key);
-      if (check !== reserved) {
-        throw new Error("IndexedDB counter read-back mismatch for " + domain + "/" + key +
-          " (expected " + String(reserved) + ", received " + String(check) + ")");
-      }
+      // Do not compare a reservation with a later global read: another
+      // concurrent caller may already have advanced the counter. Transaction
+      // completion confirms this reservation committed; uniqueness is verified
+      // by the concurrent self-test and final counter value.
       return { ok: true, value: reserved };
     } finally { db.close(); }
   }
