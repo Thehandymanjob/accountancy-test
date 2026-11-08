@@ -1,7 +1,7 @@
 {
   "app": "The Handyman Accountancy",
-  "version": "255",
-  "buildId": "THA-255-DELETE-CUSTOMER-IDB-READBACK-VERIFY-20261108",
+  "version": "256",
+  "buildId": "THA-256-SAVE-INVOICE-IDB-READBACK-VERIFY-20261108",
   "releaseDate": "2026-11-08",
   "releaseStatus": "isolated-experimental",
   "databaseSchema": 5,
@@ -9,7 +9,7 @@
   "storageNamespace": "tha_test226_",
   "files": {
     "index.html": {
-      "sha256": "417cb4f0831c5ce8b7c9fbee7b64d1198c46c14adf7eac0ab9c5507f36e090dc"
+      "sha256": "52796ac40090c21b6f63a2954d4993c90702f26fa0fbd78ba42cc23715f23630"
     },
     "version-manager.js": {
       "sha256": "e999493a2d3a407efb97f9594174a093314cd95e507fd41a7be3e79d4910d68a"
@@ -22,6 +22,7 @@
     }
   },
   "releaseNotes": [
+    "v256: Saving or editing an invoice now waits for the queued IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. This includes invoice-linked income when the invoice is marked paid. LocalStorage remains authoritative; no migration or deletion.",
     "v255: Customer deletion now waits for the queued IndexedDB accounting shadow write and verifies the complete accounting snapshot by read-back. Customers linked to invoices remain protected from deletion. LocalStorage remains authoritative; no migration or automatic deletion.",
     "v254: Saving or editing a customer now waits for the queued IndexedDB accounting shadow write and verifies the full accounting snapshot by read-back. LocalStorage remains authoritative; failed IndexedDB verification produces a warning and does not roll back the saved customer. No migration, reset, or data deletion.",
     "v253: Add Entry awaits the queued IndexedDB shadow write and verifies the stored accounting snapshot by read-back before showing completion. LocalStorage remains authoritative; on an unconfirmed IndexedDB copy, the user receives a warning. No automatic migration, reset, or data deletion.",
