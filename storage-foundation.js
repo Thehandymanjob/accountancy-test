@@ -952,7 +952,7 @@
   // Lossless, non-destructive export of app-owned LocalStorage plus every
   // IndexedDB store. Binary values are encoded explicitly; no restore is performed.
   async function exportPortableBackup() {
-    const appKeyPattern = /^(tha_test226_|tha_restore_test_v1_|tha_v206_)/;
+    const appKeyPattern = /^(handyman_|tha_test226_|tha_restore_test_v1_|tha_v206_)/;
     const local = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
