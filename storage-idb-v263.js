@@ -10,7 +10,7 @@
   const DB_VERSION = 1;
   const STORE = "records";
   const META = "metadata";
-  const BUILD = "THA-263-IDB-ONLY-FOUNDATION-3";
+  const BUILD = "THA-263-IDB-RESET-GUARD-1";
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
@@ -109,6 +109,14 @@
     });
   }
 
+  function guardWrite(tx, action, allowLocked) {
+    const request = tx.objectStore(META).get("resetLock");
+    request.onsuccess = () => {
+      const lock = request.result;
+      if (lock && lock.active && !allowLocked) { try { tx.abort(); } catch (_) {} return; }
+      action();
+    };
+  }
   function validateDescriptor(domain, key) {
     if (!validDomain(domain) || !validKey(key)) throw new Error("Invalid IndexedDB domain or key.");
     return { id: recordId(domain, key), domain, key };
@@ -190,9 +198,9 @@
     const stamp = new Date().toISOString();
     const db = await openDatabase();
     try {
-      const tx = db.transaction([STORE], "readwrite");
+      const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
-      tx.objectStore(STORE).put({ ...item, value, updatedAt: stamp });
+      guardWrite(tx, () => tx.objectStore(STORE).put({ ...item, value, updatedAt: stamp }), false);
       await done;
       const saved = await get(domain, key);
       // IndexedDB structured cloning preserves binary objects; compare primitive JSON
@@ -208,9 +216,9 @@
     const item = validateDescriptor(domain, key);
     const db = await openDatabase();
     try {
-      const tx = db.transaction([STORE], "readwrite");
+      const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
-      tx.objectStore(STORE).delete(item.id);
+      guardWrite(tx, () => tx.objectStore(STORE).delete(item.id), false);
       await done;
       const check = await get(domain, key);
       if (check !== null) throw new Error("IndexedDB delete verification failed for " + domain + "/" + key);
@@ -229,10 +237,10 @@
     const stamp = new Date().toISOString();
     const db = await openDatabase();
     try {
-      const tx = db.transaction([STORE], "readwrite");
+      const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
-      for (const item of prepared) store.put({ ...item, updatedAt: stamp });
+      guardWrite(tx, () => { for (const item of prepared) store.put({ ...item, updatedAt: stamp }); }, false);
       await done;
       const verify = await readMany(prepared);
       for (let i = 0; i < prepared.length; i++) {
@@ -256,7 +264,7 @@
     const db = await openDatabase();
     const stamp = new Date().toISOString();
     try {
-      const tx = db.transaction([STORE], "readwrite");
+      const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
       const currentRows = new Array(prepared.length);
@@ -267,6 +275,7 @@
       // Keep every operation that touches this transaction inside IndexedDB
       // request callbacks. Safari may auto-commit a transaction across an
       // awaited Promise continuation, even when another request is expected.
+      guardWrite(tx, () => {
       const requests = prepared.map((item, index) => {
         const request = store.get(item.id);
         request.onsuccess = () => {
@@ -293,6 +302,7 @@
           }
         };
       });
+      }, false);
 
       try { await done; } catch (error) {
         if (mutationError) throw mutationError;
@@ -316,11 +326,12 @@
     const stamp = new Date().toISOString();
     let reserved;
     try {
-      const tx = db.transaction([STORE], "readwrite");
+      const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
-      const request = store.get(item.id);
+      let request;
       let operationError = null;
+      guardWrite(tx, () => { request = store.get(item.id);
       request.onsuccess = () => {
         try {
           const current = request.result ? request.result.value : 0;
@@ -332,6 +343,7 @@
           try { tx.abort(); } catch (_) {}
         }
       };
+      }, false);
       try { await done; } catch (error) {
         if (operationError) throw operationError;
         throw error;
@@ -378,7 +390,7 @@
     assertUnique(prepared, "restore");
     const db = await openDatabase();
     try {
-      const tx = db.transaction([STORE], "readwrite");
+      const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
       const request = store.getAll();
@@ -389,6 +401,7 @@
           for (const row of existing) if (domains.includes(row.domain)) store.delete(row.id);
           const stamp = new Date().toISOString();
           for (const row of prepared) store.put({ ...row, updatedAt: stamp });
+          tx.objectStore(META).put({key:"resetLock",active:false,updatedAt:stamp});
         } catch (error) {
           mutationError = error;
           try { tx.abort(); } catch (_) {}
@@ -412,6 +425,33 @@
     } finally { db.close(); }
   }
 
+  async function beginResetAndClear() {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([STORE, META], "readwrite");
+      const done = transactionDone(tx);
+      tx.objectStore(META).put({key:"resetLock",active:true,updatedAt:new Date().toISOString()});
+      tx.objectStore(STORE).clear();
+      await done;
+      const verify = db.transaction([STORE, META], "readonly");
+      const rowsReq = verify.objectStore(STORE).getAll();
+      const lockReq = verify.objectStore(META).get("resetLock");
+      const [rows, lock] = await Promise.all([requestResult(rowsReq),requestResult(lockReq)]);
+      await transactionDone(verify);
+      if (rows.length || !lock || !lock.active) throw new Error("Reset lock/empty-store verification failed.");
+      return {ok:true,remainingRecords:0,locked:true};
+    } finally { db.close(); }
+  }
+  async function releaseResetLock() {
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([META], "readwrite");
+      const done = transactionDone(tx);
+      tx.objectStore(META).put({key:"resetLock",active:false,updatedAt:new Date().toISOString()});
+      await done;
+      return {ok:true,unlocked:true};
+    } finally { db.close(); }
+  }
   async function health() {
     const db = await openDatabase();
     try {
@@ -486,6 +526,6 @@
   root.HandymanStorageV263 = Object.freeze({
     databaseName: DB_NAME, schemaVersion: DB_VERSION, build: BUILD,
     ready, get, readMany, put, remove, transact, mutateMany, reserveCounter,
-    snapshot, restore, health, selfTest
+    snapshot, restore, beginResetAndClear, releaseResetLock, health, selfTest
   });
 })(window);
