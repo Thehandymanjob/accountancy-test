@@ -5,7 +5,7 @@
 <script src="./storage-idb-v263-app-shell-lab.js?v=263app2"></script>
 <script src="./app-storage-v263-v4.js?v=263app2"></script>
 <script src="./v263-accounting-controller-diagnostic-v2.js?v=263app2"></script>
-<script src="./v263-invoice-workflow-v263.js?v=263workflow3"></script>
+<script src="./v263-invoice-workflow-v263.js?v=263workflow4"></script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -22,6 +22,14 @@ async function run(){
    const customerId="lab-customer-created-"+Date.now(),created={id:customerId,name:"Synthetic New Customer",phone:"",address:"",workAddress:"",email:""};
    const x=await HandymanInvoiceWorkflowV263.saveInvoice({id:"v263-customer-save-"+Date.now(),customerId,customerName:created.name,date:"2026-11-09",status:"issued",items:[{description:"Customer creation test",price:10}],qty:1,unitPrice:10,vat:"none"},null,created);
    const s=await HandymanAccountingV263.load();return s.customers.some(c=>c.id===customerId)&&s.invoices.some(i=>i.id===x.id&&i.customerId===customerId);
+  });
+  await check("duplicateCustomerMatchedWithoutCreating",async()=>{
+   const before=await HandymanAccountingV263.load(),beforeCount=before.customers.length;
+   const duplicate={...customer,id:"lab-customer-duplicate-"+Date.now()};
+   const invoiceId="v263-customer-match-"+Date.now();
+   const x=await HandymanInvoiceWorkflowV263.saveInvoice({id:invoiceId,customerId:duplicate.id,customerName:duplicate.name,date:"2026-11-09",status:"issued",items:[{description:"Customer matching test",price:11}],qty:1,unitPrice:11,vat:"none"},null,duplicate);
+   const after=await HandymanAccountingV263.load(),saved=after.invoices.find(i=>i.id===x.id);
+   return after.customers.length===beforeCount&&saved&&saved.customerId===customer.id&&!after.customers.some(c=>c.id===duplicate.id);
   });
   await check("draftInvoiceCannotBeMarkedPaid",async()=>{
    const draftId="v263-draft-payment-"+Date.now();
@@ -41,7 +49,7 @@ async function run(){
   await check("deletedInvoiceCannotBeEdited",async()=>{let rejected=false;const s=await HandymanAccountingV263.load(),i=s.invoices.find(z=>z.id===invoiceId);try{await HandymanInvoiceWorkflowV263.saveInvoice({...i,description:"should not save"})}catch(e){rejected=/deleted invoices cannot be edited/i.test(e.message)}const n=await HandymanAccountingV263.load();return rejected&&n.invoices.find(z=>z.id===invoiceId).description==="Synthetic workflow lifecycle"});
   const finalState=await HandymanAccountingV263.load();result.invoiceId=invoiceId;result.reservedNumber=number;result.counts={invoices:finalState.invoices.length,entries:finalState.entries.length,customers:finalState.customers.length};
  }catch(e){result.fatalError={name:e.name||"Error",message:e.message||String(e)}}
- result.ok=Object.keys(checks).length===11&&Object.values(checks).every(Boolean)&&!result.fatalError;
+ result.ok=Object.keys(checks).length===12&&Object.values(checks).every(Boolean)&&!result.fatalError;
  result.checkedAt=new Date().toISOString();$("report").textContent=JSON.stringify(result,null,2);$("status").textContent=result.ok?"All canonical invoice workflow checks passed.":"One or more checks failed; see report.";return result;
 }
 $("run").addEventListener("click",run);
