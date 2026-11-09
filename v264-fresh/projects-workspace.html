@@ -51,7 +51,12 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <div class="item"><h3>Project profit sharing</h3><p class="muted">Optional allocation of the project's net result. The percentages must total 100%. This is an informational Projects-only calculation; it does not create payments or Accounting entries.</p>
 <label><input id="shareEnabled" type="checkbox" style="width:auto"> Enable partner sharing</label>
 <div id="partnerShareRows"></div>
-<button type="button" class="secondary" id="addPartnerShare">Add partner</button>
+<button type="button" class="secondary" id="addPartnerShare">Add partner to this project</button>
+<div id="partnerQuickAdd" class="item hidden"><h3>Register a new partner</h3><p class="muted">The partner will be saved in the Projects partner directory and immediately become selectable here.</p>
+<label>Partner name</label><input id="quickPartnerName" maxlength="160">
+<div class="row"><div><label>Phone (optional)</label><input id="quickPartnerPhone" maxlength="60"></div><div><label>Email (optional)</label><input id="quickPartnerEmail" maxlength="160" type="email"></div></div>
+<label>Notes (optional)</label><textarea id="quickPartnerNotes"></textarea>
+<button type="button" id="saveQuickPartner">Save partner</button><button type="button" class="secondary" id="cancelQuickPartner">Cancel</button></div>
 <div id="shareValidation" class="muted">Your business share: 100%</div></div>
 <div class="row"><button id="saveProject">Save project</button><button class="secondary" id="cancelEdit">Cancel</button></div>
 </section>
@@ -120,12 +125,28 @@ function resetForm(p){$("projectId").value=p?.id||"";$("projectName").value=p?.n
 function addPartnerShareRow(partnerId="",share=""){
  const active=(state?.partners||[]).filter(x=>x.active!==false),wrap=document.createElement("div");wrap.className="row item";
  const select=document.createElement("select");select.innerHTML='<option value="">Select partner</option>'+active.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join("");select.value=partnerId||"";
+ if(!active.length){const hint=document.createElement("p");hint.className="muted";hint.textContent="No partners registered yet. Use “Register a new partner” below.";wrap.append(hint);}
  const pct=document.createElement("input");pct.type="number";pct.min="0.01";pct.max="100";pct.step="0.01";pct.placeholder="Share %";pct.value=share??"";
  const remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Remove";
  select.setAttribute("aria-label","Partner");pct.setAttribute("aria-label","Partner share percentage");
  select.addEventListener("change",updateShareValidation);pct.addEventListener("input",updateShareValidation);
  remove.addEventListener("click",()=>{wrap.remove();updateShareValidation()});
  const a=document.createElement("div"),b=document.createElement("div");a.append(select);b.append(pct);wrap.append(a,b,remove);$("partnerShareRows").append(wrap);updateShareValidation();
+}
+async function saveQuickPartner(){
+ const name=$("quickPartnerName").value.trim();
+ if(!name){status("Enter the partner's name.",true);$("quickPartnerName").focus();return}
+ const item={id:id("partner"),name,phone:$("quickPartnerPhone").value.trim(),email:$("quickPartnerEmail").value.trim(),notes:$("quickPartnerNotes").value.trim(),active:true};
+ await api().saveDirectory("partners",item);
+ state=await api().load();
+ const rows=[...$("partnerShareRows").children],selected=rows.map(row=>row.querySelector("select")?.value||"");
+ rows.forEach((row,index)=>{const select=row.querySelector("select");if(!select)return;select.innerHTML='<option value="">Select partner</option>'+state.partners.filter(x=>x.active!==false).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join("");select.value=selected[index]||"";});
+ $("partnerQuickAdd").classList.add("hidden");
+ ["quickPartnerName","quickPartnerPhone","quickPartnerEmail","quickPartnerNotes"].forEach(x=>$(x).value="");
+ if(!$("shareEnabled").checked)$("shareEnabled").checked=true;
+ if(!$("partnerShareRows").children.length)addPartnerShareRow(item.id,"");
+ else {const blank=[...$("partnerShareRows").children].find(row=>!row.querySelector("select")?.value);if(blank)blank.querySelector("select").value=item.id;else addPartnerShareRow(item.id,"");}
+ updateShareValidation();status("Partner registered and added to the project share list.");
 }
 function readPartnerShares(){
  const rows=[...$("partnerShareRows").children].map(row=>({partnerId:row.querySelector("select").value,share:Number(row.querySelector("input").value)}));
@@ -242,7 +263,7 @@ async function start(){
 $("directoryKind").onchange=()=>{ $("directoryId").value="";$("directoryName").value="";$("directoryPhone").value="";$("directoryEmail").value="";$("directoryNotes").value="";renderDirectories();};
 $("saveDirectory").onclick=()=>saveDirectoryRecord().catch(e=>status(e.message,true));
 $("cancelDirectory").onclick=()=>{["directoryId","directoryName","directoryPhone","directoryEmail","directoryNotes"].forEach(x=>$(x).value="");};
-$("shareEnabled").onchange=updateShareValidation;$("addPartnerShare").onclick=()=>addPartnerShareRow();
+$("shareEnabled").onchange=updateShareValidation;$("addPartnerShare").onclick=()=>{$("partnerQuickAdd").classList.toggle("hidden");if(!$("partnerQuickAdd").classList.contains("hidden"))$("quickPartnerName").focus()};$("saveQuickPartner").onclick=()=>saveQuickPartner().catch(e=>status(e.message,true));$("cancelQuickPartner").onclick=()=>{$("partnerQuickAdd").classList.add("hidden")};
 $("newProject").onclick=()=>editProject(null);$("saveProject").onclick=()=>saveProject().catch(e=>status(e.message,true));$("cancelEdit").onclick=()=>show("listView");
 $("backToList").onclick=()=>{currentProjectId=null;currentSubprojectId=null;show("listView")};
 $("editCurrent").onclick=()=>editProject(current());$("addSubproject").onclick=()=>addSubproject().catch(e=>status(e.message,true));
