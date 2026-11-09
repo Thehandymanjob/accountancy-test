@@ -18,10 +18,11 @@
  }
  function linkedIncome(e,invoice){
   if(!e||e.type!=="income")return false;
-  const id=String(invoice.id),number=String(invoice.number);
-  if(String(e.invoiceId||"")===id||String(e.id||"")==="invoice-income-"+id||String(e.reference||"").trim()==="Invoice "+number)return true;
-  const notes=String(e.notes||"").trim();
-  return new RegExp("^Payment received for invoice "+number.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?:\\s|$|[—-])","i").test(notes);
+  // Never infer ownership from a human-readable invoice reference or note:
+  // unrelated manual income may legitimately contain the same text.
+  // Only stable invoiceId or the app-generated income ID proves the link.
+  const id=String(invoice.id);
+  return String(e.invoiceId||"")===id||String(e.id||"")==="invoice-income-"+id;
  }
  function removeLinkedIncome(state,invoice){
   const matches=state.entries.filter(e=>linkedIncome(e,invoice));
