@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>The Handyman — v264 Projects Workspace</title>
+<style>
+:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172235;background:#f3f5f8}
+*{box-sizing:border-box}body{margin:0;padding:16px}main{max-width:900px;margin:auto}
+header,section{background:#fff;border:1px solid #dce2ea;border-radius:14px;padding:16px;margin:12px 0}
+h1,h2,h3{margin:0 0 12px}p{line-height:1.5}.muted{color:#64748b;font-size:13px}
+.warning{background:#fff4d6;border:1px solid #f0d58a;border-radius:10px;padding:12px}
+label{display:block;font-weight:650;font-size:13px;margin:10px 0 5px}
+input,select,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:8px;font:inherit;background:white}
+textarea{min-height:75px}button{padding:11px 14px;border:0;border-radius:9px;background:#17365d;color:white;font-weight:700;margin:5px 5px 5px 0}
+button.secondary{background:#e7edf5;color:#172235}button.danger{background:#b42318}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}
+.item{border:1px solid #dce2ea;border-radius:10px;padding:12px;margin:8px 0}
+.item button{margin-top:8px}.hidden{display:none!important}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb;padding:12px;border-radius:9px;font-size:12px}
+.status{padding:10px;border-radius:8px;background:#edf4ff;margin-top:10px}
+</style></head>
+<body><main>
+<header>
+<h1>Projects Workspace — v264</h1>
+<p class="warning"><b>Isolated Projects module.</b> This page uses the v264 Projects controller and its dedicated IndexedDB domain only. It does not load the Accounting controller, read LocalStorage, import legacy records, or modify the production app. Use synthetic records here; this is an integration workspace, not a production release.</p>
+<p class="muted">Storage mode: IndexedDB only · Domain: projects · Accounting access: none</p>
+<div id="status" class="status">Starting…</div>
+</header>
+<section id="listView">
+<div class="row"><h2>Projects</h2><button id="newProject">New project</button></div>
+<div id="projectList"></div>
+</section>
+<section id="editView" class="hidden">
+<h2 id="formTitle">New project</h2>
+<input id="projectId" type="hidden">
+<label>Project name</label><input id="projectName" maxlength="160">
+<label>Customer</label><input id="customer" maxlength="160">
+<label>Address</label><input id="address" maxlength="300">
+<label>Notes</label><textarea id="notes"></textarea>
+<div class="row"><button id="saveProject">Save project</button><button class="secondary" id="cancelEdit">Cancel</button></div>
+</section>
+<section id="detailView" class="hidden">
+<div class="row"><h2 id="detailTitle">Project</h2><button class="secondary" id="backToList">Back to list</button></div>
+<div class="row"><button id="editCurrent">Edit project</button><button class="secondary" id="addSubproject">Add sub-project</button><button id="toggleComplete">Mark complete</button></div>
+<div id="subprojectList"></div>
+<div id="ledgerEditor">
+<h3>Project ledger</h3>
+<div class="row"><div><label>Record type</label><select id="recordType"><option value="income">Income</option><option value="expenses">Expense</option></select></div><div><label>Amount (£)</label><input id="recordAmount" type="number" min="0.01" step="0.01"></div></div>
+<div class="row"><div><label>Date</label><input id="recordDate" type="date"></div><div><label>Description</label><input id="recordDescription" maxlength="180"></div></div>
+<button id="saveRecord">Save project record</button>
+<div id="ledgerList"></div>
+</div>
+</section>
+<section><details><summary>Technical status</summary><pre id="diagnostic">Not initialized</pre></details></section>
+</main>
+<script src="storage-idb-v264.js?v=264-projects-ui-1"></script>
+<script src="v264-strict-domain-boundary.js?v=264-projects-ui-1"></script>
+<script src="app-storage-v264.js?v=264-projects-ui-1"></script>
+<script src="v264-projects-controller.js?v=264-projects-ui-1"></script>
+<script src="v264-bootstrap.js?v=264-projects-ui-1"></script>
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id);
+let state=null,currentProjectId=null,currentSubprojectId=null,started=false;
+const status=(message,error=false)=>{const el=$("status");el.textContent=message;el.style.background=error?"#fee4e2":"#edf4ff";el.style.color=error?"#912018":"#172235"};
+const clone=x=>structuredClone(x);
+const id=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
+const money=n=>new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(Number(n)||0);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const api=()=>{if(!window.HandymanProjectsV264)throw new Error("Projects controller unavailable.");return window.HandymanProjectsV264};
+async function refresh(){state=await api().load();renderList();if(currentProjectId)renderDetail();}
+function renderList(){
+ const root=$("projectList");
+ if(!state.projects.length){root.innerHTML='<p class="muted">No projects in this isolated database yet.</p>';return}
+ root.innerHTML=state.projects.map(p=>'<article class="item"><b>'+esc(p.name)+'</b><div class="muted">'+esc(p.customer||"No customer")+' · '+esc(p.status||"open")+'</div><button data-open="'+esc(p.id)+'">Open</button></article>').join("");
+ root.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openProject(b.dataset.open)));
+}
+function show(view){["listView","editView","detailView"].forEach(x=>$(x).classList.toggle("hidden",x!==view));}
+function resetForm(p){$("projectId").value=p?.id||"";$("projectName").value=p?.name||"";$("customer").value=p?.customer||"";$("address").value=p?.address||"";$("notes").value=p?.notes||"";$("formTitle").textContent=p?"Edit project":"New project";}
+function editProject(p){resetForm(p);show("editView");}
+async function saveProject(){
+ const name=$("projectName").value.trim();if(!name){status("Enter a project name before saving.",true);return}
+ const oldId=$("projectId").value;
+ const item={id:oldId||id("project"),name,customer:$("customer").value.trim(),address:$("address").value.trim(),notes:$("notes").value.trim(),status:oldId?(state.projects.find(p=>p.id===oldId)?.status||"open"):"open",created:oldId?(state.projects.find(p=>p.id===oldId)?.created||new Date().toISOString()):new Date().toISOString(),subprojects:oldId?clone(state.projects.find(p=>p.id===oldId)?.subprojects||[]):[],hasSubprojects:oldId?!!state.projects.find(p=>p.id===oldId)?.hasSubprojects:false};
+ if(oldId)await api().updateProject(oldId,item);else await api().addProject(item);
+ await refresh();show("listView");status("Project saved and verified in the Projects domain.");
+}
+async function openProject(projectId){currentProjectId=projectId;currentSubprojectId=null;renderDetail();show("detailView");}
+function current(){return state.projects.find(p=>String(p.id)===String(currentProjectId))||null}
+function activeLedger(){const p=current();return currentSubprojectId?(p?.subprojects||[]).find(s=>String(s.id)===String(currentSubprojectId)):p}
+function renderDetail(){
+ const p=current();if(!p)return;
+ $("detailTitle").textContent=p.name;$("toggleComplete").textContent=p.status==="complete"?"Reopen project":"Mark complete";
+ const subs=p.subprojects||[];
+ $("subprojectList").innerHTML='<h3>Sub-projects</h3>'+ (subs.length?subs.map(s=>'<div class="item"><b>'+esc(s.name)+'</b><div class="muted">Agreed price: '+money(s.price)+'</div><button data-sub="'+esc(s.id)+'">Open ledger</button></div>').join(""):'<p class="muted">No sub-projects.</p>');
+ $("subprojectList").querySelectorAll("[data-sub]").forEach(b=>b.addEventListener("click",()=>{currentSubprojectId=b.dataset.sub;renderDetail();}));
+ $("ledgerEditor").querySelector("h3").textContent=currentSubprojectId?"Sub-project ledger":"Project ledger";
+ const ledger=activeLedger();const rows=[...(ledger?.income||[]).map(x=>({...x,_type:"income"})),...(ledger?.expenses||[]).map(x=>({...x,_type:"expense"}))];
+ $("ledgerList").innerHTML=rows.length?rows.map(r=>'<div class="item"><b>'+esc(r._type.toUpperCase())+' — '+money(r.amount)+'</b><div class="muted">'+esc(r.date||"")+' · '+esc(r.description||"")+'</div></div>').join(""):'<p class="muted">No ledger records.</p>';
+}
+async function addSubproject(){
+ const p=current();if(!p)return;
+ const name=prompt("Sub-project name");if(!name||!name.trim())return;
+ const raw=prompt("Agreed price in GBP (optional)","0");if(raw===null)return;
+ const price=Number(raw);if(!Number.isFinite(price)||price<0){status("Enter a valid non-negative price.",true);return}
+ await api().addSubproject(p.id,{id:id("sub"),name:name.trim(),price,income:[],expenses:[],wages:[],tools:[],food:[],contractors:[],materials:[],created:new Date().toISOString()});
+ await refresh();status("Sub-project saved in the Projects domain.");
+}
+async function saveRecord(){
+ const ledger=activeLedger();if(!ledger)return;
+ const amount=Math.round(Number($("recordAmount").value)*100)/100,date=$("recordDate").value,description=$("recordDescription").value.trim(),kind=$("recordType").value;
+ if(!(amount>0)||!date){status("Enter a valid date and amount greater than zero.",true);return}
+ const collection=kind==="income"?"income":"expenses";
+ await api().saveLedgerRecord(currentProjectId,currentSubprojectId,collection,{id:id("ledger"),amount,date,description,category:kind==="income"?"Project income":"Other",createdAt:new Date().toISOString()});
+ $("recordAmount").value="";$("recordDescription").value="";await refresh();status("Project ledger record saved. Accounting was not accessed.");
+}
+async function toggleComplete(){const p=current();if(!p)return;await api().updateProject(p.id,{status:p.status==="complete"?"open":"complete"});await refresh();status("Project status saved. No accounting entries were created or changed.");}
+async function start(){
+ try{
+  const boot=await window.HandymanModuleBootstrapV264.startProjects();
+  if(!boot.ok||boot.mode!=="indexeddb-only"||boot.legacyImport!==false)throw new Error("Projects bootstrap did not meet the IndexedDB-only policy.");
+  state=await api().load();started=true;renderList();show("listView");
+  const diag={ok:true,module:"projects",database:boot.database,mode:boot.mode,legacyImport:false,accountingControllerLoaded:false,accountingAccess:false,productionTouched:false};
+  $("diagnostic").textContent=JSON.stringify(diag,null,2);status("Projects workspace ready. Dedicated IndexedDB domain initialized.");
+ }catch(e){status("Projects workspace could not start: "+(e.message||e),true);$("diagnostic").textContent=String(e.stack||e);}
+}
+$("newProject").onclick=()=>editProject(null);$("saveProject").onclick=()=>saveProject().catch(e=>status(e.message,true));$("cancelEdit").onclick=()=>show("listView");
+$("backToList").onclick=()=>{currentProjectId=null;currentSubprojectId=null;show("listView")};
+$("editCurrent").onclick=()=>editProject(current());$("addSubproject").onclick=()=>addSubproject().catch(e=>status(e.message,true));
+$("saveRecord").onclick=()=>saveRecord().catch(e=>status(e.message,true));$("toggleComplete").onclick=()=>toggleComplete().catch(e=>status(e.message,true));
+$("recordDate").value=new Date().toISOString().slice(0,10);
+start();
+})();
+</script>
+</body></html>
