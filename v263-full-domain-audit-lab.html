@@ -54,7 +54,7 @@ async function run(){
   check("isolatedDatabaseHealth",health.ok&&health.database===DB,{database:health.database,totalRecords:health.totalRecords,counts:health.counts});
   check("noLegacyOrProductionAccess",report.legacyImport===false&&report.productionTouched===false&&report.localStorageAccess===false&&report.oldDatabaseOpened===false);
  }catch(e){report.errors.fatal={name:e.name||"Error",message:e.message||String(e)};}
- report.checkCount=Object.keys(report.checks).length;report.allChecksPassed=Object.values(report.checks).every(Boolean);report.ok=report.checkCount===11&&report.allChecksPassed&&!report.errors.fatal;report.testedAt=new Date().toISOString();
+ report.checkCount=Object.keys(report.checks).length;report.allChecksPassed=Object.values(report.checks).every(Boolean);report.ok=report.checkCount===12&&report.allChecksPassed&&!report.errors.fatal;report.testedAt=new Date().toISOString();
  $("report").textContent=JSON.stringify(report,null,2);$("status").textContent=report.ok?"All full-domain audit checks passed.":"One or more checks failed; send the complete report."; $("copy").disabled=false;$("run").disabled=false;
 }
 $("run").addEventListener("click",run);
