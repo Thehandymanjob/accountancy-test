@@ -61,7 +61,6 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <div class="row"><div><label>Record type</label><select id="recordType"><option value="income">Income</option><option value="expenses">Expense</option></select></div><div><label>Amount (£)</label><input id="recordAmount" type="number" min="0.01" step="0.01"></div></div>
 <div id="expenseFields" class="hidden">
 <label>Expense category</label><select id="expenseCategory"><option value="expenses">General expense</option><option value="materials">Materials</option><option value="tools">Tools / equipment</option><option value="food">Food / refreshments</option><option value="wages">Labour / wages</option><option value="contractors">Contractor / subcontractor</option></select>
-<div id="contractorField" class="hidden"><label>Contractor / subcontractor (optional)</label><p class="muted">Enter the name in the description field below. No separate contractor register is needed.</p></div>
 <div id="supplierField" class="hidden"><label>Supplier / shop (optional)</label><input id="expenseSupplier" maxlength="160"></div>
 </div>
 <div class="row"><div><label>Date</label><input id="recordDate" type="date"></div><div><label>Description</label><input id="recordDescription" maxlength="180"></div></div>
@@ -200,7 +199,6 @@ function populateExpensePeople(){}
 function updateExpenseFields(){
  const isExpense=$("recordType").value==="expenses",category=$("expenseCategory").value;
  $("expenseFields").classList.toggle("hidden",!isExpense);
- $("contractorField").classList.toggle("hidden",!isExpense||category!=="contractors");
  $("supplierField").classList.toggle("hidden",!isExpense||!["materials","tools","food"].includes(category));
 }
 async function saveRecord(){
