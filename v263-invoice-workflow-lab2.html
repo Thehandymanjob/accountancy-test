@@ -5,7 +5,7 @@
 <script src="./storage-idb-v263-app-shell-lab.js?v=263app2"></script>
 <script src="./app-storage-v263-v4.js?v=263app2"></script>
 <script src="./v263-accounting-controller-diagnostic-v2.js?v=263app2"></script>
-<script src="./v263-invoice-workflow-v263.js?v=263workflow5"></script>
+<script src="./v263-invoice-workflow-v263.js?v=263workflow6"></script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -19,7 +19,7 @@ async function run(){
   customer=state.customers.find(c=>String(c.id).startsWith("lab-customer-"));
   if(!customer)throw new Error("Synthetic lab customer not found. Run the original v263 invoice lab first; no real customer will be created.");
   await check("saveInvoiceCreatesCustomerAtomically",async()=>{
-   const customerId="lab-customer-created-"+Date.now(),created={id:customerId,name:"Synthetic New Customer",phone:"",address:"",workAddress:"",email:""};
+   const customerId="lab-customer-created-"+Date.now(),created={id:customerId,name:"Synthetic New Customer "+Date.now(),phone:"",address:"",workAddress:"",email:""};
    const x=await HandymanInvoiceWorkflowV263.saveInvoice({id:"v263-customer-save-"+Date.now(),customerId,customerName:created.name,date:"2026-11-09",status:"issued",items:[{description:"Customer creation test",price:10}],qty:1,unitPrice:10,vat:"none"},null,created);
    const s=await HandymanAccountingV263.load();return s.customers.some(c=>c.id===customerId)&&s.invoices.some(i=>i.id===x.id&&i.customerId===customerId);
   });
