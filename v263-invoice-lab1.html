@@ -16,7 +16,7 @@ try{
  await check("reloadPersistence",async()=>{const s=await HandymanInvoicesV263.load();const i=s.invoices.find(x=>x.id===invoiceId);return !!i&&i.description.includes("edited")&&i.paymentStatus==="unpaid";});
  result.invoiceId=invoiceId;result.counts.final=(await HandymanInvoicesV263.load()).invoices.length;
  }catch(e){result.fatalError={name:e.name||"Error",message:e.message||String(e)}}
- result.ok=Object.values(checks).length===7&&Object.values(checks).every(Boolean)&&!result.fatalError;
+ result.ok=Object.values(checks).length===8&&Object.values(checks).every(Boolean)&&!result.fatalError;
  result.checkedAt=new Date().toISOString();report=result;$("report").textContent=JSON.stringify(result,null,2);$("status").textContent=result.ok?"All invoice lifecycle checks passed.":"One or more checks failed; see report.";return result;
 }
 $("run").addEventListener("click",run);$("copy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("report").textContent);$("status").textContent="Report copied."}catch(e){$("status").textContent="Clipboard unavailable; select report text manually."}});
