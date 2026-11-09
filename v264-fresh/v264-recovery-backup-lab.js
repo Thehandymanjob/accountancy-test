@@ -152,7 +152,9 @@
    const afterData={...afterPkg.payload};delete afterData.createdAt;
    const expectedData={...parsed.pkg.payload};delete expectedData.createdAt;
    if(await digest(canonical(afterData))!==await digest(canonical(expectedData)))throw new Error("Restore verification failed: restored records do not exactly match the selected backup.");
-   return {ok:true,restored:result.restored,domains:result.domains.length,verified:true};
+   const health=await engine.health();
+   if(health.resetLocked){if(typeof engine.completeRecovery!=="function")throw new Error("Full recovery completion API is unavailable; database remains locked.");await engine.completeRecovery(parsed.snapshot);}
+   return {ok:true,restored:result.restored,domains:result.domains.length,verified:true,recoveryCompleted:health.resetLocked};
   }
   async function resetFromBackupFile(file){
    const parsed=await readFile(file);
@@ -194,5 +196,5 @@
   return Object.freeze({createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
  }
  const engine=()=>root.HandymanStorageV264BackupLab,adapter=()=>root.HandymanAppStorageV264BackupLab;
- root.HandymanRecoveryV264BackupLab=Object.freeze({build:"THA-264-BACKUP-LAB-1",create:()=>create(engine(),adapter()),createWithDependencies:create});
+ root.HandymanRecoveryV264BackupLab=Object.freeze({build:"THA-264-RECOVERY-GUARD-LAB-2",create:()=>create(engine(),adapter()),createWithDependencies:create});
 })(window);
