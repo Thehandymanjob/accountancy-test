@@ -32,7 +32,7 @@
    ]);
    const names=["preferences","preferenceMeta","diagnostics","reports","reportNotifications","reportSettings","reportWorkflow","notifications"];
    const supportState={};names.forEach((name,i)=>supportState[name]=preferences[i]);
-   const invoiceWorkflow=requireApi("HandymanInvoiceWorkflowV264","create");
+   const invoiceWorkflow=requireApi("HandymanInvoiceWorkflowV264","saveInvoice");
    const recovery=requireApi("HandymanRecoveryV264","create");
    const result={
     ok:true,ready:true,build:BUILD,database:health.database,mode:"indexeddb-only",
