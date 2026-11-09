@@ -16,7 +16,7 @@ textarea{min-height:75px}button{padding:11px 14px;border:0;border-radius:9px;bac
 button.secondary{background:#e7edf5;color:#172235}button.danger{background:#b42318}
 .row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:180px}
 .item{border:1px solid #dce2ea;border-radius:10px;padding:12px;margin:8px 0}
-.item button{margin-top:8px}.hidden{display:none!important}
+.item button{margin-top:8px}.hidden{display:none!important}.photo-preview{display:block;max-width:220px;max-height:150px;object-fit:cover;border-radius:9px;margin:8px 0}.project-photo{width:88px;height:72px;object-fit:cover;border-radius:8px;vertical-align:middle;margin-right:10px}.sub-photo{width:76px;height:64px;object-fit:cover;border-radius:8px;vertical-align:middle;margin-right:10px}
 pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb;padding:12px;border-radius:9px;font-size:12px}
 .status{padding:10px;border-radius:8px;background:#edf4ff;margin-top:10px}
 </style></head>
@@ -37,6 +37,9 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <label>Project name</label><input id="projectName" maxlength="160">
 <label>Customer</label><input id="customer" maxlength="160">
 <label>Address</label><input id="address" maxlength="300">
+<label>Phone</label><input id="phone" type="tel" maxlength="60">
+<label>Contract type</label><select id="contract"><option value="labour-materials">Labour + Materials</option><option value="labour-only">Labour Only</option></select>
+<label>Project photo (optional)</label><input id="projectPhoto" type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.heic,.heif"><img id="projectPhotoPreview" alt="Project photo preview" class="photo-preview hidden">
 <label>Notes</label><textarea id="notes"></textarea>
 <div class="item"><h3>Project profit sharing</h3><p class="muted">Optional allocation of the project's net result. The percentages must total 100%. This is an informational Projects-only calculation; it does not create payments or Accounting entries.</p>
 <label><input id="shareEnabled" type="checkbox" style="width:auto"> Enable partner sharing</label>
@@ -53,7 +56,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <section id="detailView" class="hidden">
 <div class="row"><h2 id="detailTitle">Project</h2><button class="secondary" id="backToList">Back to list</button></div>
 <div class="row"><button id="editCurrent">Edit project</button><button class="secondary" id="addSubproject">Add sub-project</button><button class="secondary hidden" id="backToProject">Back to main project</button><button id="toggleComplete">Mark complete</button><button class="danger" id="deleteCurrent">Delete project</button></div>
-<div id="subprojectForm" class="item hidden"><h3>New sub-project</h3><label>Sub-project name</label><input id="subprojectName" maxlength="160"><label>Agreed price (£)</label><input id="subprojectPrice" type="number" min="0" step="0.01" value="0"><button id="saveSubproject">Save sub-project</button><button class="secondary" id="cancelSubproject">Cancel</button></div>
+<div id="subprojectForm" class="item hidden"><h3>New sub-project</h3><label>Sub-project photo (optional)</label><input id="subprojectPhoto" type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.heic,.heif"><img id="subprojectPhotoPreview" alt="Sub-project photo preview" class="photo-preview hidden"><label>Sub-project name</label><input id="subprojectName" maxlength="160"><label>Agreed price (£)</label><input id="subprojectPrice" type="number" min="0" step="0.01" value="0"><button id="saveSubproject">Save sub-project</button><button class="secondary" id="cancelSubproject">Cancel</button></div>
 <div id="subprojectList"></div>
 <div id="shareSummary" class="item"></div>
 <div id="ledgerEditor">
@@ -79,7 +82,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 (()=>{
 "use strict";
 const $=id=>document.getElementById(id);
-let state=null,currentProjectId=null,currentSubprojectId=null,started=false;
+let state=null,currentProjectId=null,currentSubprojectId=null,started=false,projectPhotoData="",subprojectPhotoData="";
 const status=(message,error=false)=>{const el=$("status");el.textContent=message;el.style.background=error?"#fee4e2":"#edf4ff";el.style.color=error?"#912018":"#172235"};
 const clone=x=>structuredClone(x);
 const id=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8);
@@ -90,11 +93,11 @@ async function refresh(){state=await api().load();renderList();if(currentProject
 function renderList(){
  const root=$("projectList");
  if(!state.projects.length){root.innerHTML='<p class="muted">No projects in this isolated database yet.</p>';return}
- root.innerHTML=state.projects.map(p=>'<article class="item"><b>'+esc(p.name)+'</b><div class="muted">'+esc(p.customer||"No customer")+' · '+esc(p.status||"open")+'</div><button data-open="'+esc(p.id)+'">Open</button></article>').join("");
+ root.innerHTML=state.projects.map(p=>'<article class="item">'+(p.photo?'<img class="project-photo" src="'+esc(p.photo)+'" alt="">':'')+'<b>'+esc(p.name)+'</b><div class="muted">'+esc(p.customer||"No customer")+' · '+esc(p.status||"open")+'</div><button data-open="'+esc(p.id)+'">Open</button></article>').join("");
  root.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openProject(b.dataset.open)));
 }
 function show(view){["listView","editView","detailView"].forEach(x=>$(x).classList.toggle("hidden",x!==view));}
-function resetForm(p){$("projectId").value=p?.id||"";$("projectName").value=p?.name||"";$("customer").value=p?.customer||"";$("address").value=p?.address||"";$("notes").value=p?.notes||"";$("formTitle").textContent=p?"Edit project":"New project";$("shareEnabled").checked=!!(p?.partnerShares?.length);$("partnerShareRows").innerHTML="";(p?.partnerShares||[]).forEach(x=>addPartnerShareRow(x.partnerId,x.share));updateShareValidation();}
+function resetForm(p){projectPhotoData=p?.photo||"";$("projectPhoto").value="";$("projectPhotoPreview").src=projectPhotoData;$("projectPhotoPreview").classList.toggle("hidden",!projectPhotoData);$("projectId").value=p?.id||"";$("projectName").value=p?.name||"";$("customer").value=p?.customer||"";$("address").value=p?.address||"";$("phone").value=p?.phone||"";$("contract").value=p?.contract||"labour-materials";$("notes").value=p?.notes||"";$("formTitle").textContent=p?"Edit project":"New project";$("shareEnabled").checked=!!(p?.partnerShares?.length);$("partnerShareRows").innerHTML="";(p?.partnerShares||[]).forEach(x=>addPartnerShareRow(x.partnerId,x.share));updateShareValidation();}
 function addPartnerShareRow(partnerId="",share=""){
  const active=(state?.partners||[]).filter(x=>x.active!==false),wrap=document.createElement("div");wrap.className="row item";
  const select=document.createElement("select");select.innerHTML='<option value="">Select partner</option>'+active.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join("");select.value=partnerId||"";
@@ -167,7 +170,7 @@ async function saveProject(){
  if($("shareEnabled").checked){const total=partnerShares.reduce((n,x)=>n+x.share,0);if(!partnerShares.length||total>100.001){status("Add at least one partner and keep the combined partner share at or below 100%. The business receives the remainder.",true);return}}
  const ownShare=$("shareEnabled").checked?Math.round((100-partnerShares.reduce((n,x)=>n+x.share,0))*100)/100:100;
  const old=oldId?state.projects.find(p=>p.id===oldId):null;
- const item={...(old||{}),id:oldId||id("project"),name,customer:$("customer").value.trim(),address:$("address").value.trim(),notes:$("notes").value.trim(),partnerShares,ownShare,status:old?.status||"open",created:old?.created||new Date().toISOString(),subprojects:clone(old?.subprojects||[]),hasSubprojects:!!old?.hasSubprojects};
+ const item={...(old||{}),id:oldId||id("project"),name,customer:$("customer").value.trim(),address:$("address").value.trim(),phone:$("phone").value.trim(),contract:$("contract").value,photo:projectPhotoData||old?.photo||"",notes:$("notes").value.trim(),partnerShares,ownShare,status:old?.status||"open",created:old?.created||new Date().toISOString(),subprojects:clone(old?.subprojects||[]),hasSubprojects:!!old?.hasSubprojects};
  if(oldId)await api().updateProject(oldId,item);else await api().addProject(item);
  await refresh();show("listView");status("Project saved and verified in the Projects domain.");
 }
@@ -185,7 +188,7 @@ function renderDetail(){
  renderProjectShares(p);
  const subs=p.subprojects||[];
  $("subprojectList").classList.toggle("hidden",!!currentSubprojectId);
- $("subprojectList").innerHTML='<h3>Sub-projects</h3>'+ (subs.length?subs.map(s=>'<div class="item"><b>'+esc(s.name)+'</b><div class="muted">Agreed price: '+money(s.price)+'</div><button data-sub="'+esc(s.id)+'">Open ledger</button><button class="danger" data-delete-sub="'+esc(s.id)+'">Delete</button></div>').join(""):'<p class="muted">No sub-projects.</p>');
+ $("subprojectList").innerHTML='<h3>Sub-projects</h3>'+ (subs.length?subs.map(s=>'<div class="item">'+(s.photo?'<img class="sub-photo" src="'+esc(s.photo)+'" alt="">':'')+'<b>'+esc(s.name)+'</b><div class="muted">Agreed price: '+money(s.price)+'</div><button data-sub="'+esc(s.id)+'">Open ledger</button><button class="danger" data-delete-sub="'+esc(s.id)+'">Delete</button></div>').join(""):'<p class="muted">No sub-projects.</p>');
  $("subprojectList").querySelectorAll("[data-sub]").forEach(b=>b.addEventListener("click",()=>{currentSubprojectId=b.dataset.sub;renderDetail();}));
  $("subprojectList").querySelectorAll("[data-delete-sub]").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("Delete this sub-project and all its project ledger records? This cannot be undone."))return;try{await api().deleteSubproject(currentProjectId,b.dataset.deleteSub);await refresh();status("Sub-project deleted from Projects storage.");}catch(e){status(e.message,true)}}));
  $("ledgerEditor").querySelector("h3").textContent=currentSubprojectId?"Sub-project ledger":"Project ledger";
@@ -193,8 +196,9 @@ function renderDetail(){
  $("ledgerList").innerHTML=rows.length?rows.map(r=>'<div class="item"><b>'+esc(r._type.toUpperCase())+' — '+money(r.amount)+'</b><div class="muted">'+esc(r.date||"")+' · '+esc(r.description||r.reference||r.supplier||r.workerName||r.contractorName||"")+'</div></div>').join(""):'<p class="muted">No ledger records.</p>';
  populateExpensePeople();updateExpenseFields();
 }
-async function addSubproject(){$("subprojectName").value="";$("subprojectPrice").value="0";$("subprojectForm").classList.remove("hidden");$("subprojectName").focus();}
-async function saveSubproject(){const p=current(),name=$("subprojectName").value.trim(),price=Number($("subprojectPrice").value);if(!p||!name){status("Enter a sub-project name.",true);return}if(!Number.isFinite(price)||price<0){status("Enter a valid non-negative price.",true);return}await api().addSubproject(p.id,{id:id("sub"),name,price,income:[],expenses:[],wages:[],tools:[],food:[],contractors:[],materials:[],created:new Date().toISOString()});$("subprojectForm").classList.add("hidden");await refresh();status("Sub-project saved in the Projects domain.");}
+async function addSubproject(){subprojectPhotoData="";$("subprojectPhoto").value="";$("subprojectPhotoPreview").src="";$("subprojectPhotoPreview").classList.add("hidden");$("subprojectName").value="";$("subprojectPrice").value="0";$("subprojectForm").classList.remove("hidden");$("subprojectName").focus();}
+async function saveSubproject(){const p=current(),name=$("subprojectName").value.trim(),price=Number($("subprojectPrice").value);if(!p||!name){status("Enter a sub-project name.",true);return}if(!Number.isFinite(price)||price<0){status("Enter a valid non-negative price.",true);return}await api().addSubproject(p.id,{id:id("sub"),name,price,photo:subprojectPhotoData||"",income:[],expenses:[],wages:[],tools:[],food:[],contractors:[],materials:[],created:new Date().toISOString()});$("subprojectForm").classList.add("hidden");await refresh();status("Sub-project saved in the Projects domain.");}
+async function readImage(file){if(!file)return "";if(!(/^image\//i.test(file.type)||/\.(png|jpe?g|webp|heic|heif)$/i.test(file.name||"")))throw new Error("Choose a valid image file.");if(file.size>12*1024*1024)throw new Error("Image is larger than 12 MB. Choose a smaller image.");return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result||""));reader.onerror=()=>reject(new Error("Could not read the selected image."));reader.readAsDataURL(file);});}
 function populateExpensePeople(){}
 function updateExpenseFields(){
  const isExpense=$("recordType").value==="expenses",category=$("expenseCategory").value;
@@ -227,6 +231,8 @@ async function start(){
   $("diagnostic").textContent=JSON.stringify(diag,null,2);status("Projects workspace ready. Dedicated IndexedDB domain initialized.");
  }catch(e){status("Projects workspace could not start: "+(e.message||e),true);$("diagnostic").textContent=String(e.stack||e);}
 }
+$("projectPhoto").addEventListener("change",async()=>{try{projectPhotoData=await readImage($("projectPhoto").files?.[0]);$("projectPhotoPreview").src=projectPhotoData;$("projectPhotoPreview").classList.toggle("hidden",!projectPhotoData);}catch(e){status(e.message,true);$("projectPhoto").value="";}});
+$("subprojectPhoto").addEventListener("change",async()=>{try{subprojectPhotoData=await readImage($("subprojectPhoto").files?.[0]);$("subprojectPhotoPreview").src=subprojectPhotoData;$("subprojectPhotoPreview").classList.toggle("hidden",!subprojectPhotoData);}catch(e){status(e.message,true);$("subprojectPhoto").value="";}});
 $("shareEnabled").onchange=updateShareValidation;$("addPartnerShare").onclick=()=>{$("partnerQuickAdd").classList.toggle("hidden");if(!$("partnerQuickAdd").classList.contains("hidden"))$("quickPartnerName").focus()};$("saveQuickPartner").onclick=()=>saveQuickPartner().catch(e=>status(e.message,true));$("cancelQuickPartner").onclick=()=>{$("partnerQuickAdd").classList.add("hidden")};
 $("newProject").onclick=()=>editProject(null);$("saveProject").onclick=()=>saveProject().catch(e=>status(e.message,true));$("cancelEdit").onclick=()=>show("listView");
 $("backToList").onclick=()=>{currentProjectId=null;currentSubprojectId=null;show("listView")};
