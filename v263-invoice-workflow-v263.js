@@ -45,7 +45,7 @@
   await api().update(state=>{
    let customer=state.customers.find(c=>String(c.id)===String(item.customerId));
    if(!customer&&newCustomer){
-    const norm=v=>String(v||"").trim().replace(/\\s+/g," ").toLocaleLowerCase();
+    const norm=v=>String(v||"").trim().replace(/\s+/g," ").toLocaleLowerCase();
     const name=norm(newCustomer.name),phone=norm(newCustomer.phone),address=norm(newCustomer.address);
     if(name)customer=state.customers.find(c=>norm(c.name)===name&&((phone&&norm(c.phone)===phone)||(address&&norm(c.address)===address)||(!phone&&!address)))||null;
     if(customer)item.customerId=customer.id;
