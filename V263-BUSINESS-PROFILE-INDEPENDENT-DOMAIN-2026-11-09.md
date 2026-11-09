@@ -35,7 +35,7 @@ The lab does not read LocalStorage, does not inspect the live Projects profile, 
 Run:
 https://thehandymanjob.github.io/accountancy-test/v263-business-profile-lab.html
 
-Expected result is 10/10 checks, but no result is claimed until the user sends the generated JSON report. If any check fails, stop and inspect the report before proceeding.
+Expected result is 11/11 checks, but no result is claimed until the user sends the generated JSON report. If any check fails, stop and inspect the report before proceeding.
 
 ## Cutover requirements (not yet done)
 1. Update the existing Profile & Logo UI to use this controller asynchronously while keeping the same screen and fields.
