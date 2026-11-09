@@ -6,7 +6,7 @@
   "use strict";
   const BUILD="THA-263-SUPPORT-1";
   const adapter=()=>{const value=root.HandymanAppStorageV263;if(!value)throw new Error("v263 application storage adapter is not loaded.");return value;};
-  const supported=Object.freeze(["preferences","preference_meta","diagnostics","reports","reportNotifications","reportSettings","reportWorkflow","notifications","recovery","factoryResetRecovery"]);
+  const supported=Object.freeze(["preferences","preferenceMeta","diagnostics","reports","reportNotifications","reportSettings","reportWorkflow","notifications","recovery","factoryResetRecovery"]);
   function assertDomain(name){if(!supported.includes(name))throw new Error("Unsupported v263 support domain: "+name);return name;}
   async function initialize(){const result=await adapter().initialize();if(!result||result.ok!==true)throw new Error("v263 support storage initialization failed.");return {ok:true,build:BUILD,domains:supported.slice()};}
   async function load(name){assertDomain(name);await adapter().initialize();return adapter().read(name);}
