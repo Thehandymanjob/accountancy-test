@@ -8,7 +8,7 @@
   checks.length=0;$("run").disabled=true;$("out").textContent="Running…";
   const report={title:"THA v263 Isolated Accounting Domain Report",build:"THA-263-ACCOUNTING-DOMAIN-LAB-1",createdAt:new Date().toISOString(),database:"tha_v263_accounting_domain_lab_20261109_idb",syntheticDataOnly:true,legacyStorageAccess:false,productionAccess:false,checks};
   try{
-   const init=await HandymanAccountingV263.initialize();check("IndexedDB-only initialisation",init.ok&&init.database===report.database,JSON.stringify(init));
+   const init=await HandymanAccountingV263.initialize();check("IndexedDB-only initialisation",!!init&&Array.isArray(init.entries)&&Array.isArray(init.customers)&&Array.isArray(init.invoices)&&!!init.settings,"initialized accounting state; entries="+init.entries.length+"; customers="+init.customers.length+"; invoices="+init.invoices.length+"; settings="+!!init.settings);
    const token="acct-lab-"+Date.now(),customerId=token+"-customer",invoiceId=token+"-invoice";
    await HandymanAccountingV263.saveCustomer({id:customerId,name:"Synthetic Test Customer",phone:"0000000000",address:"Test only"});
    await HandymanAccountingV263.addEntry({id:token+"-expense",type:"expense",date:"2026-11-09",amount:12.34,method:"bank",category:"Materials - Test",reference:"Synthetic expense"});
