@@ -103,7 +103,7 @@ async function saveDirectoryRecord(){
  await api().saveDirectory(kind,item);$("directoryId").value="";$("directoryName").value="";$("directoryPhone").value="";$("directoryEmail").value="";$("directoryNotes").value="";
  await refresh();renderDirectories();status("Directory record saved in the Projects domain.");
 }
-function show(view){["listView","editView","detailView"].forEach(x=>$(x).classList.toggle("hidden",x!==view));}
+function show(view){["listView","editView","detailView"].forEach(x=>$(x).classList.toggle("hidden",x!==view));$("directoryView").classList.toggle("hidden",view!=="listView");}
 function resetForm(p){$("projectId").value=p?.id||"";$("projectName").value=p?.name||"";$("customer").value=p?.customer||"";$("address").value=p?.address||"";$("notes").value=p?.notes||"";$("formTitle").textContent=p?"Edit project":"New project";}
 function editProject(p){resetForm(p);show("editView");}
 async function saveProject(){
