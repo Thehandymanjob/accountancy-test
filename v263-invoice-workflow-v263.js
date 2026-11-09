@@ -41,6 +41,7 @@
   if(!item.customerId)throw new Error("Invoice customer ID is required.");
   if(payment&&item.status==="draft")throw new Error("Draft invoices cannot be marked paid.");
   if(!Number.isSafeInteger(Number(item.number))||Number(item.number)<1)item.number=await api().reserveInvoiceNumber();
+  else await api().reserveInvoiceNumber(Number(item.number));
   await api().update(state=>{
    let customer=state.customers.find(c=>String(c.id)===String(item.customerId));
    if(!customer&&newCustomer){
