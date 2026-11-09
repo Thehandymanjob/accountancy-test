@@ -508,18 +508,23 @@
       const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
       const lockReq = tx.objectStore(META).get("resetLock");
+      let lockError = null;
       lockReq.onsuccess = () => {
-        if (!lockReq.result || lockReq.result.active !== true) { try { tx.abort(); } catch (_) {} return; }
+        if (!lockReq.result || lockReq.result.active !== true || lockReq.result.phase !== "preclear") {
+          lockError = new Error("Locked clear requires an active pre-clear reset lock.");
+          try { tx.abort(); } catch (_) {}
+          return;
+        }
         tx.objectStore(STORE).clear();
         tx.objectStore(META).put({key:"resetLock",active:true,phase:"recovery",updatedAt:new Date().toISOString()});
       };
-      await done;
+      try { await done; } catch (error) { if (lockError) throw lockError; throw error; }
       const verify = db.transaction([STORE, META], "readonly");
       const rowsReq = verify.objectStore(STORE).getAll();
       const lockCheck = verify.objectStore(META).get("resetLock");
       const [rows, lock] = await Promise.all([requestResult(rowsReq),requestResult(lockCheck)]);
       await transactionDone(verify);
-      if (rows.length || !lock || !lock.active) throw new Error("Locked clear verification failed.");
+      if (rows.length || !lock || !lock.active || lock.phase !== "recovery") throw new Error("Locked clear verification failed.");
       return {ok:true,remainingRecords:0,locked:true};
     } finally { db.close(); }
   }
