@@ -31,6 +31,16 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <div class="row"><h2>Projects</h2><button id="newProject">New project</button></div>
 <div id="projectList"></div>
 </section>
+<section id="directoryView">
+<h2>Project directories</h2>
+<p class="muted">Shared records for the Projects module only. These lists are not connected to Accounting.</p>
+<div class="row"><div><label>Directory</label><select id="directoryKind"><option value="partners">Partners</option><option value="workers">Workers</option><option value="contractors">Contractors</option></select></div><div><label>Name / Company</label><input id="directoryName" maxlength="160"></div></div>
+<div class="row"><div><label>Phone</label><input id="directoryPhone" maxlength="60"></div><div><label>Email</label><input id="directoryEmail" maxlength="160" type="email"></div></div>
+<label>Trade / Notes</label><textarea id="directoryNotes"></textarea>
+<input id="directoryId" type="hidden">
+<div class="row"><button id="saveDirectory">Save directory record</button><button class="secondary" id="cancelDirectory">Clear form</button></div>
+<div id="directoryList"></div>
+</section>
 <section id="editView" class="hidden">
 <h2 id="formTitle">New project</h2>
 <input id="projectId" type="hidden">
@@ -71,12 +81,27 @@ const id=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(3
 const money=n=>new Intl.NumberFormat("en-GB",{style:"currency",currency:"GBP"}).format(Number(n)||0);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const api=()=>{if(!window.HandymanProjectsV264)throw new Error("Projects controller unavailable.");return window.HandymanProjectsV264};
-async function refresh(){state=await api().load();renderList();if(currentProjectId)renderDetail();}
+async function refresh(){state=await api().load();renderList();if($("directoryView"))renderDirectories();if(currentProjectId)renderDetail();}
 function renderList(){
  const root=$("projectList");
  if(!state.projects.length){root.innerHTML='<p class="muted">No projects in this isolated database yet.</p>';return}
  root.innerHTML=state.projects.map(p=>'<article class="item"><b>'+esc(p.name)+'</b><div class="muted">'+esc(p.customer||"No customer")+' · '+esc(p.status||"open")+'</div><button data-open="'+esc(p.id)+'">Open</button></article>').join("");
  root.querySelectorAll("[data-open]").forEach(b=>b.addEventListener("click",()=>openProject(b.dataset.open)));
+}
+function renderDirectories(){
+ const kind=$("directoryKind").value,list=Array.isArray(state?.[kind])?state[kind]:[];
+ $("directoryList").innerHTML=list.length?list.map(item=>'<article class="item"><b>'+esc(item.name)+'</b><div class="muted">'+esc(item.phone||"")+' · '+esc(item.email||"")+'</div><div>'+esc(item.notes||"")+'</div><button data-dir-edit="'+esc(item.id)+'">Edit</button><button class="danger" data-dir-delete="'+esc(item.id)+'">Delete</button></article>').join(""):'<p class="muted">No records saved in this directory.</p>';
+ $("directoryList").querySelectorAll("[data-dir-edit]").forEach(b=>b.addEventListener("click",()=>{const x=list.find(v=>String(v.id)===String(b.dataset.dirEdit));if(!x)return;$("directoryId").value=x.id;$("directoryName").value=x.name||"";$("directoryPhone").value=x.phone||"";$("directoryEmail").value=x.email||"";$("directoryNotes").value=x.notes||"";}));
+ $("directoryList").querySelectorAll("[data-dir-delete]").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("Delete this directory record? Existing project records that refer to its ID will not be rewritten."))return;try{await api().deleteDirectory(kind,b.dataset.dirDelete);await refresh();renderDirectories();status("Directory record deleted.");}catch(e){status(e.message,true)}}));
+}
+async function saveDirectoryRecord(){
+ const kind=$("directoryKind").value,name=$("directoryName").value.trim(),oldId=$("directoryId").value;
+ if(!name){status("Enter a name or company name.",true);return}
+ if(kind!=="partners"&&kind!=="workers"&&kind!=="contractors")throw new Error("Unsupported directory.");
+ const existing=(state[kind]||[]).find(x=>String(x.id)===String(oldId));
+ const item={...(existing||{}),id:oldId||id(kind.slice(0,-1)),name,phone:$("directoryPhone").value.trim(),email:$("directoryEmail").value.trim(),notes:$("directoryNotes").value.trim(),active:existing?.active!==false};
+ await api().saveDirectory(kind,item);$("directoryId").value="";$("directoryName").value="";$("directoryPhone").value="";$("directoryEmail").value="";$("directoryNotes").value="";
+ await refresh();renderDirectories();status("Directory record saved in the Projects domain.");
 }
 function show(view){["listView","editView","detailView"].forEach(x=>$(x).classList.toggle("hidden",x!==view));}
 function resetForm(p){$("projectId").value=p?.id||"";$("projectName").value=p?.name||"";$("customer").value=p?.customer||"";$("address").value=p?.address||"";$("notes").value=p?.notes||"";$("formTitle").textContent=p?"Edit project":"New project";}
@@ -123,11 +148,14 @@ async function start(){
  try{
   const boot=await window.HandymanModuleBootstrapV264.startProjects();
   if(!boot.ok||boot.mode!=="indexeddb-only"||boot.legacyImport!==false)throw new Error("Projects bootstrap did not meet the IndexedDB-only policy.");
-  state=await api().load();started=true;renderList();show("listView");
+  state=await api().load();started=true;renderList();renderDirectories();show("listView");
   const diag={ok:true,module:"projects",database:boot.database,mode:boot.mode,legacyImport:false,accountingControllerLoaded:false,accountingAccess:false,productionTouched:false};
   $("diagnostic").textContent=JSON.stringify(diag,null,2);status("Projects workspace ready. Dedicated IndexedDB domain initialized.");
  }catch(e){status("Projects workspace could not start: "+(e.message||e),true);$("diagnostic").textContent=String(e.stack||e);}
 }
+$("directoryKind").onchange=()=>{ $("directoryId").value="";$("directoryName").value="";$("directoryPhone").value="";$("directoryEmail").value="";$("directoryNotes").value="";renderDirectories();};
+$("saveDirectory").onclick=()=>saveDirectoryRecord().catch(e=>status(e.message,true));
+$("cancelDirectory").onclick=()=>{["directoryId","directoryName","directoryPhone","directoryEmail","directoryNotes"].forEach(x=>$(x).value="");};
 $("newProject").onclick=()=>editProject(null);$("saveProject").onclick=()=>saveProject().catch(e=>status(e.message,true));$("cancelEdit").onclick=()=>show("listView");
 $("backToList").onclick=()=>{currentProjectId=null;currentSubprojectId=null;show("listView")};
 $("editCurrent").onclick=()=>editProject(current());$("addSubproject").onclick=()=>addSubproject().catch(e=>status(e.message,true));
