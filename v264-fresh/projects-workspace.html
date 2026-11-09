@@ -58,6 +58,12 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <div id="ledgerEditor">
 <h3>Project ledger</h3>
 <div class="row"><div><label>Record type</label><select id="recordType"><option value="income">Income</option><option value="expenses">Expense</option></select></div><div><label>Amount (£)</label><input id="recordAmount" type="number" min="0.01" step="0.01"></div></div>
+<div id="expenseFields" class="hidden">
+<label>Expense category</label><select id="expenseCategory"><option value="expenses">General expense</option><option value="materials">Materials</option><option value="tools">Tools / equipment</option><option value="food">Food / refreshments</option><option value="wages">Worker wages</option><option value="contractors">Contractor / subcontractor</option></select>
+<div id="workerField" class="hidden"><label>Worker</label><select id="expenseWorker"></select></div>
+<div id="contractorField" class="hidden"><label>Contractor / subcontractor</label><select id="expenseContractor"></select></div>
+<div id="supplierField" class="hidden"><label>Supplier / shop (optional)</label><input id="expenseSupplier" maxlength="160"></div>
+</div>
 <div class="row"><div><label>Date</label><input id="recordDate" type="date"></div><div><label>Description</label><input id="recordDescription" maxlength="180"></div></div>
 <button id="saveRecord">Save project record</button>
 <div id="ledgerList"></div>
@@ -130,18 +136,39 @@ function renderDetail(){
  $("subprojectList").querySelectorAll("[data-sub]").forEach(b=>b.addEventListener("click",()=>{currentSubprojectId=b.dataset.sub;renderDetail();}));
  $("subprojectList").querySelectorAll("[data-delete-sub]").forEach(b=>b.addEventListener("click",async()=>{if(!confirm("Delete this sub-project and all its project ledger records? This cannot be undone."))return;try{await api().deleteSubproject(currentProjectId,b.dataset.deleteSub);await refresh();status("Sub-project deleted from Projects storage.");}catch(e){status(e.message,true)}}));
  $("ledgerEditor").querySelector("h3").textContent=currentSubprojectId?"Sub-project ledger":"Project ledger";
- const ledger=activeLedger();const rows=[...(ledger?.income||[]).map(x=>({...x,_type:"income"})),...(ledger?.expenses||[]).map(x=>({...x,_type:"expense"}))];
- $("ledgerList").innerHTML=rows.length?rows.map(r=>'<div class="item"><b>'+esc(r._type.toUpperCase())+' — '+money(r.amount)+'</b><div class="muted">'+esc(r.date||"")+' · '+esc(r.description||"")+'</div></div>').join(""):'<p class="muted">No ledger records.</p>';
+ const ledger=activeLedger();const rows=["income","expenses","materials","tools","food","wages","contractors"].flatMap(k=>(ledger?.[k]||[]).map(x=>({...x,_type:k})));
+ $("ledgerList").innerHTML=rows.length?rows.map(r=>'<div class="item"><b>'+esc(r._type.toUpperCase())+' — '+money(r.amount)+'</b><div class="muted">'+esc(r.date||"")+' · '+esc(r.description||r.reference||r.supplier||r.workerName||r.contractorName||"")+'</div></div>').join(""):'<p class="muted">No ledger records.</p>';
+ populateExpensePeople();updateExpenseFields();
 }
 async function addSubproject(){$("subprojectName").value="";$("subprojectPrice").value="0";$("subprojectForm").classList.remove("hidden");$("subprojectName").focus();}
 async function saveSubproject(){const p=current(),name=$("subprojectName").value.trim(),price=Number($("subprojectPrice").value);if(!p||!name){status("Enter a sub-project name.",true);return}if(!Number.isFinite(price)||price<0){status("Enter a valid non-negative price.",true);return}await api().addSubproject(p.id,{id:id("sub"),name,price,income:[],expenses:[],wages:[],tools:[],food:[],contractors:[],materials:[],created:new Date().toISOString()});$("subprojectForm").classList.add("hidden");await refresh();status("Sub-project saved in the Projects domain.");}
+function populateExpensePeople(){
+ const fill=(elementId,kind)=>{const select=$(elementId),prior=select.value,list=Array.isArray(state?.[kind])?state[kind]:[];select.innerHTML='<option value="">Select '+(kind==="workers"?"worker":"contractor")+'</option>'+list.filter(x=>x.active!==false).map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join("");if([...select.options].some(o=>o.value===prior))select.value=prior;};
+ fill("expenseWorker","workers");fill("expenseContractor","contractors");
+}
+function updateExpenseFields(){
+ const isExpense=$("recordType").value==="expenses",category=$("expenseCategory").value;
+ $("expenseFields").classList.toggle("hidden",!isExpense);
+ $("workerField").classList.toggle("hidden",!isExpense||category!=="wages");
+ $("contractorField").classList.toggle("hidden",!isExpense||category!=="contractors");
+ $("supplierField").classList.toggle("hidden",!isExpense||!["materials","tools","food"].includes(category));
+}
 async function saveRecord(){
  const ledger=activeLedger();if(!ledger)return;
  const amount=Math.round(Number($("recordAmount").value)*100)/100,date=$("recordDate").value,description=$("recordDescription").value.trim(),kind=$("recordType").value;
  if(!(amount>0)||!date){status("Enter a valid date and amount greater than zero.",true);return}
- const collection=kind==="income"?"income":"expenses";
- await api().saveLedgerRecord(currentProjectId,currentSubprojectId,collection,{id:id("ledger"),amount,date,description,category:kind==="income"?"Project income":"Other",createdAt:new Date().toISOString()});
- $("recordAmount").value="";$("recordDescription").value="";await refresh();status("Project ledger record saved. Accounting was not accessed.");
+ let collection="income",record={id:id("ledger"),amount,date,description,createdAt:new Date().toISOString()};
+ if(kind==="income"){record.category="Project income";}
+ else{
+  collection=$("expenseCategory").value;
+  if(!["expenses","materials","tools","food","wages","contractors"].includes(collection))throw new Error("Choose a valid expense category.");
+  record.category=collection==="wages"?"Worker wages":collection==="contractors"?"Contractor / subcontractor":collection==="materials"?"Materials":collection==="tools"?"Tools / equipment":collection==="food"?"Food / refreshments":"General expense";
+  if(collection==="wages"){const worker=(state.workers||[]).find(x=>String(x.id)===$("expenseWorker").value);if(!worker){status("Select a registered worker for wage expenses.",true);return}record.workerId=worker.id;record.workerName=worker.name;}
+  if(collection==="contractors"){const contractor=(state.contractors||[]).find(x=>String(x.id)===$("expenseContractor").value);if(!contractor){status("Select a registered contractor.",true);return}record.contractorId=contractor.id;record.contractorName=contractor.name;record.name=contractor.name;}
+  if(["materials","tools","food"].includes(collection)){record.supplier=$("expenseSupplier").value.trim();}
+ }
+ await api().saveLedgerRecord(currentProjectId,currentSubprojectId,collection,record);
+ $("recordAmount").value="";$("recordDescription").value="";$("expenseSupplier").value="";await refresh();status("Project record saved in its own ledger. Accounting was not accessed.");
 }
 async function toggleComplete(){const p=current();if(!p)return;await api().updateProject(p.id,{status:p.status==="complete"?"open":"complete"});await refresh();status("Project status saved. No accounting entries were created or changed.");}
 async function start(){
@@ -162,7 +189,8 @@ $("editCurrent").onclick=()=>editProject(current());$("addSubproject").onclick=(
 $("saveSubproject").onclick=()=>saveSubproject().catch(e=>status(e.message,true));$("cancelSubproject").onclick=()=>$("subprojectForm").classList.add("hidden");
 $("backToProject").onclick=()=>{currentSubprojectId=null;renderDetail()};
 $("deleteCurrent").onclick=async()=>{const p=current();if(!p)return;if(!confirm("Delete this project and all its sub-projects and project ledger records? This cannot be undone."))return;try{await api().deleteProject(p.id);currentProjectId=null;currentSubprojectId=null;await refresh();show("listView");status("Project deleted from Projects storage.");}catch(e){status(e.message,true)}};
-$("saveRecord").onclick=()=>saveRecord().catch(e=>status(e.message,true));$("toggleComplete").onclick=()=>toggleComplete().catch(e=>status(e.message,true));
+$("saveRecord").onclick=()=>saveRecord().catch(e=>status(e.message,true));
+$("recordType").onchange=updateExpenseFields;$("expenseCategory").onchange=updateExpenseFields;$("toggleComplete").onclick=()=>toggleComplete().catch(e=>status(e.message,true));
 $("recordDate").value=new Date().toISOString().slice(0,10);
 start();
 })();
