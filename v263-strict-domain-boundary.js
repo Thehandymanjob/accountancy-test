@@ -9,6 +9,8 @@
  const ENGINE=()=>{const e=root.HandymanStorageV263;if(!e)throw new Error("v263 IndexedDB engine is unavailable.");return e;};
  const DOMAINS=Object.freeze({
   accounting:Object.freeze(["accounting","sequences"]),
+  accountingState:Object.freeze(["accounting"]),
+  invoiceSequence:Object.freeze(["sequences"]),
   projects:Object.freeze(["projects"]),
   contracts:Object.freeze(["contracts"]),
   businessProfile:Object.freeze(["business_profile"]),
