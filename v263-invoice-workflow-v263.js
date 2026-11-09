@@ -1,53 +1,85 @@
-/* THA v263 invoice workflow controller — atomic invoice/payment mutations.
-   Depends on HandymanAccountingV263 and uses only the isolated IndexedDB adapter.
+/* THA v263 canonical invoice workflow — IndexedDB-only, one Accounting-domain mutation per action.
+   Supports the existing UI's binary full-payment model; partial payments are deliberately rejected.
 */
 (function(root){
  "use strict";
  const api=()=>{const x=root.HandymanAccountingV263;if(!x)throw new Error("Accounting controller is not loaded.");return x;};
  const clone=x=>root.structuredClone(x),round=n=>Math.round((Number(n)||0)*100)/100;
- function validatePayment(p){if(!p||!/^\d{4}-\d{2}-\d{2}$/.test(String(p.date||""))||!["cash","bank"].includes(p.method)||!(round(p.amount)>0))throw new Error("A valid payment date, method and positive amount are required.");}
+ function total(i){
+  let subtotal=Array.isArray(i.items)&&i.items.length?i.items.reduce((n,x)=>n+(Number(x.price)||0),0):(Number(i.qty)||0)*(Number(i.unitPrice)||0);
+  subtotal=round(subtotal);
+  const rate=i.vat==="none"?0:Number(i.vat)||0;
+  return round(subtotal+Math.round(subtotal*rate)/100);
+ }
+ function validatePayment(p,invoice){
+  if(!p||!/^\d{4}-\d{2}-\d{2}$/.test(String(p.date||""))||!["cash","bank"].includes(p.method)||!(round(p.amount)>0))throw new Error("A valid payment date, method and positive amount are required.");
+  const expected=total(invoice);
+  if(round(p.amount)!==expected)throw new Error("This invoice workflow supports full payment only. Payment must equal the invoice total ("+expected+").");
+ }
+ function linkedIncome(e,invoice){
+  if(!e||e.type!=="income")return false;
+  const id=String(invoice.id),number=String(invoice.number);
+  if(String(e.invoiceId||"")===id||String(e.id||"")==="invoice-income-"+id||String(e.reference||"").trim()==="Invoice "+number)return true;
+  const notes=String(e.notes||"").trim();
+  return new RegExp("^Payment received for invoice "+number.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"(?:\\s|$|[—-])","i").test(notes);
+ }
+ function removeLinkedIncome(state,invoice){
+  const matches=state.entries.filter(e=>linkedIncome(e,invoice));
+  state.entries=state.entries.filter(e=>!matches.includes(e));
+  return matches.length;
+ }
+ function upsertLinkedIncome(state,invoice,payment){
+  const matches=state.entries.filter(e=>linkedIncome(e,invoice));
+  const prior=matches[0],entry={id:prior?.id||"invoice-income-"+invoice.id,type:"income",date:payment.date,amount:total(invoice),method:payment.method,category:"Work income",reference:"Invoice "+invoice.number,notes:"Payment received for invoice "+invoice.number,invoiceId:invoice.id,createdAt:prior?.createdAt||new Date().toISOString()};
+  state.entries=state.entries.filter(e=>!matches.includes(e));
+  state.entries.push(entry);
+ }
  async function saveInvoice(invoice,payment){
   if(!invoice||typeof invoice!=="object"||!invoice.id||!invoice.customerId)throw new Error("Invoice ID and customer ID are required.");
   const item=clone(invoice);
-  if(payment)validatePayment(payment);
   if(!Number.isSafeInteger(Number(item.number))||Number(item.number)<1)item.number=await api().reserveInvoiceNumber();
   await api().update(state=>{
    if(!state.customers.some(c=>String(c.id)===String(item.customerId)))throw new Error("Invoice customer does not exist.");
    const prior=state.invoices.find(i=>String(i.id)===String(item.id));
    if(prior&&Number(prior.number)!==Number(item.number))throw new Error("An existing invoice number cannot be changed.");
    if(state.invoices.some(i=>String(i.id)!==String(item.id)&&Number(i.number)===Number(item.number)))throw new Error("Invoice number is already in use.");
-   if(payment){item.status="issued";item.paymentStatus="paid";item.paymentDate=payment.date;item.paymentMethod=payment.method;}
+   if(prior&&(prior.deletedAt||prior.deleted))throw new Error("Deleted invoices cannot be edited; restore them first.");
+   if(payment){validatePayment(payment,item);item.status="issued";item.paymentStatus="paid";item.paymentDate=payment.date;item.paymentMethod=payment.method;upsertLinkedIncome(state,item,payment);}
+   else{item.paymentStatus="unpaid";item.paymentDate="";item.paymentMethod="";removeLinkedIncome(state,prior||item);}
+   item.createdAt=prior?.createdAt||item.createdAt||new Date().toISOString();
+   item.updatedAt=new Date().toISOString();
    const index=state.invoices.findIndex(i=>String(i.id)===String(item.id));
    if(index<0)state.invoices.push(item);else state.invoices[index]=item;
-   if(payment){
-    const income={id:"invoice-income-"+item.id,type:"income",date:payment.date,amount:round(payment.amount),method:payment.method,category:"Work income",reference:"Invoice "+item.number,notes:"Payment received for invoice "+item.number,invoiceId:item.id,createdAt:new Date().toISOString()};
-    const matches=state.entries.filter(e=>e.type==="income"&&(String(e.invoiceId||"")===String(item.id)||String(e.reference||"")==="Invoice "+item.number||String(e.id)==="invoice-income-"+item.id));
-    if(matches.length){const keep=matches[0];Object.assign(keep,income,{id:keep.id,createdAt:keep.createdAt||income.createdAt});state.entries=state.entries.filter(e=>e===keep||!matches.includes(e));}
-    else state.entries.push(income);
-   }
    return state;
   });
-  return {ok:true,id:String(item.id),number:Number(item.number)};
+  return {ok:true,id:String(item.id),number:Number(item.number),paymentStatus:item.paymentStatus};
  }
  async function markPaid(id,payment){
-  validatePayment(payment);
   await api().update(state=>{
    const invoice=state.invoices.find(i=>String(i.id)===String(id)&&!i.deletedAt&&!i.deleted);
    if(!invoice)throw new Error("Active invoice not found.");
-   invoice.status="issued";invoice.paymentStatus="paid";invoice.paymentDate=payment.date;invoice.paymentMethod=payment.method;
-   const entry={id:"invoice-income-"+invoice.id,type:"income",date:payment.date,amount:round(payment.amount),method:payment.method,category:"Work income",reference:"Invoice "+invoice.number,notes:"Payment received for invoice "+invoice.number,invoiceId:invoice.id,createdAt:new Date().toISOString()};
-   const matches=state.entries.filter(e=>e.type==="income"&&(String(e.invoiceId||"")===String(invoice.id)||String(e.reference||"")==="Invoice "+invoice.number||String(e.id)==="invoice-income-"+invoice.id));
-   if(matches.length){const keep=matches[0];Object.assign(keep,entry,{id:keep.id,createdAt:keep.createdAt||entry.createdAt});state.entries=state.entries.filter(e=>e===keep||!matches.includes(e));}else state.entries.push(entry);
-   return state;
-  });return {ok:true};
+   if(invoice.status==="draft")throw new Error("Draft invoices cannot be marked paid.");
+   validatePayment(payment,invoice);
+   invoice.status="issued";invoice.paymentStatus="paid";invoice.paymentDate=payment.date;invoice.paymentMethod=payment.method;invoice.updatedAt=new Date().toISOString();
+   upsertLinkedIncome(state,invoice,payment);return state;
+  });
+  return {ok:true,id:String(id),paymentStatus:"paid"};
  }
  async function markUnpaid(id){
-  await api().update(state=>{const invoice=state.invoices.find(i=>String(i.id)===String(id)&&!i.deletedAt&&!i.deleted);if(!invoice)throw new Error("Active invoice not found.");state.entries=state.entries.filter(e=>!(e.type==="income"&&(String(e.invoiceId||"")===String(invoice.id)||String(e.reference||"")==="Invoice "+invoice.number||String(e.id)==="invoice-income-"+invoice.id)));invoice.paymentStatus="unpaid";invoice.paymentDate="";invoice.paymentMethod="";return state;});
-  return {ok:true};
+  await api().update(state=>{
+   const invoice=state.invoices.find(i=>String(i.id)===String(id)&&!i.deletedAt&&!i.deleted);
+   if(!invoice)throw new Error("Active invoice not found.");
+   removeLinkedIncome(state,invoice);invoice.paymentStatus="unpaid";invoice.paymentDate="";invoice.paymentMethod="";invoice.updatedAt=new Date().toISOString();return state;
+  });
+  return {ok:true,id:String(id),paymentStatus:"unpaid"};
  }
  async function softDelete(id){
-  await api().update(state=>{const invoice=state.invoices.find(i=>String(i.id)===String(id)&&!i.deletedAt&&!i.deleted);if(!invoice)throw new Error("Active invoice not found.");invoice.deletedAt=new Date().toISOString();invoice.deleted=true;state.entries=state.entries.filter(e=>!(e.type==="income"&&(String(e.invoiceId||"")===String(invoice.id)||String(e.reference||"")==="Invoice "+invoice.number||String(e.id)==="invoice-income-"+invoice.id)));return state;});
-  return {ok:true,numberReserved:true};
+  await api().update(state=>{
+   const invoice=state.invoices.find(i=>String(i.id)===String(id)&&!i.deletedAt&&!i.deleted);
+   if(!invoice)throw new Error("Active invoice not found.");
+   removeLinkedIncome(state,invoice);invoice.deletedAt=new Date().toISOString();invoice.deleted=true;invoice.paymentStatus="unpaid";invoice.paymentDate="";invoice.paymentMethod="";invoice.updatedAt=new Date().toISOString();return state;
+  });
+  return {ok:true,id:String(id),numberReserved:true};
  }
- root.HandymanInvoiceWorkflowV263=Object.freeze({saveInvoice,markPaid,markUnpaid,softDelete});
+ root.HandymanInvoiceWorkflowV263=Object.freeze({saveInvoice,markPaid,markUnpaid,softDelete,total});
 })(window);
