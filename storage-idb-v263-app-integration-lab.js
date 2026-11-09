@@ -6,11 +6,11 @@
 (function (root) {
   "use strict";
 
-  const DB_NAME = "tha_v263_app_integration_lab_20261109_r4_idb";
+  const DB_NAME = "tha_v263_app_integration_lab_20261109_r5_idb";
   const DB_VERSION = 2;
   const STORE = "records";
   const META = "metadata";
-  const BUILD = "THA-263-APP-INTEGRATION-LAB-4";
+  const BUILD = "THA-263-APP-INTEGRATION-LAB-5";
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
@@ -65,6 +65,52 @@
     if (ak.length !== bk.length || ak.some((key, i) => key !== bk[i])) return false;
     for (const key of ak) if (!(await valuesEqual(a[key], b[key], seen))) return false;
     return true;
+  }
+
+  // Safari-safe envelope: nested Blob/File payloads are converted to ArrayBuffer
+  // before multi-record IndexedDB transactions, then reconstructed on every read.
+  const BINARY_TAG = "__tha_v263_binary_envelope_v1__";
+  async function encodeBinary(value, seen = new WeakMap()) {
+    if (value === null || typeof value !== "object") return value;
+    if (value instanceof Blob) {
+      const data = await value.arrayBuffer();
+      if (typeof File !== "undefined" && value instanceof File) {
+        return { [BINARY_TAG]: "file", name: value.name, type: value.type, lastModified: value.lastModified, data };
+      }
+      return { [BINARY_TAG]: "blob", type: value.type, data };
+    }
+    if (value instanceof Date || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return value;
+    if (seen.has(value)) return seen.get(value);
+    if (Array.isArray(value)) {
+      const out = []; seen.set(value, out);
+      for (const item of value) out.push(await encodeBinary(item, seen));
+      return out;
+    }
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return value;
+    const out = Object.create(proto); seen.set(value, out);
+    for (const key of Object.keys(value)) out[key] = await encodeBinary(value[key], seen);
+    return out;
+  }
+  function decodeBinary(value, seen = new WeakMap()) {
+    if (value === null || typeof value !== "object") return value;
+    if (value[BINARY_TAG] === "blob" && value.data instanceof ArrayBuffer) return new Blob([value.data], { type: value.type || "" });
+    if (value[BINARY_TAG] === "file" && value.data instanceof ArrayBuffer) {
+      if (typeof File !== "function") return new Blob([value.data], { type: value.type || "" });
+      return new File([value.data], String(value.name || "file"), { type: value.type || "", lastModified: Number(value.lastModified) || 0 });
+    }
+    if (value instanceof Date || value instanceof Blob || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return value;
+    if (seen.has(value)) return seen.get(value);
+    if (Array.isArray(value)) {
+      const out = []; seen.set(value, out);
+      for (const item of value) out.push(decodeBinary(item, seen));
+      return out;
+    }
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return value;
+    const out = Object.create(proto); seen.set(value, out);
+    for (const key of Object.keys(value)) out[key] = decodeBinary(value[key], seen);
+    return out;
   }
 
   const requestResult = request => new Promise((resolve, reject) => {
@@ -171,7 +217,7 @@
       const done = transactionDone(tx);
       const row = await requestResult(tx.objectStore(STORE).get(item.id));
       await done;
-      return row ? row.value : null;
+      return row ? decodeBinary(row.value) : null;
     } finally { db.close(); }
   }
 
@@ -187,7 +233,7 @@
       const rows = await Promise.all(prepared.map(x => requestResult(store.get(x.id))));
       await done;
       return { ok: true, records: rows.map((row, i) => ({
-        domain: prepared[i].domain, key: prepared[i].key, value: row ? row.value : null
+        domain: prepared[i].domain, key: prepared[i].key, value: row ? decodeBinary(row.value) : null
       })) };
     } finally { db.close(); }
   }
@@ -228,11 +274,7 @@
 
   async function transact(writes) {
     if (!Array.isArray(writes) || writes.length === 0) throw new Error("A non-empty write list is required.");
-    const prepared = writes.map(x => {
-      const item = validateDescriptor(x.domain, x.key);
-      validateValue(x.value);
-      return { ...item, value: x.value };
-    });
+    const prepared = await Promise.all(writes.map(async x => { const item = validateDescriptor(x.domain, x.key); validateValue(x.value); return { ...item, value: await encodeBinary(x.value), originalValue: x.value }; }));
     assertUnique(prepared, "transaction");
     const stamp = new Date().toISOString();
     let db = null, tx = null, stage = "open-database";
@@ -262,7 +304,7 @@
       stage = "verify-committed-records";
       const verify = await readMany(prepared);
       for (let i = 0; i < prepared.length; i++) {
-        if (!(await valuesEqual(verify.records[i].value, prepared[i].value))) {
+        if (!(await valuesEqual(verify.records[i].value, prepared[i].originalValue))) {
           throw new Error("IndexedDB transaction content verification failed for " + prepared[i].domain + "/" + prepared[i].key);
         }
       }
@@ -311,7 +353,7 @@
             const current = currentRows.map((row, i) => ({
               domain: prepared[i].domain,
               key: prepared[i].key,
-              value: row ? row.value : clone(prepared[i].initialValue)
+              value: row ? decodeBinary(row.value) : clone(prepared[i].initialValue)
             }));
             next = updater(clone(current));
             if (next && typeof next.then === "function") throw new Error("IndexedDB mutation callback must be synchronous.");
@@ -395,7 +437,7 @@
         database: DB_NAME,
         createdAt: new Date().toISOString(),
         domains: [...new Set(domains)].sort(),
-        records: rows.filter(x => domains.includes(x.domain)).sort((a, b) => a.id.localeCompare(b.id))
+        records: rows.filter(x => domains.includes(x.domain)).map(row => ({ ...row, value: decodeBinary(row.value) })).sort((a, b) => a.id.localeCompare(b.id))
       };
     } finally { db.close(); }
   }
@@ -406,12 +448,7 @@
         !Array.isArray(packageValue.records)) throw new Error("Invalid v263 IndexedDB backup package.");
     const domains = [...new Set(packageValue.domains)];
     if (domains.length !== packageValue.domains.length || domains.some(x => !validDomain(x))) throw new Error("Invalid or duplicate backup domains.");
-    const prepared = packageValue.records.map(row => {
-      const item = validateDescriptor(row.domain, row.key);
-      if (!domains.includes(row.domain)) throw new Error("Backup record is outside the declared domains.");
-      validateValue(row.value);
-      return { ...item, value: row.value };
-    });
+    const prepared = await Promise.all(packageValue.records.map(async row => { const item = validateDescriptor(row.domain, row.key); if (!domains.includes(row.domain)) throw new Error("Backup record is outside the declared domains."); validateValue(row.value); return { ...item, value: await encodeBinary(row.value), originalValue: row.value }; }));
     assertUnique(prepared, "restore");
     const db = await openDatabase();
     try {
@@ -442,7 +479,7 @@
       if (verify.records.length !== expected.length) throw new Error("IndexedDB restore record-count verification failed.");
       for (let i = 0; i < expected.length; i++) {
         const actual = verify.records[i], wanted = expected[i];
-        if (actual.id !== wanted.id || !(await valuesEqual(actual.value, wanted.value))) {
+        if (actual.id !== wanted.id || !(await valuesEqual(actual.value, wanted.originalValue))) {
           throw new Error("IndexedDB restore content verification failed for " + wanted.domain + "/" + wanted.key);
         }
       }
