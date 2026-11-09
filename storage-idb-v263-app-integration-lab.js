@@ -6,11 +6,11 @@
 (function (root) {
   "use strict";
 
-  const DB_NAME = "tha_v263_app_integration_lab_20261109_idb";
-  const DB_VERSION = 1;
+  const DB_NAME = "tha_v263_app_integration_lab_20261109_r2_idb";
+  const DB_VERSION = 2;
   const STORE = "records";
   const META = "metadata";
-  const BUILD = "THA-263-APP-INTEGRATION-LAB-1";
+  const BUILD = "THA-263-APP-INTEGRATION-LAB-2";
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
@@ -151,12 +151,12 @@
       let validationError = null;
       request.onsuccess = () => {
         const current = request.result;
-        if (current && current.version !== 1) {
+        if (current && current.version !== 2) {
           validationError = new Error("Unexpected v263 schema metadata.");
           try { tx.abort(); } catch (_) {}
           return;
         }
-        if (!current) store.put({ key: "schema", version: 1, database: DB_NAME, build: BUILD, createdAt: new Date().toISOString() });
+        if (!current) store.put({ key: "schema", version: 2, database: DB_NAME, build: BUILD, createdAt: new Date().toISOString() });
       };
       try { await done; } catch (error) { if (validationError) throw validationError; throw error; }
       return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION, build: BUILD };
