@@ -3,12 +3,12 @@
 <style>
 :root{color-scheme:light}*{box-sizing:border-box}body{margin:0;padding:18px;background:#f3f5f8;color:#172033;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:900px;margin:auto}.card{background:#fff;border:1px solid #d9dee8;border-radius:14px;padding:18px;margin:12px 0}h1{font-size:22px;margin:0 0 6px}h2{font-size:17px;margin:0 0 10px}.muted{color:#5d687b}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}button{border:0;border-radius:9px;padding:12px 16px;background:#173d72;color:white;font-weight:650;font-size:15px}button:disabled{opacity:.5}#run{background:#176b42}.progress{height:10px;background:#e5e9ef;border-radius:20px;overflow:hidden}.bar{height:100%;width:0;background:#176b42;transition:width .15s}ol{padding-left:22px}li{padding:6px 0;border-bottom:1px solid #edf0f4}.pass{color:#137044;font-weight:700}.fail{color:#b42318;font-weight:700}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101828;color:#e7edf7;padding:14px;border-radius:10px;font-size:12px;max-height:320px;overflow:auto}.small{font-size:13px}
 </style></head><body><main class="wrap">
-<div class="card"><h1>v263 Application Integration Lab</h1><div class="muted">Isolated database · synthetic data only · no LocalStorage import · no production app files modified</div><p><b>Database:</b> tha_v263_app_integration_lab_20261109_r4_idb</p><p class="small">Run the complete suite once. Then reload this page in Safari and run the persistence check. Do not use this lab for real business data.</p>
+<div class="card"><h1>v263 Application Integration Lab</h1><div class="muted">Isolated database · synthetic data only · no LocalStorage import · no production app files modified</div><p><b>Database:</b> tha_v263_app_integration_lab_20261109_r5_idb</p><p class="small">Each integrated-suite run starts with a fresh isolated test database. After a successful run, reload this page and run the persistence check. Do not use this lab for real business data.</p>
 <div class="actions"><button id="run">Run integrated test suite</button><button id="reload" disabled>Run reload persistence check</button><button id="copy" disabled>Copy report</button></div><div class="progress"><div class="bar" id="bar"></div></div><p id="status" class="muted">Waiting to start.</p></div>
 <div class="card"><h2>Test results</h2><ol id="results"><li>Not run yet.</li></ol></div>
 <div class="card"><h2>Machine-readable report</h2><pre id="report">No report generated.</pre></div>
 </main>
-<script src="storage-idb-v263-app-integration-lab.js?v=263lab4"></script>
+<script src="storage-idb-v263-app-integration-lab.js?v=263lab5"></script>
 <script src="app-storage-v263-v4.js?v=263lab2"></script>
 <script src="v263-accounting-controller-diagnostic-v2.js?v=263lab2"></script>
 <script src="v263-projects-controller.js?v=263lab2"></script>
@@ -17,15 +17,23 @@
 <script src="v263-recovery.js?v=263lab2"></script>
 <script>
 (()=>{'use strict';
-const $=id=>document.getElementById(id),BUILD='THA-263-APP-INTEGRATION-LAB-4',DB='tha_v263_app_integration_lab_20261109_r4_idb';
+const $=id=>document.getElementById(id),BUILD='THA-263-APP-INTEGRATION-LAB-5',DB='tha_v263_app_integration_lab_20261109_r5_idb';
 let report=null,passed=0,done=0,total=0;
 const results=[];
 function paint(){ $('bar').style.width=(total?done/total*100:0)+'%';$('status').textContent='Completed '+done+' of '+total+' checks · '+passed+' passed';$('results').innerHTML=results.map(x=>'<li><span class="'+(x.ok?'pass':'fail')+'">'+(x.ok?'PASS':'FAIL')+'</span> — '+x.name+(x.detail?' <span class="muted">('+String(x.detail).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+')</span>':'')+'</li>').join('');}
 async function check(name,fn){try{const detail=await fn();results.push({name,ok:true,detail:detail===undefined?'':String(detail)});passed++;}catch(e){results.push({name,ok:false,errorName:e&&e.name||'Error',errorMessage:e&&e.message||String(e),errorStack:String(e&&e.stack||'')});}done++;paint();}
 function assert(v,msg){if(!v)throw new Error(msg||'Assertion failed');}
 async function equal(a,b,msg){assert(await HandymanStorageV263.valuesEqual(a,b),msg||'Values differ');}
+async function resetLabDatabase(){
+ return new Promise((resolve,reject)=>{
+  const req=indexedDB.deleteDatabase(DB);
+  req.onsuccess=()=>resolve(true);
+  req.onerror=()=>reject(req.error||new Error('Could not reset isolated lab database.'));
+  req.onblocked=()=>reject(new Error('Lab database reset is blocked by another open lab tab. Close other lab tabs and retry.'));
+ });
+}
 async function main(){
- $('run').disabled=true;$('reload').disabled=true;results.length=0;passed=0;done=0;total=13;paint();
+ $('run').disabled=true; await resetLabDatabase();$('reload').disabled=true;results.length=0;passed=0;done=0;total=13;paint();
  let recovery=null,backup=null;
  await check('Fresh isolated IndexedDB initializes empty',async()=>{const init=await HandymanAppStorageV263.initialize();assert(init.ok&&init.database===DB&&init.mode==='indexeddb-only');const all=await HandymanAppStorageV263.readAll();assert(all.emptyDatabase);return init.build;});
  await check('Accounting controller: customer, income/expense, invoice data round-trip',async()=>{const A=HandymanAccountingV263;await A.initialize();await A.saveCustomer({id:'cust-1',name:'Integration Test Customer',email:'lab@example.invalid',extra:{keep:true}});await A.addEntry({id:'entry-income-1',type:'income',amount:1250,date:'2026-11-09',reference:'Synthetic invoice payment',customerId:'cust-1',receipt:new Blob(['receipt-test'],{type:'text/plain'})});await A.addEntry({id:'entry-expense-1',type:'expense',amount:120,date:'2026-11-09',reference:'Synthetic materials'});const state=await A.load();assert(state.customers.length===1&&state.entries.length===2);assert(state.entries[0].receipt instanceof Blob);return state.entries.length+' entries';});
@@ -41,10 +49,11 @@ async function main(){
  await check('Portable backup creates and verifies a complete package',async()=>{recovery=HandymanRecoveryV263.create();backup=await recovery.createBackup();assert(backup.ok&&backup.verification.records>=11&&backup.verification.domains===14);const inspect=await recovery.inspectFile(backup.blob);assert(inspect.ok&&inspect.records===backup.verification.records);return inspect.records+' records / '+inspect.domains+' domains';});
  await check('Factory reset requires exact backup, locks writes, then verified restore recovers all data',async()=>{const reset=await recovery.resetFromBackupFile(backup.blob);assert(reset.ok&&reset.remainingRecords===0&&reset.resetLocked);let blocked=false;try{await HandymanAppStorageV263.write('accounting',{entries:[],customers:[],invoices:[],customExpenseCategories:[],settings:{}})}catch(e){blocked=true;}assert(blocked,'ordinary write was not blocked by reset lock');const restored=await recovery.restoreFromFile(backup.blob);assert(restored.ok&&restored.verified);const a=await HandymanAccountingV263.load(),p=await HandymanProjectsV263.load(),c=await HandymanContractsV263.load();assert(a.entries.length===3&&p.projects[0].subprojects[0].amount===300&&c.contracts[0].status==='signed');return 'locked reset + write blocked + exact restore';});
  report={ok:results.every(x=>x.ok),build:BUILD,database:DB,checkedAt:new Date().toISOString(),passed,total,results};
- $('report').textContent=JSON.stringify(report,null,2);$('copy').disabled=false;$('reload').disabled=!report.ok;$('run').disabled=false;$('status').textContent='Suite finished: '+passed+'/'+total+' PASS'; 
+ $('report').textContent=JSON.stringify(report,null,2);$('copy').disabled=false;$('reload').disabled=false;$('run').disabled=false;$('status').textContent='Suite finished: '+passed+'/'+total+' PASS'; 
 }
 $('run').addEventListener('click',()=>main().catch(e=>{$('status').textContent='Suite stopped: '+String(e.message||e);$('run').disabled=false;}));
 $('reload').addEventListener('click',async()=>{try{const a=await HandymanAccountingV263.load(),p=await HandymanProjectsV263.load(),c=await HandymanContractsV263.load();const ok=a.entries.length===3&&p.projects[0].subprojects[0].amount===300&&c.contracts[0].status==='signed';const result={name:'Reload persistence check',ok,checkedAt:new Date().toISOString(),entries:a.entries.length,projects:p.projects.length,contracts:c.contracts.length};$('report').textContent=JSON.stringify({previous:report,reload:result},null,2);$('status').textContent=ok?'Reload persistence PASS':'Reload persistence FAIL';}catch(e){$('status').textContent='Reload check failed: '+String(e.message||e);}});
+$('reload').disabled=false;
 $('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('report').textContent);$('status').textContent='Report copied.';}catch(e){$('status').textContent='Clipboard unavailable; select and copy the report text.';}});
 })();
 </script></body></html>
