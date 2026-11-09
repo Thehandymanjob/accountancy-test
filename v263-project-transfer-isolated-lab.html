@@ -13,6 +13,6 @@ try{
  await check("reloadPersistence",async()=>{const [p,a]=await Promise.all([HandymanProjectsV263.load(),HandymanAppStorageV263.read("accounting")]);const sub=p.projects.find(x=>x.id===projectId).subprojects.find(x=>x.id===subId);return sub.income.some(x=>x.accountingTransferId)&&sub.expenses.some(x=>x.accountingTransferId)&&a.entries.filter(x=>x.projectId===projectId).length===2;});
  result.projectId=projectId;result.subprojectId=subId;
 }catch(e){result.fatalError={name:e.name||"Error",message:e.message||String(e)}}
-result.ok=Object.keys(checks).length===7&&Object.values(checks).every(Boolean)&&!result.fatalError;result.checkedAt=new Date().toISOString();report=result;$("report").textContent=JSON.stringify(result,null,2);$("status").textContent=result.ok?"All isolated transfer checks passed.":"One or more checks failed; see report.";return result}
+result.ok=Object.keys(checks).length===8&&Object.values(checks).every(Boolean)&&!result.fatalError;result.checkedAt=new Date().toISOString();report=result;$("report").textContent=JSON.stringify(result,null,2);$("status").textContent=result.ok?"All isolated transfer checks passed.":"One or more checks failed; see report.";return result}
 $("run").addEventListener("click",run);$("copy").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("report").textContent);$("status").textContent="Report copied."}catch(e){$("status").textContent="Clipboard unavailable; select report text manually."}});
 </script></main></body></html>
