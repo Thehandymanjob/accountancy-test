@@ -1,81 +1,72 @@
-/* THA v263 application repository adapter.
-   This module is intentionally independent of LocalStorage and never imports legacy data.
-   It is not wired into index.html until every application domain has an async cutover.
+/* THA v263 application repository adapter — strict domain boundary edition.
+   All application reads/writes pass through HandymanV263DomainBoundary.
+   No cross-domain transactions, mixed backups, LocalStorage, or legacy import.
 */
 (function(root){
-  "use strict";
-  const engine=()=> {
-    const api=root.HandymanStorageV263;
-    if(!api) throw new Error("v263 IndexedDB engine is not loaded.");
-    return api;
-  };
-  const domains=Object.freeze({
-    accounting:{key:"state",fallback:()=>({entries:[],customers:[],invoices:[],customExpenseCategories:[],settings:{businessName:"",ownerName:""}})},
-    projects:{key:"state",fallback:()=>({projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[],profile:{},current:null,guide:"en"})},
-    contracts:{key:"state",fallback:()=>({contracts:[]})},
-    sequences:{key:"invoice-number",fallback:()=>0},
-    preferences:{key:"language",fallback:()=>"en"},
-    preferenceMeta:{key:"language-pref-version",fallback:()=>""},
-    diagnostics:{key:"monitor-log",fallback:()=>[]},
-    reports:{key:"archive",fallback:()=>[]},
-    reportNotifications:{key:"notifications",fallback:()=>[]},
-    reportSettings:{key:"settings",fallback:()=>({})},
-    reportWorkflow:{key:"workflow",fallback:()=>({})},
-    notifications:{key:"items",fallback:()=>[]},
-    recovery:{key:"last-reset-snapshot",fallback:()=>null},
-    factoryResetRecovery:{key:"factory-reset-recovery",fallback:()=>null}
-  });
-  const descriptor=name=>{
-    const item=domains[name];
-    if(!item) throw new Error("Unknown application storage domain: "+name);
-    return {domain:name,key:item.key};
-  };
-  async function initialize(){
-    const status=await engine().ready();
-    if(!status||status.ok!==true) throw new Error("v263 IndexedDB initialization did not pass.");
-    return {ok:true,database:status.database,build:status.build,mode:"indexeddb-only",legacyImport:false};
-  }
-  async function read(name){
-    const d=descriptor(name),value=await engine().get(d.domain,d.key);
-    return value===null?domains[name].fallback():value;
-  }
-  async function readAll(){
-    await initialize();
-    const names=Object.keys(domains);
-    const rows=await engine().readMany(names.map(descriptor));
-    const result={};
-    for(const row of rows.records){
-      result[row.domain]=row.value===null?domains[row.domain].fallback():row.value;
-    }
-    return {ok:true,emptyDatabase:rows.records.every(row=>row.value===null),state:result};
-  }
-  async function write(name,value){
-    const d=descriptor(name);
-    const result=await engine().put(d.domain,d.key,value);
-    return {...result,verified:true};
-  }
-  async function writeMany(values){
-    if(!values||typeof values!=="object"||Array.isArray(values)) throw new Error("A domain-value object is required.");
-    const writes=Object.keys(values).map(name=>({...descriptor(name),value:values[name]}));
-    if(!writes.length) throw new Error("No application domains supplied.");
-    return engine().transact(writes);
-  }
-  async function mutate(name,updater){
-    if(typeof updater!=="function") throw new Error("A synchronous state updater is required.");
-    const d=descriptor(name);
-    const result=await engine().mutateMany([{...d,initialValue:domains[name].fallback()}],rows=>{
-      const next=updater(rows[0].value);
-      if(next&&typeof next.then==="function") throw new Error("Application state updater must be synchronous.");
-      return [next];
-    });
-    return {ok:true,state:result.records[0].value,updatedAt:result.updatedAt};
-  }
-  async function reserveInvoiceNumber(minimum){return engine().reserveCounter("sequences","invoice-number",minimum||0);}
-  async function backup(){return engine().snapshot(Object.keys(domains));}
-  async function restore(packageValue){return engine().restore(packageValue);}
-  async function health(){return engine().health();}
-  root.HandymanAppStorageV263=Object.freeze({
-    domains:Object.keys(domains),initialize,read,readAll,write,writeMany,mutate,
-    reserveInvoiceNumber,backup,restore,health
-  });
+ "use strict";
+ const boundary=()=>{const api=root.HandymanV263DomainBoundary;if(!api)throw new Error("v263 strict domain boundary is not loaded.");return api;};
+ const domains=Object.freeze({
+  accounting:{domain:"accounting",key:"state",scope:"accounting",fallback:()=>({entries:[],customers:[],invoices:[],customExpenseCategories:[],settings:{businessName:"",ownerName:""}})},
+  projects:{domain:"projects",key:"state",scope:"projects",fallback:()=>({projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[],profile:{},current:null,guide:"en"})},
+  contracts:{domain:"contracts",key:"state",scope:"contracts",fallback:()=>({contracts:[]})},
+  sequences:{domain:"sequences",key:"invoice-number",scope:"accounting",fallback:()=>0},
+  preferences:{domain:"preferences",key:"language",scope:"support",fallback:()=>"en"},
+  preferenceMeta:{domain:"preference_meta",key:"language-pref-version",scope:"support",fallback:()=>""},
+  diagnostics:{domain:"diagnostics",key:"monitor-log",scope:"support",fallback:()=>[]},
+  reports:{domain:"reports",key:"archive",scope:"support",fallback:()=>[]},
+  reportNotifications:{domain:"report_notifications",key:"notifications",scope:"support",fallback:()=>[]},
+  reportSettings:{domain:"report_settings",key:"settings",scope:"support",fallback:()=>({})},
+  reportWorkflow:{domain:"report_workflow",key:"workflow",scope:"support",fallback:()=>({})},
+  notifications:{domain:"notifications",key:"items",scope:"support",fallback:()=>[]},
+  recovery:{domain:"recovery",key:"last-reset-snapshot",scope:"support",fallback:()=>null},
+  factoryResetRecovery:{domain:"factory_reset_recovery",key:"factory-reset-recovery",scope:"support",fallback:()=>null}
+ });
+ const scopeNames=Object.freeze({accounting:"accounting",projects:"projects",contracts:"contracts",support:"support"});
+ const descriptor=name=>{const item=domains[name];if(!item)throw new Error("Unknown application storage domain: "+name);return item;};
+ const scoped=name=>boundary().createScope(scopeNames[name]);
+ async function initialize(){
+  const e=root.HandymanStorageV263;if(!e)throw new Error("v263 IndexedDB engine is not loaded.");
+  const status=await e.ready();if(!status||status.ok!==true)throw new Error("v263 IndexedDB initialization did not pass.");
+  for(const name of Object.keys(scopeNames))scoped(name);
+  return {ok:true,database:status.database,build:status.build,mode:"indexeddb-only",legacyImport:false,strictDomainBoundary:true};
+ }
+ async function read(name){
+  const d=descriptor(name),value=await scoped(d.scope).get(d.domain,d.key);
+  return value===null?d.fallback():value;
+ }
+ async function readAll(){
+  await initialize();const state={};
+  for(const name of Object.keys(domains))state[name]=await read(name);
+  return {ok:true,emptyDatabase:Object.keys(state).every(name=>{const d=domains[name];return JSON.stringify(state[name])===JSON.stringify(d.fallback());}),state};
+ }
+ async function write(name,value){
+  const d=descriptor(name),result=await scoped(d.scope).put(d.domain,d.key,value);
+  if(!result||result.ok!==true)throw new Error("IndexedDB write was not confirmed: "+name);
+  const verified=await scoped(d.scope).get(d.domain,d.key);
+  if(!(await root.HandymanStorageV263.valuesEqual(verified,value)))throw new Error("IndexedDB write verification failed: "+name);
+  return {...result,verified:true};
+ }
+ async function mutate(name,updater){
+  if(typeof updater!=="function")throw new Error("A synchronous state updater is required.");
+  const d=descriptor(name),result=await scoped(d.scope).mutate(d.domain,d.key,d.fallback(),updater);
+  if(!result||result.ok!==true)throw new Error("IndexedDB mutation was not confirmed: "+name);
+  return {ok:true,state:result.records?result.records[0].value:result.state,updatedAt:result.updatedAt};
+ }
+ async function writeMany(){throw new Error("Multi-domain writes are disabled. Save one independent domain at a time.");}
+ async function reserveInvoiceNumber(minimum){return scoped("accounting").reserveCounter("sequences","invoice-number",minimum||0);}
+ async function backup(name){
+  if(!domains[name])throw new Error("A single application domain name is required for backup.");
+  const d=descriptor(name);return scoped(d.scope).snapshot();
+ }
+ async function restore(name,pkg){
+  if(!domains[name])throw new Error("A single application domain name is required for restore.");
+  const d=descriptor(name);
+  if(pkg.domains.length!==1||pkg.domains[0]!==d.domain)throw new Error("Backup does not belong to the selected domain.");
+  return scoped(d.scope).restore(pkg);
+ }
+ async function health(){return root.HandymanStorageV263.health();}
+ root.HandymanAppStorageV263=Object.freeze({
+  domains:Object.keys(domains),initialize,read,readAll,write,writeMany,mutate,
+  reserveInvoiceNumber,backup,restore,health
+ });
 })(window);
