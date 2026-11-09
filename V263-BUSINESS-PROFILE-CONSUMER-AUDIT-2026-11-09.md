@@ -78,3 +78,10 @@ G. Do not change the production repository or current `index.html` until all con
 - Profile editor still writes Projects LocalStorage: unchanged.
 - Contract, invoice, report, launcher and project print consumers still use legacy profile paths: unchanged.
 - Production cutover: NOT APPROVED / NOT PERFORMED.
+
+## Follow-on implementation — shared consumer bridge
+Added on 2026-11-09:
+- `v263-business-profile-consumers.js`: read-only asynchronous bridge for launcher, contracts, invoices, accounting reports, project receipts, project reports and other exports. All seven consumer types read the same Business Profile controller. The bridge exposes no write, Projects, Accounting or legacy-storage API.
+- `v263-business-profile-consumer-integration-lab.html`: isolated browser test page using synthetic profile data only.
+
+The consumer integration lab is the next user-run verification gate. It does not yet rewrite the real v262 renderers or profile form. The current `index.html` remains unchanged and must not be described as integrated.
