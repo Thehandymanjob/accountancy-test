@@ -3,12 +3,12 @@
 <style>
 :root{color-scheme:light}*{box-sizing:border-box}body{margin:0;padding:18px;background:#f3f5f8;color:#172033;font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:900px;margin:auto}.card{background:#fff;border:1px solid #d9dee8;border-radius:14px;padding:18px;margin:12px 0}h1{font-size:22px;margin:0 0 6px}h2{font-size:17px;margin:0 0 10px}.muted{color:#5d687b}.actions{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}button{border:0;border-radius:9px;padding:12px 16px;background:#173d72;color:white;font-weight:650;font-size:15px}button:disabled{opacity:.5}#run{background:#176b42}.progress{height:10px;background:#e5e9ef;border-radius:20px;overflow:hidden}.bar{height:100%;width:0;background:#176b42;transition:width .15s}ol{padding-left:22px}li{padding:6px 0;border-bottom:1px solid #edf0f4}.pass{color:#137044;font-weight:700}.fail{color:#b42318;font-weight:700}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101828;color:#e7edf7;padding:14px;border-radius:10px;font-size:12px;max-height:320px;overflow:auto}.small{font-size:13px}
 </style></head><body><main class="wrap">
-<div class="card"><h1>v263 Application Integration Lab</h1><div class="muted">Isolated database · synthetic data only · no LocalStorage import · no production app files modified</div><p><b>Database:</b> tha_v263_app_integration_lab_20261109_r2_idb</p><p class="small">Run the complete suite once. Then reload this page in Safari and run the persistence check. Do not use this lab for real business data.</p>
+<div class="card"><h1>v263 Application Integration Lab</h1><div class="muted">Isolated database · synthetic data only · no LocalStorage import · no production app files modified</div><p><b>Database:</b> tha_v263_app_integration_lab_20261109_r3_idb</p><p class="small">Run the complete suite once. Then reload this page in Safari and run the persistence check. Do not use this lab for real business data.</p>
 <div class="actions"><button id="run">Run integrated test suite</button><button id="reload" disabled>Run reload persistence check</button><button id="copy" disabled>Copy report</button></div><div class="progress"><div class="bar" id="bar"></div></div><p id="status" class="muted">Waiting to start.</p></div>
 <div class="card"><h2>Test results</h2><ol id="results"><li>Not run yet.</li></ol></div>
 <div class="card"><h2>Machine-readable report</h2><pre id="report">No report generated.</pre></div>
 </main>
-<script src="storage-idb-v263-app-integration-lab.js?v=263lab2diag1"></script>
+<script src="storage-idb-v263-app-integration-lab.js?v=263lab3"></script>
 <script src="app-storage-v263-v4.js?v=263lab2"></script>
 <script src="v263-accounting-controller-diagnostic-v2.js?v=263lab2"></script>
 <script src="v263-projects-controller.js?v=263lab2"></script>
@@ -17,7 +17,7 @@
 <script src="v263-recovery.js?v=263lab2"></script>
 <script>
 (()=>{'use strict';
-const $=id=>document.getElementById(id),BUILD='THA-263-APP-INTEGRATION-LAB-2',DB='tha_v263_app_integration_lab_20261109_r2_idb';
+const $=id=>document.getElementById(id),BUILD='THA-263-APP-INTEGRATION-LAB-3',DB='tha_v263_app_integration_lab_20261109_r3_idb';
 let report=null,passed=0,done=0,total=0;
 const results=[];
 function paint(){ $('bar').style.width=(total?done/total*100:0)+'%';$('status').textContent='Completed '+done+' of '+total+' checks · '+passed+' passed';$('results').innerHTML=results.map(x=>'<li><span class="'+(x.ok?'pass':'fail')+'">'+(x.ok?'PASS':'FAIL')+'</span> — '+x.name+(x.detail?' <span class="muted">('+String(x.detail).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+')</span>':'')+'</li>').join('');}
