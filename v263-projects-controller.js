@@ -13,7 +13,12 @@
   const state={...value};
   if(!Array.isArray(state.projects)||!Array.isArray(state.workers))throw new Error("Projects state requires projects and workers arrays.");
   for(const key of collections)if(!Array.isArray(state[key]))state[key]=[];
-  if(Object.prototype.hasOwnProperty.call(state,"profile")){\n   const profile=state.profile;\n   const hasProfile=profile&&typeof profile==="object"&&!Array.isArray(profile)&&Object.values(profile).some(value=>value!==""&&value!==null&&value!==undefined);\n   if(hasProfile)throw new Error("Projects state contains legacy Business Profile data. Move and verify it in the separate Business Profile domain before saving Projects.");\n   delete state.profile;\n  }
+  if(Object.prototype.hasOwnProperty.call(state,"profile")){
+   const profile=state.profile;
+   const hasProfile=profile&&typeof profile==="object"&&!Array.isArray(profile)&&Object.values(profile).some(value=>value!==""&&value!==null&&value!==undefined);
+   if(hasProfile)throw new Error("Projects state contains legacy Business Profile data. Move and verify it in the separate Business Profile domain before saving Projects.");
+   delete state.profile;
+  }
   if(!("current" in state))state.current=null;
   if(!("guide" in state))state.guide="en";
   const ids=new Set();
