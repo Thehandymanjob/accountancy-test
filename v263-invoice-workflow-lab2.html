@@ -5,7 +5,7 @@
 <script src="./storage-idb-v263-app-shell-lab.js?v=263app2"></script>
 <script src="./app-storage-v263-v4.js?v=263app2"></script>
 <script src="./v263-accounting-controller-diagnostic-v2.js?v=263app2"></script>
-<script src="./v263-invoice-workflow-v263.js?v=263workflow6"></script>
+<script src="./v263-invoice-workflow-v263.js?v=263workflow7"></script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
@@ -46,6 +46,17 @@ async function run(){
   });
   const id="v263-workflow-lab2-"+Date.now();
   const base={id,customerId:customer.id,customerName:customer.name,date:"2026-11-09",status:"issued",paymentStatus:"unpaid",items:[{description:"Synthetic workflow test",price:300}],qty:1,unitPrice:300,vat:"none",description:"Synthetic workflow lifecycle"};
+  await check("unrelatedIncomeWithSameReferenceIsPreserved",async()=>{
+   const id="v263-unrelated-income-"+Date.now();
+   const x=await HandymanInvoiceWorkflowV263.saveInvoice({id,customerId:customer.id,customerName:customer.name,date:"2026-11-09",status:"issued",items:[{description:"Reference collision test",price:17}],qty:1,unitPrice:17,vat:"none"});
+   const unrelatedId="manual-income-same-ref-"+Date.now();
+   await HandymanAccountingV263.update(state=>{state.entries.push({id:unrelatedId,type:"income",date:"2026-11-09",amount:17,method:"cash",category:"Other income",reference:"Invoice "+x.number,notes:"Manual income entry without invoice link"});return state;});
+   await HandymanInvoiceWorkflowV263.markPaid(id,{date:"2026-11-09",method:"cash",amount:17});
+   await HandymanInvoiceWorkflowV263.markUnpaid(id);
+   const s=await HandymanAccountingV263.load();
+   const kept=s.entries.find(e=>e.id===unrelatedId);
+   return !!kept&&kept.amount===17&&kept.reference==="Invoice "+x.number&&!s.entries.some(e=>e.invoiceId===id);
+  });
   await check("saveIssuedUnpaid",async()=>{const x=await HandymanInvoiceWorkflowV263.saveInvoice(base);invoiceId=x.id;number=x.number;const s=await HandymanAccountingV263.load();const i=s.invoices.find(z=>z.id===invoiceId);return !!i&&i.status==="issued"&&i.paymentStatus==="unpaid"&&!s.entries.some(e=>e.invoiceId===invoiceId)});
   await check("partialPaymentRejected",async()=>{let rejected=false;try{await HandymanInvoiceWorkflowV263.markPaid(invoiceId,{date:"2026-11-09",method:"bank",amount:100})}catch(e){rejected=/full payment only/i.test(e.message)}const s=await HandymanAccountingV263.load();return rejected&&!s.entries.some(e=>e.invoiceId===invoiceId)&&s.invoices.find(i=>i.id===invoiceId).paymentStatus==="unpaid"});
   await check("markPaidCreatesOneFullIncome",async()=>{await HandymanInvoiceWorkflowV263.markPaid(invoiceId,{date:"2026-11-09",method:"bank",amount:300});const s=await HandymanAccountingV263.load();const matches=s.entries.filter(e=>e.type==="income"&&e.invoiceId===invoiceId);return matches.length===1&&matches[0].amount===300&&matches[0].date==="2026-11-09"&&matches[0].method==="bank"});
@@ -56,7 +67,7 @@ async function run(){
   await check("deletedInvoiceCannotBeEdited",async()=>{let rejected=false;const s=await HandymanAccountingV263.load(),i=s.invoices.find(z=>z.id===invoiceId);try{await HandymanInvoiceWorkflowV263.saveInvoice({...i,description:"should not save"})}catch(e){rejected=/deleted invoices cannot be edited/i.test(e.message)}const n=await HandymanAccountingV263.load();return rejected&&n.invoices.find(z=>z.id===invoiceId).description==="Synthetic workflow lifecycle"});
   const finalState=await HandymanAccountingV263.load();result.invoiceId=invoiceId;result.reservedNumber=number;result.counts={invoices:finalState.invoices.length,entries:finalState.entries.length,customers:finalState.customers.length};
  }catch(e){result.fatalError={name:e.name||"Error",message:e.message||String(e)}}
- result.ok=Object.keys(checks).length===13&&Object.values(checks).every(Boolean)&&!result.fatalError;
+ result.ok=Object.keys(checks).length===14&&Object.values(checks).every(Boolean)&&!result.fatalError;
  result.checkedAt=new Date().toISOString();$("report").textContent=JSON.stringify(result,null,2);$("status").textContent=result.ok?"All canonical invoice workflow checks passed.":"One or more checks failed; see report.";return result;
 }
 $("run").addEventListener("click",run);
