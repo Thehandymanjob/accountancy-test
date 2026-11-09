@@ -235,13 +235,31 @@
     });
     assertUnique(prepared, "transaction");
     const stamp = new Date().toISOString();
-    const db = await openDatabase();
+    let db = null, tx = null, stage = "open-database";
     try {
-      const tx = db.transaction([STORE, META], "readwrite");
+      db = await openDatabase();
+      const dbStores = Array.from(db.objectStoreNames);
+      stage = "create-readwrite-transaction";
+      tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
+      stage = "resolve-transaction-object-stores";
       const store = tx.objectStore(STORE);
-      guardWrite(tx, () => { for (const item of prepared) store.put({ ...item, updatedAt: stamp }); }, false);
+      const meta = tx.objectStore(META);
+      stage = "read-reset-lock";
+      const request = meta.get("resetLock");
+      request.onsuccess = () => {
+        const lock = request.result;
+        if (lock && lock.active) { try { tx.abort(); } catch (_) {} return; }
+        try {
+          stage = "queue-multi-domain-writes";
+          for (const item of prepared) store.put({ ...item, updatedAt: stamp });
+        } catch (error) {
+          try { tx.abort(); } catch (_) {}
+        }
+      };
+      stage = "wait-for-transaction-commit";
       await done;
+      stage = "verify-committed-records";
       const verify = await readMany(prepared);
       for (let i = 0; i < prepared.length; i++) {
         if (!(await valuesEqual(verify.records[i].value, prepared[i].value))) {
@@ -249,7 +267,14 @@
         }
       }
       return { ok: true, written: prepared.length, updatedAt: stamp };
-    } finally { db.close(); }
+    } catch (error) {
+      const dbStores = db ? Array.from(db.objectStoreNames) : [];
+      const txStores = tx ? Array.from(tx.objectStoreNames) : [];
+      const detail = error && error.name ? error.name + ": " + error.message : String(error);
+      throw new Error("TRANSACT_DIAGNOSTIC stage=" + stage +
+        " dbStores=[" + dbStores.join(",") + "] txStores=[" + txStores.join(",") +
+        "] preparedDomains=[" + prepared.map(x => x.domain).join(",") + "] cause=" + detail);
+    } finally { if (db) db.close(); }
   }
 
   async function mutateMany(descriptors, updater) {
