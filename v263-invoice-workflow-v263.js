@@ -34,12 +34,19 @@
   state.entries=state.entries.filter(e=>!matches.includes(e));
   state.entries.push(entry);
  }
- async function saveInvoice(invoice,payment){
-  if(!invoice||typeof invoice!=="object"||!invoice.id||!invoice.customerId)throw new Error("Invoice ID and customer ID are required.");
-  const item=clone(invoice);
+ async function saveInvoice(invoice,payment,customer){
+  if(!invoice||typeof invoice!=="object"||!invoice.id)throw new Error("Invoice ID is required.");
+  const item=clone(invoice),newCustomer=customer&&typeof customer==="object"?clone(customer):null;
+  if(!item.customerId&&newCustomer&&newCustomer.id)item.customerId=newCustomer.id;
+  if(!item.customerId)throw new Error("Invoice customer ID is required.");
+  if(payment&&item.status==="draft")throw new Error("Draft invoices cannot be marked paid.");
   if(!Number.isSafeInteger(Number(item.number))||Number(item.number)<1)item.number=await api().reserveInvoiceNumber();
   await api().update(state=>{
-   if(!state.customers.some(c=>String(c.id)===String(item.customerId)))throw new Error("Invoice customer does not exist.");
+   if(!state.customers.some(c=>String(c.id)===String(item.customerId))){
+    if(!newCustomer||String(newCustomer.id)!==String(item.customerId)||!String(newCustomer.name||"").trim())throw new Error("Invoice customer does not exist and no valid new customer was supplied.");
+    if(state.customers.some(c=>String(c.id)===String(newCustomer.id)))throw new Error("New customer ID is already in use.");
+    state.customers.push(newCustomer);
+   }
    const prior=state.invoices.find(i=>String(i.id)===String(item.id));
    if(prior&&Number(prior.number)!==Number(item.number))throw new Error("An existing invoice number cannot be changed.");
    if(state.invoices.some(i=>String(i.id)!==String(item.id)&&Number(i.number)===Number(item.number)))throw new Error("Invoice number is already in use.");
