@@ -157,7 +157,7 @@ async function saveProject(){
  const name=$("projectName").value.trim();if(!name){status("Enter a project name before saving.",true);return}
  const oldId=$("projectId").value;
  const partnerShares=$("shareEnabled").checked?readPartnerShares():[];
- if($("shareEnabled").checked){const total=partnerShares.reduce((n,x)=>n+x.share,0);if(!partnerShares.length||Math.abs(total-100)>0.001){status("Partner and business shares must total exactly 100%.",true);return}}
+ if($("shareEnabled").checked){const total=partnerShares.reduce((n,x)=>n+x.share,0);if(!partnerShares.length||total>100.001){status("Add at least one partner and keep the combined partner share at or below 100%. The business receives the remainder.",true);return}}
  const ownShare=$("shareEnabled").checked?Math.round((100-partnerShares.reduce((n,x)=>n+x.share,0))*100)/100:100;
  const old=oldId?state.projects.find(p=>p.id===oldId):null;
  const item={...(old||{}),id:oldId||id("project"),name,customer:$("customer").value.trim(),address:$("address").value.trim(),notes:$("notes").value.trim(),partnerShares,ownShare,status:old?.status||"open",created:old?.created||new Date().toISOString(),subprojects:clone(old?.subprojects||[]),hasSubprojects:!!old?.hasSubprojects};
