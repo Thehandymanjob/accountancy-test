@@ -91,11 +91,19 @@
   async function capture(){
    await adapter.initialize();
    const status=await engine.health();
-   const registered=typeof adapter.backup==="function"?await adapter.backup():null;
-   if(!registered||!Array.isArray(registered.domains))throw new Error("Application adapter cannot enumerate physical backup domains.");
-   const domains=[...new Set([...registered.domains,...Object.keys(status.counts||{})])].sort();
+   const appDomains=adapter.domains;
+   if(!Array.isArray(appDomains)||!appDomains.length)throw new Error("Application adapter domain registry is unavailable.");
+   // Explicit physical IndexedDB stores. Never ask the adapter for a cross-domain backup:
+   // the adapter deliberately permits only one domain per backup call.
+   const domains=[
+    "accounting","projects","contracts","business_profile","sequences",
+    "preferences","preference_meta","diagnostics","reports","report_notifications",
+    "report_settings","report_workflow","notifications","recovery","factory_reset_recovery"
+   ];
    const snapshot=await engine.snapshot(domains);
-   if(snapshot.records.length!==status.totalRecords)throw new Error("Backup completeness check failed: database record count changed during capture.");
+   if(!snapshot||!Array.isArray(snapshot.records)||snapshot.records.length!==status.totalRecords)throw new Error("Backup completeness check failed: database record count changed during capture.");
+   const unexpected=snapshot.records.some(row=>!domains.includes(row.domain));
+   if(unexpected)throw new Error("Backup contains a record outside the registered v264 application domains.");
    return {format:SNAPSHOT_FORMAT,database:DB,createdAt:snapshot.createdAt,domains:snapshot.domains,records:snapshot.records};
   }
   async function packageSnapshot(snapshot){
@@ -186,5 +194,5 @@
   return Object.freeze({createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
  }
  const engine=()=>root.HandymanStorageV264,adapter=()=>root.HandymanAppStorageV264;
- root.HandymanRecoveryV264=Object.freeze({build:"THA-263-RECOVERY-1",create:()=>create(engine(),adapter()),createWithDependencies:create});
+ root.HandymanRecoveryV264=Object.freeze({build:"THA-264-RECOVERY-2",create:()=>create(engine(),adapter()),createWithDependencies:create});
 })(window);
