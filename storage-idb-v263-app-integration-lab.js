@@ -6,11 +6,11 @@
 (function (root) {
   "use strict";
 
-  const DB_NAME = "tha_v263_app_integration_lab_20261109_r3_idb";
+  const DB_NAME = "tha_v263_app_integration_lab_20261109_r4_idb";
   const DB_VERSION = 2;
   const STORE = "records";
   const META = "metadata";
-  const BUILD = "THA-263-APP-INTEGRATION-LAB-3";
+  const BUILD = "THA-263-APP-INTEGRATION-LAB-4";
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
