@@ -42,11 +42,19 @@
   if(payment&&item.status==="draft")throw new Error("Draft invoices cannot be marked paid.");
   if(!Number.isSafeInteger(Number(item.number))||Number(item.number)<1)item.number=await api().reserveInvoiceNumber();
   await api().update(state=>{
-   if(!state.customers.some(c=>String(c.id)===String(item.customerId))){
-    if(!newCustomer||String(newCustomer.id)!==String(item.customerId)||!String(newCustomer.name||"").trim())throw new Error("Invoice customer does not exist and no valid new customer was supplied.");
-    if(state.customers.some(c=>String(c.id)===String(newCustomer.id)))throw new Error("New customer ID is already in use.");
-    state.customers.push(newCustomer);
+   let customer=state.customers.find(c=>String(c.id)===String(item.customerId));
+   if(!customer&&newCustomer){
+    const norm=v=>String(v||"").trim().replace(/\\s+/g," ").toLocaleLowerCase();
+    const name=norm(newCustomer.name),phone=norm(newCustomer.phone),address=norm(newCustomer.address);
+    if(name)customer=state.customers.find(c=>norm(c.name)===name&&((phone&&norm(c.phone)===phone)||(address&&norm(c.address)===address)||(!phone&&!address)))||null;
+    if(customer)item.customerId=customer.id;
+    else{
+     if(String(newCustomer.id)!==String(item.customerId)||!name)throw new Error("Invoice customer does not exist and no valid new customer was supplied.");
+     if(state.customers.some(c=>String(c.id)===String(newCustomer.id)))throw new Error("New customer ID is already in use.");
+     state.customers.push(newCustomer);customer=newCustomer;
+    }
    }
+   if(!customer)throw new Error("Invoice customer does not exist and no valid new customer was supplied.");
    const prior=state.invoices.find(i=>String(i.id)===String(item.id));
    if(prior&&Number(prior.number)!==Number(item.number))throw new Error("An existing invoice number cannot be changed.");
    if(state.invoices.some(i=>String(i.id)!==String(item.id)&&Number(i.number)===Number(item.number)))throw new Error("Invoice number is already in use.");
