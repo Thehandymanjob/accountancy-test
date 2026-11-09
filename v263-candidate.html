@@ -27,10 +27,10 @@ small{color:#aaa}
 </div>
 <div class="panel">
  <h2>Business Profile migration</h2>
- <p>First inspect the legacy Projects profile. Migration is a separate action and is never automatic.</p>
+ <p>This checks only the Projects data already inside the new, isolated v263 database. It does not inspect the old app or production LocalStorage. Legacy migration requires a separate verified export/import route.</p>
  <div id="profileStatus" class="status">Not inspected</div>
- <button id="inspect">Inspect legacy profile (read-only)</button>
- <button id="migrate" disabled>Run verified profile migration</button>
+ <button id="inspect">Inspect v263 Projects profile (read-only)</button>
+ <button id="migrate" disabled>Move candidate profile into Business Profile</button>
  <pre id="profileReport">No profile operation has been run.</pre>
 </div>
 <p><small>Projects and Accounting remain separate. No combined backup or cross-domain transfer is available on this candidate page.</small></p>
