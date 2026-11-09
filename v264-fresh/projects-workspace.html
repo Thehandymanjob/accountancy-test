@@ -142,8 +142,21 @@ function updateShareValidation(){
 }
 function projectNetResult(p){
  const ledgers=[p,...(Array.isArray(p.subprojects)?p.subprojects:[])];
- const sum=(l,keys)=>keys.reduce((n,k)=>n+(Array.isArray(l[k])?l[k].reduce((a,x)=>a+(Number(x.amount)||0),0):0),0);
- return ledgers.reduce((n,l)=>n+sum(l,["income"])-sum(l,["expenses","materials","tools","food","wages","contractors"]),0);
+ const totals={income:0,costs:0};
+ for(const key of ["income","expenses","materials","tools","food","wages","contractors"]){
+  const seen=new Set();
+  for(const ledger of ledgers){
+   for(const record of Array.isArray(ledger[key])?ledger[key]:[]){
+    const recordId=record?.id?String(record.id):"";
+    if(recordId&&seen.has(recordId))continue;
+    if(recordId)seen.add(recordId);
+    const amount=Number(record?.amount);
+    if(!Number.isFinite(amount))continue;
+    if(key==="income")totals.income+=amount;else totals.costs+=amount;
+   }
+  }
+ }
+ return Math.round((totals.income-totals.costs)*100)/100;
 }
 function renderProjectShares(p){
  const rows=Array.isArray(p.partnerShares)?p.partnerShares:[];
