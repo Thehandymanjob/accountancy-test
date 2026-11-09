@@ -85,3 +85,9 @@ Added on 2026-11-09:
 - `v263-business-profile-consumer-integration-lab.html`: isolated browser test page using synthetic profile data only.
 
 The consumer integration lab is the next user-run verification gate. It does not yet rewrite the real v262 renderers or profile form. The current `index.html` remains unchanged and must not be described as integrated.
+
+## Consumer bridge verification and migration safety hardening
+- User-provided consumer integration report: PASS, 11/11 checks. Seven consumers read the same profile, profile updates are visible on next read, bridge is read-only, and only the `business_profile` domain is persisted.
+- Updated `v263-business-profile-controller.js`: explicit legacy import is now safe against silent overwrite. On an empty profile store, the supplied legacy object is imported and verified. Repeating the identical import is idempotent. If a different profile already exists, import is rejected with a conflict error; it does not overwrite the current profile.
+- Added an isolated migration safety lab with its own fresh database, separate adapter and synthetic-only profile: `v263-business-profile-migration-safety-lab.html`. It checks first import, repeat import, conflict rejection, preservation of current logo/data, profile-only backup/restore, mixed-domain rejection, invalid input rejection and database health.
+- This safety gate is not yet user-run. The real v262 editor, backup/restore and document renderers remain unchanged; production cutover is still not approved.
