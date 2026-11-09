@@ -3,7 +3,7 @@
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f2f4f7;color:#172033;font:16px -apple-system,BlinkMacSystemFont,Arial,sans-serif;padding:18px;line-height:1.5}.wrap{max-width:760px;margin:auto}.card{background:#fff;border:1px solid #dce1e8;border-radius:14px;padding:18px;margin:14px 0}h1{font-size:23px;margin:0 0 6px}h2{font-size:18px;margin:0 0 10px}.muted{color:#596579;font-size:14px}.status{padding:12px;border-radius:9px;background:#eef2f7;white-space:pre-wrap;overflow-wrap:anywhere;font:13px ui-monospace,monospace}button{width:100%;border:0;border-radius:9px;padding:14px;background:#173d68;color:white;font-size:16px;font-weight:700;margin:7px 0}button.secondary{background:#596579}button:disabled{opacity:.55}#report{min-height:160px}ul{padding-left:20px}
 </style></head><body><main class="wrap">
-<section class="card"><h1>The Handyman Accountancy — v263</h1><div class="muted">Independent IndexedDB application-shell laboratory · build THA-263-APP-SHELL-LAB-2</div><p><strong>Important:</strong> This page is separate from the live app. It uses a new, dedicated database and synthetic test records only. It does not read or modify LocalStorage, the existing app database, production files, or your backups.</p><div id="dbstatus" class="status">Waiting to initialise…</div></section>
+<section class="card"><h1>The Handyman Accountancy — v263</h1><div class="muted">Independent IndexedDB application-shell laboratory · build THA-263-APP-SHELL-LAB-3</div><p><strong>Important:</strong> This page is separate from the live app. It uses a new, dedicated database and synthetic test records only. It does not read or modify LocalStorage, the existing app database, production files, or your backups.</p><div id="dbstatus" class="status">Waiting to initialise…</div></section>
 <section class="card"><h2>Application-domain integration test</h2><p class="muted">Tests the same logical domains and asynchronous controllers intended for the v263 migration: accounting, projects, contracts, image/blob persistence, and backup/restore.</p><button id="run">Run isolated app-shell test</button><button id="copy" class="secondary" disabled>Copy full report</button><div id="report" class="status">No test has been run yet.</div></section>
 <section class="card"><h2>Test scope</h2><ul><li>Initialise the isolated IndexedDB database.</li><li>Create/read/update synthetic accounting data.</li><li>Create a project and sub-project with a Blob image attachment.</li><li>Create and reload a contract record.</li><li>Snapshot all 14 application domains and restore the snapshot.</li><li>Verify that the synthetic records and binary image survive restore.</li><li>Confirm database identity and no legacy storage access.</li></ul></section>
 </main>
@@ -23,7 +23,7 @@ function line(name,ok,detail){return {check:name,ok:!!ok,detail:detail||""};}
 async function run(){
  $("run").disabled=true;$("copy").disabled=true;
  const checks=[];
- const report={title:"THA v263 Isolated App-Shell Integration Report",build:"THA-263-APP-SHELL-LAB-1",createdAt:new Date().toISOString(),database:"tha_v263_app_shell_lab_20261109_idb",syntheticDataOnly:true,legacyStorageAccess:false,productionAccess:false,checks};
+ const report={title:"THA v263 Isolated App-Shell Integration Report",build:"THA-263-APP-SHELL-LAB-3",createdAt:new Date().toISOString(),database:"tha_v263_app_shell_lab_20261109_idb",syntheticDataOnly:true,legacyStorageAccess:false,productionAccess:false,checks};
  try{
   const init=await HandymanAppStorageV263.initialize();
   checks.push(line("IndexedDB initialisation",init.ok===true,JSON.stringify(init)));
@@ -48,6 +48,7 @@ async function run(){
   await HandymanProjectsV263.initialize();
   const projectId="v263-shell-project-001";
   const imageBlob=new Blob(["synthetic-project-photo-v263"],{type:"image/jpeg"});
+  await HandymanProjectsV263.update(state=>{state.projects=state.projects.filter(x=>x.id!==projectId);return state;});
   await HandymanProjectsV263.addProject({id:projectId,name:"Synthetic Shell Project",status:"active",photo:imageBlob,receipts:[{id:"receipt-1",image:new Blob(["synthetic-receipt-v263"],{type:"image/jpeg"})}],income:[],expenses:[],subprojects:[]});
   await HandymanProjectsV263.addSubproject(projectId,{id:"v263-shell-subproject-001",name:"Synthetic Extra Job",income:[],expenses:[]});
   const pRead=await HandymanProjectsV263.load();
@@ -119,7 +120,7 @@ async function run(){
   report.ok=checks.every(x=>x.ok);
   report.totalChecks=checks.length;report.passed=checks.filter(x=>x.ok).length;report.failed=checks.filter(x=>!x.ok).length;
  }catch(error){
-  report.ok=false;report.error=String(error&&error.stack||error);report.totalChecks=checks.length;report.passed=checks.filter(x=>x.ok).length;report.failed=checks.filter(x=>!x.ok).length;
+  report.ok=false;report.errorName=String(error&&error.name||"Error");report.errorMessage=String(error&&error.message||error);report.errorStack=String(error&&error.stack||"");report.totalChecks=checks.length;report.passed=checks.filter(x=>x.ok).length;report.failed=checks.filter(x=>!x.ok).length+1;
  }
  lastReport=report;$("report").textContent=JSON.stringify(report,null,2);$("copy").disabled=false;
  $("dbstatus").textContent="Database: "+report.database+"\nResult: "+(report.ok?"PASS":"FAIL")+" · "+report.passed+"/"+report.totalChecks+" checks";
