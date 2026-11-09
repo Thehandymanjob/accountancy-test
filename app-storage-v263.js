@@ -9,6 +9,7 @@
   accounting:{domain:"accounting",key:"state",scope:"accounting",fallback:()=>({entries:[],customers:[],invoices:[],customExpenseCategories:[],settings:{businessName:"",ownerName:""}})},
   projects:{domain:"projects",key:"state",scope:"projects",fallback:()=>({projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[],profile:{},current:null,guide:"en"})},
   contracts:{domain:"contracts",key:"state",scope:"contracts",fallback:()=>({contracts:[]})},
+  businessProfile:{domain:"business_profile",key:"identity",scope:"businessProfile",fallback:()=>({businessName:"",ownerName:"",phone:"",email:"",address:"",logo:"",paymentDetails:""})},
   sequences:{domain:"sequences",key:"invoice-number",scope:"accounting",fallback:()=>0},
   preferences:{domain:"preferences",key:"language",scope:"support",fallback:()=>"en"},
   preferenceMeta:{domain:"preference_meta",key:"language-pref-version",scope:"support",fallback:()=>""},
@@ -21,7 +22,7 @@
   recovery:{domain:"recovery",key:"last-reset-snapshot",scope:"support",fallback:()=>null},
   factoryResetRecovery:{domain:"factory_reset_recovery",key:"factory-reset-recovery",scope:"support",fallback:()=>null}
  });
- const scopeNames=Object.freeze({accounting:"accounting",accountingState:"accountingState",invoiceSequence:"invoiceSequence",projects:"projects",contracts:"contracts",support:"support"});
+ const scopeNames=Object.freeze({accounting:"accounting",accountingState:"accountingState",invoiceSequence:"invoiceSequence",projects:"projects",contracts:"contracts",businessProfile:"businessProfile",support:"support"});
  const descriptor=name=>{const item=domains[name];if(!item)throw new Error("Unknown application storage domain: "+name);return item;};
  const scoped=name=>boundary().createScope(scopeNames[name]);
  async function initialize(){
