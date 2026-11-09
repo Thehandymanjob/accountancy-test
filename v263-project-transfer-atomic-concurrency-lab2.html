@@ -11,15 +11,15 @@ body{margin:0;padding:16px;background:#f3f5f8;color:#172235;font:16px -apple-sys
 <script>
 /* Dedicated copy of the isolated engine with a unique database name. */
 </script>
-<script src="./storage-idb-v263-transfer-atomic-v2-engine.js?build=atomicv2"></script>
+<script src="./storage-idb-v263-transfer-atomic-v3-engine.js?build=atomicv3"></script>
 <script src="./app-storage-v263-v4.js?build=atomicv2"></script>
 <script src="./v263-projects-controller.js?build=atomicv2"></script>
 <script src="./v263-project-accounting-transfer-atomic-v2.js?build=atomicv2"></script>
 <script>
 'use strict';
 const $=id=>document.getElementById(id);
-const DB="tha_v263_transfer_concurrency_20261109_idb";
-const report={build:"THA-263-TRANSFER-ATOMIC-CONCURRENCY-LAB-2",database:DB,mode:"indexeddb-only",legacyImport:false,productionTouched:false,localStorageAccess:false,oldDatabaseOpened:false,checks:{},observations:{},errors:{},testedAt:null};
+const DB="tha_v263_transfer_atomic_v3_20261109_idb";
+const report={build:"THA-263-TRANSFER-ATOMIC-CONCURRENCY-LAB-3",database:DB,mode:"indexeddb-only",legacyImport:false,productionTouched:false,localStorageAccess:false,oldDatabaseOpened:false,checks:{},observations:{},errors:{},testedAt:null};
 const check=(name,value,detail)=>{report.checks[name]=!!value;if(detail!==undefined)report.observations[name]=detail;};
 async function run(){
  $("run").disabled=true;$("status").textContent="Running atomic concurrency tests…";
