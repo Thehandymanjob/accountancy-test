@@ -48,6 +48,11 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <label>Customer</label><input id="customer" maxlength="160">
 <label>Address</label><input id="address" maxlength="300">
 <label>Notes</label><textarea id="notes"></textarea>
+<div class="item"><h3>Project profit sharing</h3><p class="muted">Optional allocation of the project's net result. The percentages must total 100%. This is an informational Projects-only calculation; it does not create payments or Accounting entries.</p>
+<label><input id="shareEnabled" type="checkbox" style="width:auto"> Enable partner sharing</label>
+<div id="partnerShareRows"></div>
+<button type="button" class="secondary" id="addPartnerShare">Add partner</button>
+<div id="shareValidation" class="muted">Your business share: 100%</div></div>
 <div class="row"><button id="saveProject">Save project</button><button class="secondary" id="cancelEdit">Cancel</button></div>
 </section>
 <section id="detailView" class="hidden">
@@ -55,6 +60,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <div class="row"><button id="editCurrent">Edit project</button><button class="secondary" id="addSubproject">Add sub-project</button><button class="secondary hidden" id="backToProject">Back to main project</button><button id="toggleComplete">Mark complete</button><button class="danger" id="deleteCurrent">Delete project</button></div>
 <div id="subprojectForm" class="item hidden"><h3>New sub-project</h3><label>Sub-project name</label><input id="subprojectName" maxlength="160"><label>Agreed price (£)</label><input id="subprojectPrice" type="number" min="0" step="0.01" value="0"><button id="saveSubproject">Save sub-project</button><button class="secondary" id="cancelSubproject">Cancel</button></div>
 <div id="subprojectList"></div>
+<div id="shareSummary" class="item"></div>
 <div id="ledgerEditor">
 <h3>Project ledger</h3>
 <div class="row"><div><label>Record type</label><select id="recordType"><option value="income">Income</option><option value="expenses">Expense</option></select></div><div><label>Amount (£)</label><input id="recordAmount" type="number" min="0.01" step="0.01"></div></div>
@@ -110,12 +116,51 @@ async function saveDirectoryRecord(){
  await refresh();renderDirectories();status("Directory record saved in the Projects domain.");
 }
 function show(view){["listView","editView","detailView"].forEach(x=>$(x).classList.toggle("hidden",x!==view));$("directoryView").classList.toggle("hidden",view!=="listView");}
-function resetForm(p){$("projectId").value=p?.id||"";$("projectName").value=p?.name||"";$("customer").value=p?.customer||"";$("address").value=p?.address||"";$("notes").value=p?.notes||"";$("formTitle").textContent=p?"Edit project":"New project";}
+function resetForm(p){$("projectId").value=p?.id||"";$("projectName").value=p?.name||"";$("customer").value=p?.customer||"";$("address").value=p?.address||"";$("notes").value=p?.notes||"";$("formTitle").textContent=p?"Edit project":"New project";$("shareEnabled").checked=!!(p?.partnerShares?.length);$("partnerShareRows").innerHTML="";(p?.partnerShares||[]).forEach(x=>addPartnerShareRow(x.partnerId,x.share));updateShareValidation();}
+function addPartnerShareRow(partnerId="",share=""){
+ const active=(state?.partners||[]).filter(x=>x.active!==false),wrap=document.createElement("div");wrap.className="row item";
+ const select=document.createElement("select");select.innerHTML='<option value="">Select partner</option>'+active.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join("");select.value=partnerId||"";
+ const pct=document.createElement("input");pct.type="number";pct.min="0.01";pct.max="100";pct.step="0.01";pct.placeholder="Share %";pct.value=share??"";
+ const remove=document.createElement("button");remove.type="button";remove.className="danger";remove.textContent="Remove";
+ select.setAttribute("aria-label","Partner");pct.setAttribute("aria-label","Partner share percentage");
+ select.addEventListener("change",updateShareValidation);pct.addEventListener("input",updateShareValidation);
+ remove.addEventListener("click",()=>{wrap.remove();updateShareValidation()});
+ const a=document.createElement("div"),b=document.createElement("div");a.append(select);b.append(pct);wrap.append(a,b,remove);$("partnerShareRows").append(wrap);updateShareValidation();
+}
+function readPartnerShares(){
+ const rows=[...$("partnerShareRows").children].map(row=>({partnerId:row.querySelector("select").value,share:Number(row.querySelector("input").value)}));
+ if(rows.some(x=>!x.partnerId||!Number.isFinite(x.share)||x.share<=0||x.share>100))throw new Error("Select a partner and enter a percentage above 0 and up to 100.");
+ if(new Set(rows.map(x=>x.partnerId)).size!==rows.length)throw new Error("A partner can only be added once to a project.");
+ return rows;
+}
+function updateShareValidation(){
+ const enabled=$("shareEnabled").checked; $("partnerShareRows").classList.toggle("hidden",!enabled);$("addPartnerShare").classList.toggle("hidden",!enabled);
+ let sum=0;for(const row of $("partnerShareRows").children)sum+=Number(row.querySelector("input").value)||0;
+ const own=Math.round((100-sum)*100)/100;
+ $("shareValidation").textContent=enabled?("Partner shares: "+sum.toFixed(2)+"% · Your business share: "+own.toFixed(2)+"% · Total: "+(sum+own).toFixed(2)+"%"): "Your business share: 100%";
+ $("shareValidation").style.color=enabled&&(sum<=0||sum>100)?"#b42318":"#64748b";
+}
+function projectNetResult(p){
+ const ledgers=[p,...(Array.isArray(p.subprojects)?p.subprojects:[])];
+ const sum=(l,keys)=>keys.reduce((n,k)=>n+(Array.isArray(l[k])?l[k].reduce((a,x)=>a+(Number(x.amount)||0),0):0),0);
+ return ledgers.reduce((n,l)=>n+sum(l,["income"])-sum(l,["expenses","materials","tools","food","wages","contractors"]),0);
+}
+function renderProjectShares(p){
+ const rows=Array.isArray(p.partnerShares)?p.partnerShares:[];
+ const result=projectNetResult(p);
+ const own=Number(p.ownShare??(100-rows.reduce((n,x)=>n+(Number(x.share)||0),0)));
+ const parts=[{name:"Your business",share:own},...rows.map(x=>({name:(state.partners||[]).find(y=>String(y.id)===String(x.partnerId))?.name||"Partner (record unavailable)",share:Number(x.share)||0}))];
+ $("shareSummary").innerHTML='<h3>Net profit allocation</h3><p class="muted">Based on recorded project income minus recorded project costs, including sub-project ledgers. Informational only; no Accounting entries or payments are created.</p><div class="item"><b>Current project result: '+money(result)+'</b></div>'+parts.map(x=>'<div class="row item"><div><b>'+esc(x.name)+'</b><div class="muted">'+x.share.toFixed(2)+'%</div></div><div><b>'+money(result*x.share/100)+'</b></div></div>').join("");
+}
 function editProject(p){resetForm(p);show("editView");}
 async function saveProject(){
  const name=$("projectName").value.trim();if(!name){status("Enter a project name before saving.",true);return}
  const oldId=$("projectId").value;
- const item={id:oldId||id("project"),name,customer:$("customer").value.trim(),address:$("address").value.trim(),notes:$("notes").value.trim(),status:oldId?(state.projects.find(p=>p.id===oldId)?.status||"open"):"open",created:oldId?(state.projects.find(p=>p.id===oldId)?.created||new Date().toISOString()):new Date().toISOString(),subprojects:oldId?clone(state.projects.find(p=>p.id===oldId)?.subprojects||[]):[],hasSubprojects:oldId?!!state.projects.find(p=>p.id===oldId)?.hasSubprojects:false};
+ const partnerShares=$("shareEnabled").checked?readPartnerShares():[];
+ if($("shareEnabled").checked){const total=partnerShares.reduce((n,x)=>n+x.share,0);if(!partnerShares.length||Math.abs(total-100)>0.001){status("Partner and business shares must total exactly 100%.",true);return}}
+ const ownShare=$("shareEnabled").checked?Math.round((100-partnerShares.reduce((n,x)=>n+x.share,0))*100)/100:100;
+ const old=oldId?state.projects.find(p=>p.id===oldId):null;
+ const item={...(old||{}),id:oldId||id("project"),name,customer:$("customer").value.trim(),address:$("address").value.trim(),notes:$("notes").value.trim(),partnerShares,ownShare,status:old?.status||"open",created:old?.created||new Date().toISOString(),subprojects:clone(old?.subprojects||[]),hasSubprojects:!!old?.hasSubprojects};
  if(oldId)await api().updateProject(oldId,item);else await api().addProject(item);
  await refresh();show("listView");status("Project saved and verified in the Projects domain.");
 }
@@ -130,6 +175,7 @@ function renderDetail(){
  $("deleteCurrent").classList.toggle("hidden",!!currentSubprojectId);
  $("toggleComplete").classList.toggle("hidden",!!currentSubprojectId);
  $("toggleComplete").textContent=p.status==="complete"?"Reopen project":"Mark complete";
+ renderProjectShares(p);
  const subs=p.subprojects||[];
  $("subprojectList").classList.toggle("hidden",!!currentSubprojectId);
  $("subprojectList").innerHTML='<h3>Sub-projects</h3>'+ (subs.length?subs.map(s=>'<div class="item"><b>'+esc(s.name)+'</b><div class="muted">Agreed price: '+money(s.price)+'</div><button data-sub="'+esc(s.id)+'">Open ledger</button><button class="danger" data-delete-sub="'+esc(s.id)+'">Delete</button></div>').join(""):'<p class="muted">No sub-projects.</p>');
@@ -183,6 +229,7 @@ async function start(){
 $("directoryKind").onchange=()=>{ $("directoryId").value="";$("directoryName").value="";$("directoryPhone").value="";$("directoryEmail").value="";$("directoryNotes").value="";renderDirectories();};
 $("saveDirectory").onclick=()=>saveDirectoryRecord().catch(e=>status(e.message,true));
 $("cancelDirectory").onclick=()=>{["directoryId","directoryName","directoryPhone","directoryEmail","directoryNotes"].forEach(x=>$(x).value="");};
+$("shareEnabled").onchange=updateShareValidation;$("addPartnerShare").onclick=()=>addPartnerShareRow();
 $("newProject").onclick=()=>editProject(null);$("saveProject").onclick=()=>saveProject().catch(e=>status(e.message,true));$("cancelEdit").onclick=()=>show("listView");
 $("backToList").onclick=()=>{currentProjectId=null;currentSubprojectId=null;show("listView")};
 $("editCurrent").onclick=()=>editProject(current());$("addSubproject").onclick=()=>addSubproject().catch(e=>status(e.message,true));
