@@ -60,8 +60,8 @@ async function run(){
   const cOK=!!c&&c.attachment instanceof Blob&&c.attachment.size===contract.attachment.size;
   checks.push(line("Contract and PDF attachment persistence",cOK,c?"contract and PDF Blob verified":"contract missing"));
   const snapshot=await HandymanAppStorageV263.backup();
-  const snapshotOK=!!snapshot&&Array.isArray(snapshot.records)&&snapshot.records.length===14;
-  checks.push(line("Fourteen-domain snapshot",snapshotOK,"snapshot records="+(snapshot.records?snapshot.records.length:"invalid")));
+  const snapshotOK=!!snapshot&&Array.isArray(snapshot.domains)&&snapshot.domains.length===14&&Array.isArray(snapshot.records)&&snapshot.records.some(x=>x.domain==="accounting")&&snapshot.records.some(x=>x.domain==="projects")&&snapshot.records.some(x=>x.domain==="contracts");
+  checks.push(line("Fourteen-domain snapshot scope",snapshotOK,"domains="+(snapshot.domains?snapshot.domains.length:"invalid")+"; populated records="+(snapshot.records?snapshot.records.length:"invalid")));
   await HandymanAppStorageV263.mutate("accounting",s=>({...s,entries:[...(s.entries||[]),{id:"post-snapshot-marker",type:"expense",amount:9}]}));
   const restore=await HandymanAppStorageV263.restore(snapshot);
   const restoredAccounting=await HandymanAppStorageV263.read("accounting");
