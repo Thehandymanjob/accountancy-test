@@ -294,7 +294,7 @@
         if (lock && lock.active) { try { tx.abort(); } catch (_) {} return; }
         try {
           stage = "queue-multi-domain-writes";
-          for (const item of prepared) store.put({ ...item, updatedAt: stamp });
+          for (const item of prepared) store.put({ id: item.id, domain: item.domain, key: item.key, value: item.value, updatedAt: stamp });
         } catch (error) {
           try { tx.abort(); } catch (_) {}
         }
@@ -462,7 +462,7 @@
           const existing = request.result || [];
           for (const row of existing) if (domains.includes(row.domain)) store.delete(row.id);
           const stamp = new Date().toISOString();
-          for (const row of prepared) store.put({ ...row, updatedAt: stamp });
+          for (const row of prepared) store.put({ id: row.id, domain: row.domain, key: row.key, value: row.value, updatedAt: stamp });
           tx.objectStore(META).put({key:"resetLock",active:false,updatedAt:stamp});
         } catch (error) {
           mutationError = error;
