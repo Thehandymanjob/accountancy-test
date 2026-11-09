@@ -21,7 +21,7 @@
   recovery:{domain:"recovery",key:"last-reset-snapshot",scope:"support",fallback:()=>null},
   factoryResetRecovery:{domain:"factory_reset_recovery",key:"factory-reset-recovery",scope:"support",fallback:()=>null}
  });
- const scopeNames=Object.freeze({accounting:"accounting",projects:"projects",contracts:"contracts",support:"support"});
+ const scopeNames=Object.freeze({accounting:"accounting",accountingState:"accountingState",invoiceSequence:"invoiceSequence",projects:"projects",contracts:"contracts",support:"support"});
  const descriptor=name=>{const item=domains[name];if(!item)throw new Error("Unknown application storage domain: "+name);return item;};
  const scoped=name=>boundary().createScope(scopeNames[name]);
  async function initialize(){
@@ -56,7 +56,7 @@
  async function reserveInvoiceNumber(minimum){return scoped("accounting").reserveCounter("sequences","invoice-number",minimum||0);}
  async function backup(name){
   if(!domains[name])throw new Error("A single application domain name is required for backup.");
-  const d=descriptor(name);return scoped(d.scope).snapshot();
+  const d=descriptor(name);const backupScope=d.domain==="sequences"?"invoiceSequence":d.scope==="accounting"?"accountingState":d.scope;return scoped(backupScope).snapshot();
  }
  async function restore(name,pkg){
   if(!domains[name])throw new Error("A single application domain name is required for restore.");
