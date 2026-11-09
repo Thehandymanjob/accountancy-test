@@ -60,9 +60,11 @@
  }
  async function restore(name,pkg){
   if(!domains[name])throw new Error("A single application domain name is required for restore.");
+  if(!pkg||!Array.isArray(pkg.domains))throw new Error("Invalid scoped backup package.");
   const d=descriptor(name);
   if(pkg.domains.length!==1||pkg.domains[0]!==d.domain)throw new Error("Backup does not belong to the selected domain.");
-  return scoped(d.scope).restore(pkg);
+  const backupScope=d.domain==="sequences"?"invoiceSequence":d.scope==="accounting"?"accountingState":d.scope;
+  return scoped(backupScope).restore(pkg);
  }
  async function health(){return root.HandymanStorageV263.health();}
  root.HandymanAppStorageV263=Object.freeze({
