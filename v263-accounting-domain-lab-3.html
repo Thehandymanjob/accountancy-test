@@ -77,9 +77,13 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f2f5f9;border:1px so
    state=await HandymanAccountingV263.load();const entry=state.entries.find(x=>x.id===entryId);
    check("Entry edit preserves stable ID and unknown fields",!!entry&&entry.id===entryId&&entry.amount===9&&entry.customAudit?.tag==="keep-me","idPreserved="+(entry?.id===entryId)+"; amount="+entry?.amount+"; customField="+entry?.customAudit?.tag);
    
+   await HandymanInvoiceWorkflowV263.markPaid(invoiceId,{date:"2026-11-09",method:"bank",amount:275});
+   state=await HandymanAccountingV263.load();
+   const linkedBefore=state.entries.filter(x=>x.invoiceId===invoiceId);
    const linkedDelete=await expectReject(()=>HandymanAccountingV263.deleteEntry("invoice-income-"+invoiceId),/invoice-linked/i);
-   check("Direct deletion of invoice-linked income is blocked",linkedDelete.rejected,"rejected="+linkedDelete.rejected+"; message="+linkedDelete.message);
-   
+   state=await HandymanAccountingV263.load();
+   const linkedAfter=state.entries.filter(x=>x.invoiceId===invoiceId);
+   check("Direct deletion of invoice-linked income is blocked",linkedBefore.length===1&&linkedDelete.rejected&&linkedAfter.length===1,"linkedBefore="+linkedBefore.length+"; rejected="+linkedDelete.rejected+"; linkedAfter="+linkedAfter.length+"; message="+linkedDelete.message);   
    const health=await HandymanAppStorageV263.health();
    check("Final dedicated database health",health.ok&&health.database===report.database&&!health.resetLocked,"healthy="+health.ok+"; database="+health.database+"; resetLocked="+health.resetLocked);
    report.ok=checks.every(x=>x.ok);report.totalChecks=checks.length;report.passed=checks.filter(x=>x.ok).length;report.failed=checks.filter(x=>!x.ok).length;report.health=health;
