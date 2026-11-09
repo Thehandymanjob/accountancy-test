@@ -4,7 +4,7 @@
 */
 (function(root){
  "use strict";
- const BUILD="THA-263-CONTRACTS-1";
+ const BUILD="THA-264-CONTRACTS-2";
  const storage=()=>{const s=root.HandymanAppStorageV264;if(!s)throw new Error("v264 application storage adapter is not loaded.");return s;};
  const clone=value=>{if(typeof root.structuredClone==="function")return root.structuredClone(value);throw new Error("This browser must support structuredClone for safe contract persistence.");};
  function normalize(value){

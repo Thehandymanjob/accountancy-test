@@ -54,7 +54,7 @@
   });
  }
  root.HandymanV264DomainBoundary=Object.freeze({
-  build:"THA-263-STRICT-DOMAIN-BOUNDARY-1",
+  build:"THA-264-STRICT-DOMAIN-BOUNDARY-2",
   createScope,
   scopes:Object.keys(DOMAINS)
  });

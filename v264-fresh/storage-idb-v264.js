@@ -10,7 +10,8 @@
   const DB_VERSION = 1;
   const STORE = "records";
   const META = "metadata";
-  const BUILD = "THA-264-FRESH-IDB-RESET-GUARD-1";
+  const BUILD = "THA-264-FRESH-IDB-RECOVERY-GUARD-2";
+  const RECOVERY_DOMAINS = Object.freeze(["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"].sort());
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
@@ -381,6 +382,7 @@
         !Array.isArray(packageValue.records)) throw new Error("Invalid v264 IndexedDB backup package.");
     const domains = [...new Set(packageValue.domains)];
     if (domains.length !== packageValue.domains.length || domains.some(x => !validDomain(x))) throw new Error("Invalid or duplicate backup domains.");
+    const fullRecovery = domains.slice().sort().join("|") === RECOVERY_DOMAINS.join("|");
     const prepared = packageValue.records.map(row => {
       const item = validateDescriptor(row.domain, row.key);
       if (!domains.includes(row.domain)) throw new Error("Backup record is outside the declared domains.");
@@ -393,20 +395,27 @@
       const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
-      const request = store.getAll();
-      let mutationError = null;
-      request.onsuccess = () => {
+      const rowsRequest = store.getAll();
+      const lockRequest = tx.objectStore(META).get("resetLock");
+      let rowsReady = false, lockReady = false, existing = [], lock = null, mutationError = null;
+      const applyRestore = () => {
+        if (!rowsReady || !lockReady) return;
         try {
-          const existing = request.result || [];
+          if (lock && lock.active && (lock.phase !== "recovery" || !fullRecovery)) {
+            throw new Error("Restore blocked: a locked database requires a complete full-domain recovery backup.");
+          }
           for (const row of existing) if (domains.includes(row.domain)) store.delete(row.id);
           const stamp = new Date().toISOString();
           for (const row of prepared) store.put({ ...row, updatedAt: stamp });
-          tx.objectStore(META).put({key:"resetLock",active:false,updatedAt:stamp});
+          // The reset lock intentionally remains active until Recovery verifies
+          // the complete restored database and completes the recovery handshake.
         } catch (error) {
           mutationError = error;
           try { tx.abort(); } catch (_) {}
         }
       };
+      rowsRequest.onsuccess = () => { existing = rowsRequest.result || []; rowsReady = true; applyRestore(); };
+      lockRequest.onsuccess = () => { lock = lockRequest.result || null; lockReady = true; applyRestore(); };
       try { await done; } catch (error) {
         if (mutationError) throw mutationError;
         throw error;
@@ -421,7 +430,50 @@
           throw new Error("IndexedDB restore content verification failed for " + wanted.domain + "/" + wanted.key);
         }
       }
-      return { ok: true, restored: prepared.length, domains };
+      return { ok: true, restored: prepared.length, domains, fullRecovery };
+    } finally { db.close(); }
+  }
+
+  async function completeRecovery(packageValue) {
+    if (!packageValue || packageValue.format !== "tha-v264-indexeddb-snapshot-v1" ||
+        packageValue.database !== DB_NAME || !Array.isArray(packageValue.domains) ||
+        packageValue.domains.slice().sort().join("|") !== RECOVERY_DOMAINS.join("|") ||
+        !Array.isArray(packageValue.records)) {
+      throw new Error("Recovery completion requires a full v264 database snapshot.");
+    }
+    const expected = packageValue.records.map(row => {
+      const item = validateDescriptor(row.domain, row.key);
+      if (!RECOVERY_DOMAINS.includes(row.domain)) throw new Error("Recovery package contains an unregistered domain.");
+      validateValue(row.value);
+      return { ...item, value: row.value };
+    }).sort((a,b)=>a.id.localeCompare(b.id));
+    assertUnique(expected, "recovery completion");
+    const actual = await snapshot(RECOVERY_DOMAINS);
+    if (actual.records.length !== expected.length) throw new Error("Recovery completion blocked: restored record count differs from the full backup.");
+    for (let i=0;i<expected.length;i++) {
+      if (actual.records[i].id !== expected[i].id || !(await valuesEqual(actual.records[i].value, expected[i].value))) {
+        throw new Error("Recovery completion blocked: restored content differs at " + expected[i].domain + "/" + expected[i].key);
+      }
+    }
+    const db = await openDatabase();
+    try {
+      const tx = db.transaction([META], "readwrite");
+      const done = transactionDone(tx);
+      const request = tx.objectStore(META).get("resetLock");
+      let lockError = null;
+      request.onsuccess = () => {
+        const lock = request.result;
+        if (!lock || lock.active !== true || lock.phase !== "recovery") {
+          lockError = new Error("Recovery completion blocked: database is not awaiting a full restore.");
+          try { tx.abort(); } catch (_) {}
+          return;
+        }
+        tx.objectStore(META).put({key:"resetLock",active:false,phase:"complete",updatedAt:new Date().toISOString()});
+      };
+      try { await done; } catch (error) { if (lockError) throw lockError; throw error; }
+      const finalHealth = await health();
+      if (finalHealth.resetLocked) throw new Error("Recovery completion failed: reset lock remains active.");
+      return {ok:true,unlocked:true,verifiedRecords:expected.length};
     } finally { db.close(); }
   }
 
@@ -430,13 +482,23 @@
     try {
       const tx = db.transaction([META], "readwrite");
       const done = transactionDone(tx);
-      tx.objectStore(META).put({key:"resetLock",active:true,updatedAt:new Date().toISOString()});
-      await done;
+      const request = tx.objectStore(META).get("resetLock");
+      let lockError = null;
+      request.onsuccess = () => {
+        const current = request.result;
+        if (current && current.active) {
+          lockError = new Error("A reset or recovery operation is already in progress.");
+          try { tx.abort(); } catch (_) {}
+          return;
+        }
+        tx.objectStore(META).put({key:"resetLock",active:true,phase:"preclear",updatedAt:new Date().toISOString()});
+      };
+      try { await done; } catch (error) { if (lockError) throw lockError; throw error; }
       const check = db.transaction([META], "readonly");
       const req = check.objectStore(META).get("resetLock");
       const lock = await requestResult(req);
       await transactionDone(check);
-      if (!lock || lock.active !== true) throw new Error("Could not verify persistent reset lock.");
+      if (!lock || lock.active !== true || lock.phase !== "preclear") throw new Error("Could not verify persistent reset lock.");
       return {ok:true,locked:true};
     } finally { db.close(); }
   }
@@ -449,6 +511,7 @@
       lockReq.onsuccess = () => {
         if (!lockReq.result || lockReq.result.active !== true) { try { tx.abort(); } catch (_) {} return; }
         tx.objectStore(STORE).clear();
+        tx.objectStore(META).put({key:"resetLock",active:true,phase:"recovery",updatedAt:new Date().toISOString()});
       };
       await done;
       const verify = db.transaction([STORE, META], "readonly");
@@ -466,9 +529,19 @@
     try {
       const tx = db.transaction([META], "readwrite");
       const done = transactionDone(tx);
-      tx.objectStore(META).put({key:"resetLock",active:false,updatedAt:new Date().toISOString()});
-      await done;
-      return {ok:true,unlocked:true};
+      const request = tx.objectStore(META).get("resetLock");
+      let lockError = null;
+      request.onsuccess = () => {
+        const lock = request.result;
+        if (!lock || lock.active !== true || lock.phase !== "preclear") {
+          lockError = new Error("Reset lock can only be cancelled before database clearing. A full backup restore is required after clearing.");
+          try { tx.abort(); } catch (_) {}
+          return;
+        }
+        tx.objectStore(META).put({key:"resetLock",active:false,phase:"cancelled",updatedAt:new Date().toISOString()});
+      };
+      try { await done; } catch (error) { if (lockError) throw lockError; throw error; }
+      return {ok:true,unlocked:true,cancelledBeforeClear:true};
     } finally { db.close(); }
   }
   async function health() {
@@ -546,6 +619,6 @@
   root.HandymanStorageV264 = Object.freeze({
     databaseName: DB_NAME, schemaVersion: DB_VERSION, build: BUILD,
     ready, get, readMany, put, remove, transact, mutateMany, reserveCounter,
-    snapshot, restore, beginResetLock, clearWhileResetLocked, releaseResetLock, health, selfTest, valuesEqual
+    snapshot, restore, completeRecovery, beginResetLock, clearWhileResetLocked, releaseResetLock, health, selfTest, valuesEqual
   });
 })(window);

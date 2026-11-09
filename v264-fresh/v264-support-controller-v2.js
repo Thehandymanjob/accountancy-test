@@ -4,7 +4,7 @@
 */
 (function(root){
   "use strict";
-  const BUILD="THA-263-SUPPORT-1";
+  const BUILD="THA-264-SUPPORT-2";
   const adapter=()=>{const value=root.HandymanAppStorageV264;if(!value)throw new Error("v264 application storage adapter is not loaded.");return value;};
   const supported=Object.freeze(["preferences","preferenceMeta","diagnostics","reports","reportNotifications","reportSettings","reportWorkflow","notifications","recovery","factoryResetRecovery"]);
   function assertDomain(name){if(!supported.includes(name))throw new Error("Unsupported v264 support domain: "+name);return name;}
