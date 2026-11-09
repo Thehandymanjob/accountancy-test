@@ -7,7 +7,7 @@
  const boundary=()=>{const api=root.HandymanV263DomainBoundary;if(!api)throw new Error("v263 strict domain boundary is not loaded.");return api;};
  const domains=Object.freeze({
   accounting:{domain:"accounting",key:"state",scope:"accounting",fallback:()=>({entries:[],customers:[],invoices:[],customExpenseCategories:[],settings:{businessName:"",ownerName:""}})},
-  projects:{domain:"projects",key:"state",scope:"projects",fallback:()=>({projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[],profile:{},current:null,guide:"en"})},
+  projects:{domain:"projects",key:"state",scope:"projects",fallback:()=>({projects:[],workers:[],partners:[],contractors:[],companies:[],companyJobs:[],current:null,guide:"en"})},
   contracts:{domain:"contracts",key:"state",scope:"contracts",fallback:()=>({contracts:[]})},
   businessProfile:{domain:"business_profile",key:"identity",scope:"businessProfile",fallback:()=>({businessName:"",ownerName:"",phone:"",email:"",address:"",logo:"",paymentDetails:""})},
   sequences:{domain:"sequences",key:"invoice-number",scope:"accounting",fallback:()=>0},
