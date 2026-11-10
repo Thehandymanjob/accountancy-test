@@ -46,7 +46,7 @@
   support:Object.freeze({load:name=>support().load(name),save:(name,value)=>support().save(name,value),update:(name,fn)=>support().update(name,fn),setLanguage:(lang,version)=>support().setLanguage(lang,version),appendDiagnostic:event=>support().appendDiagnostic(event),loadReportWorkspace:()=>support().loadReportWorkspace(),saveReportWorkspace:value=>support().saveReportWorkspace(value),saveHelpContactDraft:draft=>support().saveHelpContactDraft(draft),deleteHelpContactDraft:id=>support().deleteHelpContactDraft(id)}),
   media:Object.freeze({initialize:()=>media().initialize(),saveAsset:item=>media().saveAsset(item),getAsset:id=>media().getAsset(id),deleteAsset:id=>media().deleteAsset(id),list:filter=>media().list(filter)}),
   health:()=>required("HandymanStorageV264").health(),
-  backup:()=>required("HandymanRecoveryV264").create()
+  backup:scopeName=>required("HandymanRecoveryV264").create(scopeName)
  });
  root.HandymanUIAdapterV264=api;
 })(window);
