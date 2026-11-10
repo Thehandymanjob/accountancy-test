@@ -17,7 +17,11 @@
   ["businessProfile","HandymanBusinessProfileV264","load"],
   ["support","HandymanSupportV264","load"],
   ["recovery","HandymanRecoveryV264","create"],
-  ["moduleBootstrap","HandymanModuleBootstrapV264","startAll"],
+  ["moduleBootstrap","HandymanModuleBootstrapV264","startAccounting"],
+  ["moduleBootstrapProjects","HandymanModuleBootstrapV264","startProjects"],
+  ["moduleBootstrapContracts","HandymanModuleBootstrapV264","startContracts"],
+  ["moduleBootstrapBusinessProfile","HandymanModuleBootstrapV264","startBusinessProfile"],
+  ["moduleBootstrapSupport","HandymanModuleBootstrapV264","startSupport"],
   ["uiAdapter","HandymanUIAdapterV264","startAll"]
  ];
  let active=null;
