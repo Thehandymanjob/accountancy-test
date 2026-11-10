@@ -87,7 +87,7 @@ document.getElementById("run").onclick=async()=>{
   state=await accounting.load();
   results.invoiceSoftDelete=!!state.invoices.find(x=>x.id===invoiceId)?.deletedAt;
   const afterReload=await accounting.load();
-  results.persistenceAfterReload=afterReload.invoices.some(x=>x.id===invoiceId&&x.deletedAt)&&afterReload.customers.some(x=>x.id===customerId);
+  results.persistenceOnFreshRead=afterReload.invoices.some(x=>x.id===invoiceId&&x.deletedAt)&&afterReload.customers.some(x=>x.id===customerId);
   results.invoiceNumberReserved=Number.isInteger(number)&&number>0;
   const health=await HandymanStorageV264.health();
   results.health={ok:health.ok,database:health.database,totalRecords:health.totalRecords};
