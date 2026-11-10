@@ -1190,7 +1190,7 @@ function renderRecords(){
  const p=$('recordPagination');if(p)p.innerHTML=paginationMarkup('records',pg.total,pg.page,pg.pages,pg.start,pg.end,'renderRecords');renderThirdPartyRecords()
 }
 function setPeriod(){const d=new Date();let a,b;if(d.getDate()>=13){a=new Date(d.getFullYear(),d.getMonth(),13);b=new Date(d.getFullYear(),d.getMonth()+1,12)}else{a=new Date(d.getFullYear(),d.getMonth()-1,13);b=new Date(d.getFullYear(),d.getMonth(),12)}const fmt=x=>`${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;$('homeFrom').value=$('reportFrom').value=fmt(a);$('homeTo').value=$('reportTo').value=fmt(b);refreshAll()}
-function reportArchiveLanguage(){try{const lang=localStorage.getItem('tha_test226_app_language_v1')||'en';return ['en','fa','ar','ckb','kmr','tr','pl'].includes(lang)?lang:'en'}catch(e){return 'en'}}
+function reportArchiveLanguage(){try{const lang=window.HandymanUIDomainGatewayV264?.states?.support?.preferences||'en';return ['en','fa','ar','ckb','kmr','tr','pl'].includes(lang)?lang:'en'}catch(e){return 'en'}}
 function localizeAccountingReport(root,lang){
  if(!root||lang==='en')return;
  const fa={
@@ -2249,6 +2249,7 @@ select.native-select-hidden{position:absolute!important;width:1px!important;heig
    window.__thaProjectSaveOk=true;
    window.__thaContractSaveOk=true;
    if(typeof ctRenderSaved==='function')await ctRenderSaved();
+   if(typeof applyAppLanguage==='function')applyAppLanguage(window.HandymanUIDomainGatewayV264.states.support.preferences||'en');
    if(typeof syncLauncherBrand==='function')syncLauncherBrand();
    return result;
   }).catch(error=>{
@@ -2911,20 +2912,7 @@ function translateStaticUi(lang){
  document.querySelectorAll('[placeholder],[title],[aria-label]').forEach(el=>{for(const attr of ['placeholder','title','aria-label']){const key=el.tagName+'|'+attr;if(!APP_UI_ORIGINAL_ATTR.has(el))APP_UI_ORIGINAL_ATTR.set(el,{});const originals=APP_UI_ORIGINAL_ATTR.get(el);if(!(attr in originals))originals[attr]=el.getAttribute(attr);const v=originals[attr];if(v&&APP_UI_STRINGS[v]&&APP_UI_STRINGS[v][lang]){const translated=APP_UI_STRINGS[v][lang];if(el.getAttribute(attr)!==translated)el.setAttribute(attr,translated)}else if(v!==null&&el.getAttribute(attr)!==v)el.setAttribute(attr,v)}});
 }
 const APP_LANG_PREF_VERSION_KEY='tha_test226_app_language_pref_version_v1';
-function currentAppLang(){
- try{
-  // Earlier test builds could leave an accidental Arabic/Sorani selection behind.
-  // Treat preferences from those builds as untrusted once, defaulting to English.
-  const prefVersion=localStorage.getItem(APP_LANG_PREF_VERSION_KEY);
-  if(prefVersion!=='204'){ 
-   localStorage.setItem(APP_LANG_KEY,'en');
-   localStorage.setItem(APP_LANG_PREF_VERSION_KEY,'204');
-   return 'en';
-  }
-  const saved=localStorage.getItem(APP_LANG_KEY)||'en';
-  return Object.prototype.hasOwnProperty.call(APP_LANGS,saved)?saved:'en';
- }catch(e){return 'en'}
-}
+function currentAppLang(){try{const value=window.HandymanUIDomainGatewayV264?.states?.support?.preferences||'en';return Object.prototype.hasOwnProperty.call(APP_LANGS,value)?value:'en'}catch(e){return 'en'}}
 function applyAppLanguage(lang){
  const safeLang=Object.prototype.hasOwnProperty.call(APP_LANGS,lang)?lang:'en';
  const d=APP_LANGS[safeLang]||APP_LANGS.en;
@@ -2944,9 +2932,9 @@ function applyAppLanguage(lang){
  const sel=document.getElementById('appLanguageSelect');if(sel)sel.value=safeLang;
  translateStaticUi(safeLang);
 }
-window.setAppLanguage=function(lang){
+window.setAppLanguage=async function(lang){
  if(!Object.prototype.hasOwnProperty.call(APP_LANGS,lang))return;
- try{localStorage.setItem(APP_LANG_KEY,lang);localStorage.setItem(APP_LANG_PREF_VERSION_KEY,'204')}catch(e){}
+ try{await window.HandymanSupportV264.setLanguage(lang,'264')}catch(error){const st=document.getElementById('languageSavedStatus');if(st)st.textContent='Could not save language preference in IndexedDB. '+(error&&error.message||error);return}
  applyAppLanguage(lang);
  const st=document.getElementById('languageSavedStatus');
  if(st){const msgs={en:'Language preference saved on this device.',fa:'زبان انتخاب‌شده روی این دستگاه ذخیره شد.',ar:'تم حفظ اللغة المحددة على هذا الجهاز.',ckb:'زمانی هەڵبژێردراو لەم ئامێرەدا پاشەکەوت کرا.',kmr:'Hilbijartina zimanê li ser vê amûrê hat tomarkirin.',tr:'Seçilen dil bu cihaza kaydedildi.',pl:'Wybrany język zapisano na tym urządzeniu.'};st.textContent=(APP_LANGS[lang].name||lang)+' — '+msgs[lang]}
