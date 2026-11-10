@@ -1225,7 +1225,7 @@ function refreshReport(){
  (Array.isArray(db.customExpenseCategories)?db.customExpenseCategories:[]).filter(c=>!materialsCats.includes(c)&&!vehicle.some(v=>v.label===c)&&!['Tools & workwear','Tool hire','Advertising','Accountancy','Pension','National Insurance (NIC)','Public liability insurance','Training'].includes(c)).forEach(c=>other.push({label:c,amount:catTotal(c)}));
  const has=(arr)=>arr.some(x=>x.amount!==0);
  const incomeRows=[{label:'Cash',amount:total(income.filter(x=>x.method==='cash'))},{label:'Bank Transfer',amount:total(income.filter(x=>x.method==='bank'))},{label:'Other / not specified',amount:total(income.filter(x=>!['cash','bank'].includes(x.method)))}];
- let logo='';try{const savedWorkspace=JSON.parse(localStorage.getItem('tha_test226_projects_v1')||'{}');const savedProfile=savedWorkspace.profile||{};if(typeof savedProfile.logo==='string'&&savedProfile.logo.startsWith('data:image/'))logo=savedProfile.logo}catch(e){}if(!logo)logo=$('report').querySelector('.report-brand .brand-mark')?.src||'';
+ let logo='';const savedProfile=window.HandymanUIDomainGatewayV264?.states?.businessProfile||{};if(typeof savedProfile.logo==='string'&&savedProfile.logo.startsWith('data:image/'))logo=savedProfile.logo;if(!logo)$('report').querySelector('.report-brand .brand-mark')?.src||'';
  const includeReceipt=!!$('reportDetailReceipt')?.checked,includeDate=!!$('reportDetailDate')?.checked,includeCompany=!!$('reportDetailCompany')?.checked;
  const includeExpenseDetails=includeReceipt||includeDate||includeCompany;
  const companyName=x=>String(x.reference||'').trim()||String(x.category||'').replace(/^Materials\s*[-–:]\s*/i,'').trim()||String(x.notes||'').trim()||'—';
@@ -1525,7 +1525,7 @@ function invoiceHTML(i){
  const lines=(Array.isArray(i.items)&&i.items.length?i.items:[{description:i.description||'',price:a.subtotal}]).filter(x=>x.description||x.price>0);
  const rows=lines.map(x=>`<tr><td>${esc(x.description||'Work item').replace(/\n/g,'<br>')}</td><td>${money(x.price||0)}</td></tr>`).join('');
  const ref=!isDraft&&i.number?`<br><br><strong>Payment reference:</strong> Please use invoice number ${esc(i.number)} as your payment reference when making a bank transfer.`:'';
- const profile=prDB.profile||{};
+ const profile=window.HandymanUIDomainGatewayV264?.states?.businessProfile||prDB.profile||{};
  const invoiceLogo=(typeof profile.logo==='string'&&profile.logo.startsWith('data:image/'))?`<img class="invoice-logo" src="${esc(profile.logo)}" alt="Business logo">`:'';
  const paymentDetails=db.settings.paymentDetails||profile.paymentDetails||profile.bankDetails||profile.bankAccountDetails||'';
  const paymentText=paymentDetails?esc(paymentDetails).replace(/\n/g,'<br>'):'Bank transfer details have not been configured. Please add your bank details in Settings before issuing this invoice.';
@@ -2248,8 +2248,9 @@ select.native-select-hidden{position:absolute!important;width:1px!important;heig
    window.__thaAccountingSaveOk=true;
    window.__thaProjectSaveOk=true;
    window.__thaContractSaveOk=true;
+   monitorLogCache=Array.isArray(result.states.support.diagnostics)?result.states.support.diagnostics:[];
    if(typeof ctRenderSaved==='function')await ctRenderSaved();
-   if(typeof applyAppLanguage==='function')applyAppLanguage(window.HandymanUIDomainGatewayV264.states.support.preferences||'en');
+   if(typeof applyAppLanguage==='function'applyAppLanguage(window.HandymanUIDomainGatewayV264.states.support.preferences||'en');
    if(typeof syncLauncherBrand==='function')syncLauncherBrand();
    return result;
   }).catch(error=>{
@@ -2269,9 +2270,9 @@ select.native-select-hidden{position:absolute!important;width:1px!important;heig
 <script>
 /* v168 Local-first audit log and diagnostics. No automatic upload. */
 const MONITOR_LOG_KEY='tha_test226_monitor_log_v1';const MONITOR_MAX_EVENTS=2500;let monitorPage=1;const MONITOR_PAGE_SIZE=25;
-function monitorReadLog(){try{const a=JSON.parse(localStorage.getItem(MONITOR_LOG_KEY)||'[]');return Array.isArray(a)?a:[]}catch(e){return []}}
-function monitorWriteLog(a){try{localStorage.setItem(MONITOR_LOG_KEY,JSON.stringify(a.slice(-MONITOR_MAX_EVENTS)));return true}catch(e){return false}}
-function monitorContext(){let projectVersion='';try{projectVersion=JSON.parse(localStorage.getItem('tha_test226_projects_v1')||'{}').version||''}catch(e){}return {appVersion:document.querySelector('meta[name="app-version"]')?.content||'unknown',platform:navigator.platform||'',userAgent:navigator.userAgent||'',language:navigator.language||'',online:navigator.onLine!==false,storageKeyAvailable:(()=>{try{return localStorage.getItem(KEY)!==null}catch(e){return false}})(),projectWorkspaceVersion:String(projectVersion||'')}}
+let monitorLogCache=[];let monitorWriteTail=Promise.resolve();function monitorReadLog(){return monitorLogCache.map(x=>({...x}))}
+function monitorWriteLog(a){try{const next=a.slice(-MONITOR_MAX_EVENTS).map(x=>({...x}));monitorLogCache=next;const support=window.HandymanSupportV264;if(!support||!window.HandymanUIDomainGatewayV264?.ready)return false;const operation=monitorWriteTail.then(()=>support.save('diagnostics',next));monitorWriteTail=operation.catch(error=>{console.error('IndexedDB diagnostics save failed:',error)});return true}catch(e){return false}}
+function monitorContext(){const projectVersion=window.HandymanUIDomainGatewayV264?.states?.projects?.version||'';return {appVersion:document.querySelector('meta[name="app-version"]')?.content||'unknown',platform:navigator.platform||'',userAgent:navigator.userAgent||'',language:navigator.language||'',online:navigator.onLine!==false,storageKeyAvailable:!!window.HandymanUIDomainGatewayV264?.ready,projectWorkspaceVersion:String(projectVersion||'')}}
 function logMonitorEvent(category,event,recordType='',recordId='',result='info',details={}){try{const item={id:'evt-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),timestamp:new Date().toISOString(),category:String(category||'activity'),event:String(event||'event'),recordType:String(recordType||''),recordId:String(recordId||''),result:String(result||'info'),details:details&&typeof details==='object'?details:{value:String(details)},context:{appVersion:document.querySelector('meta[name="app-version"]')?.content||'unknown'}};const all=monitorReadLog();all.push(item);if(!monitorWriteLog(all)&&!window.__monitorStorageWarning){window.__monitorStorageWarning=true;console.warn('Monitor log could not be saved; local storage may be full.')}return item.id}catch(e){console.warn('Monitor logging failed',e);return null}}
 function installMonitorStorageHooks(){if(Storage.prototype.__handymanMonitorHooks)return;const originalSet=Storage.prototype.setItem,originalRemove=Storage.prototype.removeItem;Storage.prototype.setItem=function(key,value){const result=originalSet.call(this,key,value);try{if(this===window.localStorage&&!window.__thaStorageRestoreInProgress&&key!=='tha_test226_monitor_log_v1'&&key!=='tha_test226_invoice_sequence_v1'&&key!==KEY){const type=key==='tha_test226_projects_v1'?'projects':key==='tha_test226_contracts_v1'?'contracts':'storage';let counts={bytes:String(value??'').length};try{const parsed=JSON.parse(String(value));if(Array.isArray(parsed))counts.recordCount=parsed.length;else if(parsed&&typeof parsed==='object'){for(const k of ['projects','workers','entries','customers','invoices','contracts'])if(Array.isArray(parsed[k]))counts[k+'Count']=parsed[k].length}}catch(e){}logMonitorEvent('activity','local_storage_updated',type,key,'success',counts)}}catch(e){}return result};Storage.prototype.removeItem=function(key){const existed=this.getItem(key)!==null;const result=originalRemove.call(this,key);try{if(this===window.localStorage&&!window.__thaStorageRestoreInProgress&&existed&&key!=='tha_test226_monitor_log_v1'&&key!=='tha_test226_invoice_sequence_v1')logMonitorEvent('activity','local_storage_item_removed',key==='tha_test226_projects_v1'?'projects':key==='tha_test226_contracts_v1'?'contracts':'storage',key,'success',{keyRemoved:true})}catch(e){}return result};Storage.prototype.__handymanMonitorHooks=true}installMonitorStorageHooks();
 function monitorSafeError(error){return {name:String(error?.name||'Error').slice(0,120),message:String(error?.message||error||'Unknown error').slice(0,1500),stack:String(error?.stack||'').slice(0,6000)}}
