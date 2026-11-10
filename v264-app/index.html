@@ -731,6 +731,7 @@ body:not(.projects-open) #invoices .invoice-actions button{font-size:11px;min-he
 #prPrintReportOverlay .pr-pdf-render-status{padding:20px;color:#657286;font-size:14px}
 #prPrintReportOverlay .pr-pdf-page-canvas{display:block;max-width:100%;height:auto!important;background:#fff;box-shadow:0 2px 8px #142b4a22}
 @media(max-width:560px){#prPrintReportOverlay .pr-pdf-preview-pages{max-height:calc(100dvh - 190px);min-height:420px;padding:6px;gap:10px}}
+#prPrintReportOverlay .pr-pdf-render-error{width:100%;padding:18px;background:#fff1f0;border:1px solid #e2a09a;border-radius:8px;color:#8b1e16;font:600 14px/1.5 system-ui;overflow-wrap:anywhere}
 </style>
 
 
@@ -1996,23 +1997,27 @@ function prRestoreReportPreview(){
 }
 async function prLoadPdfJs(){
  if(window.pdfjsLib)return window.pdfjsLib;
- await new Promise((resolve,reject)=>{
-  const existing=document.querySelector('script[data-pr-pdfjs]');
-  if(existing){
-   if(window.pdfjsLib){resolve();return}
-   existing.addEventListener('load',resolve,{once:true});
-   existing.addEventListener('error',()=>reject(new Error('PDF preview engine could not load')),{once:true});
-   return;
-  }
-  const script=document.createElement('script');
-  script.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
-  script.dataset.prPdfjs='1';script.onload=resolve;
-  script.onerror=()=>reject(new Error('PDF preview engine could not load'));
-  document.head.appendChild(script);
- });
- if(!window.pdfjsLib)throw new Error('PDF preview engine is unavailable');
- window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
- return window.pdfjsLib;
+ const sources=[
+  {src:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',worker:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'},
+  {src:'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js',worker:'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'}
+ ];
+ let lastError=null;
+ for(const source of sources){
+  try{
+   await new Promise((resolve,reject)=>{
+    const script=document.createElement('script');
+    script.src=source.src;
+    script.dataset.prPdfjs='1';
+    script.onload=resolve;
+    script.onerror=()=>{script.remove();reject(new Error('Could not load '+source.src))};
+    document.head.appendChild(script);
+   });
+   if(!window.pdfjsLib)throw new Error('PDF.js loaded without its viewer API');
+   window.pdfjsLib.GlobalWorkerOptions.workerSrc=source.worker;
+   return window.pdfjsLib;
+  }catch(error){lastError=error}
+ }
+ throw lastError||new Error('PDF preview engine could not load');
 }
 async function prRenderPdfPreview(blob,host){
  host.innerHTML='<p class="pr-pdf-render-status">Preparing PDF preview…</p>';
@@ -2093,8 +2098,13 @@ async function prRunSubReportPrint(){
   await prRenderPdfPreview(prSubReportPdfBlob,pageHost);
   msg.textContent='PDF ready.';
  }catch(e){
-  msg.textContent='Could not create the PDF. Check your internet connection and try again. '+(e&&e.message?e.message:'');
-  alert('PDF creation failed. This method needs an internet connection to load the PDF library.');
+  const detail=e&&e.message?e.message:String(e||'Unknown error');
+  const shell=box&&box.querySelector('.pr-print-preview-shell');
+  const pages=shell&&shell.querySelector('.pr-pdf-preview-pages');
+  const visibleError='PDF preview could not be displayed: '+detail;
+  if(pages)pages.innerHTML='<div class="pr-pdf-render-error" role="alert">'+visibleError+'</div>';
+  else if(shell){const error=document.createElement('p');error.className='pr-pdf-render-error';error.setAttribute('role','alert');error.textContent=visibleError;shell.appendChild(error)}
+  else msg.textContent=visibleError;
  }finally{
   if(button){button.disabled=false;button.textContent='Generate PDF'}
  }
