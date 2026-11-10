@@ -98,7 +98,7 @@
    const domains=[
     "accounting","projects","contracts","business_profile","sequences",
     "preferences","preference_meta","diagnostics","reports","report_notifications",
-    "report_settings","report_workflow","notifications","recovery","factory_reset_recovery"
+    "report_settings","report_workflow","notifications","recovery","factory_reset_recovery","help_contact_drafts","media"
    ];
    const snapshot=await engine.snapshot(domains);
    if(!snapshot||!Array.isArray(snapshot.records)||snapshot.records.length!==status.totalRecords)throw new Error("Backup completeness check failed: database record count changed during capture.");
