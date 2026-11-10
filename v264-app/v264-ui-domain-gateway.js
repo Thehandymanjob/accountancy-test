@@ -34,21 +34,24 @@
  function api(name){const get=controllers[name];if(!get)throw new Error("Unknown application domain: "+name);const value=get();if(!value)throw new Error("IndexedDB controller is unavailable for "+name);return value;}
  async function load(name){
   requireReady();
-  const value= name==="support" ? await api(name).loadReportWorkspace() : await api(name).load();
+  let value;
+  if(name==="support")value=await api(name).loadReportWorkspace();
+  else if(name==="projects"){const pair=await Promise.all([api(name).load(),api("businessProfile").load()]);value={...pair[0],profile:pair[1]};}
+  else value=await api(name).load();
   states[name]=clone(value);return clone(value);
  }
  async function save(name,value){
   requireReady();
   let result;
   if(name==="accounting")result=await api(name).save(value);
-  else if(name==="projects")result=await api(name).save(value);
+  else if(name==="projects"){const projectState=clone(value);const profile=projectState.profile||{};delete projectState.profile;const profileResult=await api("businessProfile").save(profile);if(!profileResult||profileResult.ok!==true)throw new Error("Business Profile was not saved.");result=await api(name).save(projectState);}
   else if(name==="contracts")result=await api(name).save(value);
   else if(name==="businessProfile")result=await api(name).save(value);
   else if(name==="support")result=await api(name).saveReportWorkspace(value);
   else throw new Error("Unknown application domain: "+name);
   if(!result||result.ok!==true)throw new Error("IndexedDB did not confirm the "+name+" save.");
   const verified=await load(name);
-  const expected=name==="businessProfile"?(result.profile||value):name==="support"?value:value;
+  const expected=name==="businessProfile"?(result.profile||value):name==="projects"?value:name==="support"?value:value;
   if(name!=="support" && !(await root.HandymanStorageV264.valuesEqual(verified,expected)))throw new Error("IndexedDB read-back verification failed for "+name+".");
   return {ok:true,verified:true,state:clone(verified)};
  }
