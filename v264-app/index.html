@@ -2300,7 +2300,7 @@ select.native-select-hidden{position:absolute!important;width:1px!important;heig
   });
 })();
 </script>
-</body></html>
+
 
 <div id="receiptImageModal" class="receipt-modal" hidden role="dialog" aria-modal="true" aria-label="Receipt image"><div class="receipt-modal-inner"><div class="receipt-modal-actions"><button type="button" onclick="closeReceiptImage()">Close ✕</button></div><img id="receiptImageModalImg" alt="Receipt photo"></div></div>
 <div id="receiptCropModal" class="receipt-crop-modal" hidden role="dialog" aria-modal="true" aria-label="Crop receipt photo"><div class="receipt-crop-inner"><h3>Crop receipt photo</h3><p class="small">Adjust the crop area. The selected area will be saved with the expense.</p><div class="receipt-crop-preview"><img id="receiptCropImage" alt="Receipt crop preview"></div><div class="receipt-crop-controls"><label>Left edge (%)<input id="receiptCropX" type="range" min="0" max="90" value="0" oninput="updateReceiptCropPreview()"></label><label>Top edge (%)<input id="receiptCropY" type="range" min="0" max="90" value="0" oninput="updateReceiptCropPreview()"></label><label>Width (%)<input id="receiptCropW" type="range" min="10" max="100" value="100" oninput="updateReceiptCropPreview()"></label><label>Height (%)<input id="receiptCropH" type="range" min="10" max="100" value="100" oninput="updateReceiptCropPreview()"></label></div><div class="receipt-crop-actions"><button type="button" onclick="cancelReceiptCrop()">Cancel</button><button type="button" onclick="useFullReceiptImage()">Use full image</button><button type="button" class="primary" onclick="applyReceiptCrop()">Save cropped photo</button></div></div></div>
