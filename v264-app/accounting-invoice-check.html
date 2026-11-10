@@ -111,7 +111,7 @@ document.getElementById("run").onclick=async()=>{
  finally{
   Storage.prototype.getItem=original.get;Storage.prototype.setItem=original.set;Storage.prototype.removeItem=original.remove;Storage.prototype.clear=original.clear;
   if(started){
-   try{await HandymanAccountingV264.update(state=>{state.entries=state.entries.filter(x=>![entryId,blobEntryId].includes(String(x.id)));state.invoices=state.invoices.filter(x=>String(x.id)!==invoiceId);state.customers=state.customers.filter(x=>String(x.id)!==customerId);return state;});results.syntheticCleanup=true;}catch(e){results.syntheticCleanup=false;errors.cleanup=String(e&&e.message||e);}
+   try{await HandymanAccountingV264.update(state=>{state.entries=state.entries.filter(x=>![entryId,blobEntryId].includes(String(x.id)));state.invoices=state.invoices.filter(x=>String(x.id)!==invoiceId);state.customers=state.customers.filter(x=>String(x.id)!==customerId);return state;});await HandymanMediaV264.deleteAsset(mediaId);await HandymanSupportV264.deleteHelpContactDraft(draftId);results.syntheticCleanup=true;}catch(e){results.syntheticCleanup=false;errors.cleanup=String(e&&e.message||e);}
   }
  }
  const bools=Object.entries(results).filter(([k,v])=>typeof v==="boolean"&&k!=="failed");
