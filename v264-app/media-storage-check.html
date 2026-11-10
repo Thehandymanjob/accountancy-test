@@ -17,16 +17,16 @@ button{padding:12px 16px;border:0;border-radius:8px;background:#17365d;color:#ff
 <p><b>Database:</b> <code>the_handyman_accountancy_v264_idb</code></p>
 <button id="run">Run independent media checks</button><pre id="out">Waiting…</pre>
 </section></main>
-<script src="../v264-fresh/storage-idb-v264.js?v=media3"></script>
-<script src="../v264-fresh/v264-strict-domain-boundary.js?v=media3"></script>
-<script src="../v264-fresh/app-storage-v264.js?v=media3"></script>
-<script src="../v264-fresh/v264-media-controller.js?v=media3"></script>
-<script src="../v264-fresh/v264-recovery.js?v=media3"></script>
+<script src="../v264-fresh/storage-idb-v264.js?v=media4"></script>
+<script src="../v264-fresh/v264-strict-domain-boundary.js?v=media4"></script>
+<script src="../v264-fresh/app-storage-v264.js?v=media4"></script>
+<script src="../v264-fresh/v264-media-controller.js?v=media4"></script>
+<script src="../v264-fresh/v264-recovery.js?v=media4"></script>
 <script>
 "use strict";
 const out=document.getElementById("out"),show=x=>out.textContent=JSON.stringify(x,null,2);
 document.getElementById("run").onclick=async()=>{
- const id="tha-media-check-"+Date.now(),ids=[id+"-photo",id+"-receipt"],results={};
+ const id="tha-media-check-"+Date.now(),ids=[id+"-photo",id+"-receipt",id+"-file"],results={};
  const original={get:Storage.prototype.getItem,set:Storage.prototype.setItem,remove:Storage.prototype.removeItem,clear:Storage.prototype.clear};
  let initialized=false;
  try{
@@ -39,17 +39,17 @@ document.getElementById("run").onclick=async()=>{
   const receipt=new Blob(["synthetic receipt image"],{type:"image/png"});
   await HandymanMediaV264.saveAsset({id:ids[0],name:"photo.jpg",ownerType:"project",ownerId:id,role:"project-photo",blob:photo});
   await HandymanMediaV264.saveAsset({id:ids[1],name:"receipt.png",ownerType:"accounting-entry",ownerId:id,role:"receipt",blob:receipt});
-  const [a,b]=await Promise.all(ids.map(x=>HandymanMediaV264.getAsset(x)));
-  results.twoIndependentBlobRecords=!!a&&!!b&&a.blob instanceof Blob&&b.blob instanceof Blob&&await a.blob.text()==="synthetic project photo"&&await b.blob.text()==="synthetic receipt image";
+  const file=new File(["synthetic file payload"],"test-receipt.pdf",{type:"application/pdf",lastModified:1700000000000});\n  await HandymanMediaV264.saveAsset({id:ids[2],name:file.name,ownerType:"accounting-entry",ownerId:id,role:"receipt-file",blob:file});\n  const [a,b,c]=await Promise.all(ids.map(x=>HandymanMediaV264.getAsset(x)));
+  results.twoIndependentBlobRecords=!!a&&!!b&&a.blob instanceof Blob&&b.blob instanceof Blob&&await a.blob.text()==="synthetic project photo"&&await b.blob.text()==="synthetic receipt image";\n  results.fileRoundTrip=!!c&&c.blob instanceof File&&c.blob.name==="test-receipt.pdf"&&c.blob.type==="application/pdf"&&await c.blob.text()==="synthetic file payload";
   const listed=await HandymanMediaV264.list();
-  results.metadataFiltering=listed.some(x=>x.id===ids[0]&&x.ownerType==="project"&&x.role==="project-photo")&&listed.some(x=>x.id===ids[1]&&x.ownerType==="accounting-entry"&&x.role==="receipt");
+  results.metadataFiltering=listed.some(x=>x.id===ids[0]&&x.ownerType==="project"&&x.role==="project-photo")&&listed.some(x=>x.id===ids[1]&&x.ownerType==="accounting-entry"&&x.role==="receipt")&&listed.some(x=>x.id===ids[2]&&x.role==="receipt-file");
   await HandymanMediaV264.deleteAsset(ids[0]);
   results.deleteIsolation=!(await HandymanMediaV264.getAsset(ids[0]))&&!!(await HandymanMediaV264.getAsset(ids[1]));
   const backup=await HandymanRecoveryV264.create().createBackup();
   const pkg=JSON.parse(await backup.blob.text()),rows=pkg.payload.records.filter(x=>x.domain==="media"&&ids.includes(x.key));
-  results.backupIncludesIndependentMedia=backup.verification.ok&&rows.length===1&&rows[0].key===ids[1];
+  results.backupIncludesIndependentMedia=backup.verification.ok&&rows.length===2&&rows.some(x=>x.key===ids[1])&&rows.some(x=>x.key===ids[2]);
   results.backupIntegrity=backup.verification.records===pkg.payload.records.length&&backup.verification.digest===pkg.digest;
-  results.noLegacyStorageAccess=true;
+  results.noLegacyStorageAccess=true;\n  const engineTest=await HandymanStorageV264.selfTest();results.engineBlobAndSnapshotSelfTest=engineTest.ok===true;results.engineSelfTest=engineTest;
  }catch(e){results.failed=true;results.error=String(e&&e.message||e);}
  finally{
   Storage.prototype.getItem=original.get;Storage.prototype.setItem=original.set;Storage.prototype.removeItem=original.remove;Storage.prototype.clear=original.clear;
