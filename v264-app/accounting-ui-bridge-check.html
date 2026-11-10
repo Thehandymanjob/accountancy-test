@@ -14,13 +14,14 @@ document.getElementById('run').addEventListener('click',async()=>{
   next.customers.push({id:customerId,name:'Synthetic UI Bridge Customer',phone:'',address:'',workAddress:'',email:''});
   next.entries.push({id:entryId,type:'expense',date:'2026-11-10',amount:12.34,method:'bank',category:'Materials - Test',reference:'Synthetic UI bridge',receiptImage:new Blob(['receipt-bridge-check'],{type:'text/plain'}),createdAt:new Date().toISOString()});
   next.customExpenseCategories=[...new Set([...(next.customExpenseCategories||[]),'Materials - Test'])];
+  next.thirdPartyTransactions=[...(Array.isArray(next.thirdPartyTransactions)?next.thirdPartyTransactions:[]),{id:id+'-third-party',personName:'Synthetic UI Bridge Person',amount:3.21,direction:'received-on-behalf',projectSync:true}];
   const committed=await bridge.commit(next);results.fullStateCommit=committed.ok&&committed.verified;
   const read=await bridge.load();
   results.customerReadBack=read.customers.some(x=>x.id===customerId);
   const savedEntry=read.entries.find(x=>x.id===entryId);
   results.entryReadBack=!!savedEntry&&savedEntry.amount===12.34;
   results.receiptBlobReadBack=savedEntry?.receiptImage instanceof Blob&&await savedEntry.receiptImage.text()==='receipt-bridge-check';
-  results.extraAccountingFieldsPreserved=Array.isArray(read.thirdPartyTransactions)&&Array.isArray(read.customExpenseCategories);
+  results.extraAccountingFieldsPreserved=read.thirdPartyTransactions.some(x=>x.id===id+'-third-party'&&x.amount===3.21)&&read.customExpenseCategories.includes('Materials - Test');
   const mutated=await bridge.mutate(state=>({...state,entries:state.entries.filter(x=>x.id!==entryId),customers:state.customers.filter(x=>x.id!==customerId)}));
   results.atomicMutation=mutated.ok&&mutated.verified;
   const clean=await bridge.load();
