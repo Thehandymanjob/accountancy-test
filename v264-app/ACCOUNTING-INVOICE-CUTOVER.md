@@ -1,56 +1,41 @@
-# Accounting and invoice async cutover map
+# Accounting and Invoice UI Cutover — refreshed 2026-11-10
 
-Date: 2026-11-10
-Source: `v264-app/index.html` (copied v262 UI)
-Status: analysis only; no UI handlers changed.
+## Status
 
-## State contract
+The preserved Accounting and Invoice UI is now connected to the v264 IndexedDB gateway for its active CRUD paths. Static JavaScript compilation passes. The candidate is still awaiting iPhone Safari runtime tests and must not yet be treated as a production release.
 
-Legacy UI state is a single object:
-`{ entries, customers, invoices, customExpenseCategories, settings, ... }`
+## Accounting state
 
-v264 accounting fallback currently defines:
-`{ entries:[], customers:[], invoices:[], customExpenseCategories:[], settings:{businessName:"",ownerName:""} }`
+- `loadDB()` awaits `HandymanUIDomainGatewayV264.initialize()` and loads the accounting domain from IndexedDB.
+- The UI's `db` object is an in-memory render model, not a durable browser-storage database.
+- `persist()` is asynchronous. It snapshots the accounting state, awaits the gateway save, requires `ok === true` and `verified === true`, and reports failure without claiming success.
+- All 12 active `persist()` call sites are awaited.
+- Entry create/delete, customer create/delete, settings, invoice save/delete, payment marking and invoice-linked income changes await the persistence path and retain rollback logic for failed writes.
+- Full backup waits for the accounting write queue and all other application-domain queues before snapshotting.
 
-The v264 controller preserves additional unknown top-level fields only if the accounting normalizer permits them; inspect its full normalize/validation rules before moving data or finalizing the shape. Since user intends to start with fresh data, no legacy import is planned.
+## Invoice workflow
 
-## Confirmed handler dependencies
+- Invoice create/edit is asynchronous and awaits the accounting save/read-back.
+- Invoice number reservations use the IndexedDB sequence controller. The high-water mark is reserved during accounting startup and after invoice save/delete/number repair operations.
+- Mark-paid records the full invoice total as one linked income entry, with the selected payment date and method. Mark-unpaid removes the linked income entry and updates invoice status.
+- The payment modal in this UI contains date and payment-method fields only. There is no partial-payment amount, staged-payment history or deposit schedule in this source. Do not claim partial-payment support.
+- Hard-coded legacy handling for invoice numbers 133 and 134 was removed. New invoices with those numbers are no longer treated as pre-existing test records or automatically marked paid.
+- The unused invoice-number repair helper is async and awaits both the accounting write and sequence reservations.
 
-| Handler / function | Current behavior | Required v264 replacement |
-|---|---|---|
-| `loadDB()` | Synchronous LocalStorage read and validation | `await HandymanAccountingV264.load()`; fail closed if unavailable |
-| `persist()` | Synchronous LocalStorage write/read-back, then queued IndexedDB shadow write | Remove completely; use awaited controller operations with read-back verification |
-| `saveEntry()` | Mutates global `db`, then calls persist and shadow-readback | `await accounting.update/addEntry`; update UI state only after confirmed save |
-| `editEntry()` | Reads in-memory `db.entries` and fills form | Can remain synchronous only after authoritative state has loaded; must not write |
-| `deleteEntry()` | Mutates global `db`, then persist | `await accounting.deleteEntry(id)`; restore display state on failure |
-| `saveCustomer()` | Async handler already; currently likely mutates db/persist | Use `saveCustomer` controller and verify customer ID stability |
-| `deleteCustomer()` | Async handler; checks invoice references, then mutates db | Preserve referential-integrity check; controller delete only after check |
-| Invoice create/edit | Existing invoice form and customer state are coupled to `db` | `HandymanInvoiceWorkflowV264.saveInvoice(invoice,payment,customer)`; inspect all fields and side effects |
-| Mark paid/unpaid | Legacy handler changes invoice and creates/removes linked income entry | `markPaid/markUnpaid`; verify linked entry ID, dates, amount and duplicate prevention |
-| Invoice soft delete | Legacy invoice deletion/status logic | `softDelete(id)`; verify old behavior and record retention |
-| Invoice numbering | LocalStorage counter + highest shared invoice/income number helpers | `reserveInvoiceNumber(minimum)`; reconcile existing numbers only for newly created blank DB |
-| Settings business name/owner | Stored in accounting `settings` and also referenced by report/PDF | Keep existing UI settings behavior and field names; ensure profile domain ownership is unambiguous |
-| Expense category additions | `customExpenseCategories` in accounting state | Persist through accounting controller |
-| Contractor picker | Reads contractors from project LocalStorage | Load from Projects controller; no cross-domain synchronous read |
+## Project/accounting separation
 
-## Async UI constraints
+- The old automatic project-to-accounting sync helper functions and startup cleanup were removed.
+- Project completion changes project status only. It does not create, delete or sync accounting entries.
+- No active Transfer to Accounting or Pay Contractor UI handler was found in this candidate. Those workflows remain outside the completed cutover and require an explicit product decision/implementation before release if they are still required.
 
-- The main `db` object may remain an in-memory view-model/cache for rendering, but it cannot be the durable source of truth.
-- Initial startup must await all required domain loads before enabling actions or showing a writable screen.
-- Every mutating event path must await persistence. A failed write must leave the displayed state unchanged or restore the previous state and show a visible error.
-- Do not make a synchronous LocalStorage compatibility shim for IndexedDB.
-- Do not retain shadow writes, legacy import, or silent fallback.
-- Any renderer that reads global `db` can remain synchronous if the view-model is refreshed only from verified IndexedDB controller results.
-- Avoid concurrent stale saves: use controller atomic `update(mutator)` for single-domain changes rather than read/modify/write from an old UI snapshot.
+## Remaining tests
 
-## Important feature mismatch requiring decision before implementation
+1. Create/edit/delete an income entry and expense entry; reload and verify exact amounts, dates, payment methods, categories, notes and receipt images.
+2. Create/edit/delete a customer; verify stable customer IDs and invoice references.
+3. Create/edit/issue/soft-delete an invoice; verify number reservation and linked income behavior.
+4. Mark an invoice paid and unpaid; verify no duplicate income entry is created.
+5. Test backup/restore with invoices, receipts and other binary/image data.
+6. Compare invoice PDF/print output against the previous working version.
+7. Confirm Safari quota, blocked IndexedDB, reload and interrupted-write behavior.
 
-The v264 UI adapter currently rejects partial invoice payments unless the payment amount equals the full invoice total. This is not proven to match v262 behavior. The workflow controller must be inspected and extended if v262 supports deposits, staged payments, or multiple partial payments. Do not cut over invoices until this is resolved.
-
-## Next coding sequence
-
-1. Inspect full accounting controller and invoice workflow validation and data mutations.
-2. Map all invoice/customer handlers and all sequence helpers (including delete/re-number edge cases).
-3. Implement async state initialization and accounting entry CRUD only, with an isolated browser test page.
-4. Then migrate customer and invoice handlers, including partial payments if supported by the v262 UI.
-5. Run new browser tests for persistence after reload and zero LocalStorage access before proceeding to projects.
+**Important:** the candidate directory is named `v264-app`, but the current HTML metadata still says version 262. Set version/build metadata only after the complete candidate passes testing.
