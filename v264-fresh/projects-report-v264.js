@@ -36,14 +36,12 @@ async function open(){
  document.body.appendChild(shell);document.body.style.overflow="hidden";
  $("thaGeneratePdf").onclick=()=>window.print();
 }
-function install(){
- const btn=$("openProjectReport");if(!btn)return;
- btn.addEventListener("click",async()=>{try{const p=window.__thaCurrentProjectId;if(!p)throw new Error("Open a project first.");await open()}catch(e){const status=$("status");if(status){status.textContent="Report could not be opened: "+(e.message||e);status.style.background="#fde8e8";}}});
- const original=window.openProject;
+function bind(){
+ const btn=$("openProjectReport");
+ if(!btn||btn.dataset.reportBound)return;
+ btn.dataset.reportBound="1";
+ btn.addEventListener("click",async()=>{try{if(!window.__thaCurrentProjectId)throw new Error("Open a project first.");await open()}catch(e){const status=$("status");if(status){status.textContent="Report could not be opened: "+(e.message||e);status.style.background="#fde8e8";}}});
 }
-const observer=new MutationObserver(()=>{const btn=$("openProjectReport");if(btn&&!btn.dataset.reportBound){btn.dataset.reportBound="1";install()}});
-observer.observe(document.body,{childList:true,subtree:true});
-const currentSetter=()=>{const openBtn=$("openProjectReport");if(openBtn&&!openBtn.dataset.reportBound){openBtn.dataset.reportBound="1";openBtn.addEventListener("click",async()=>{try{const id=window.__thaCurrentProjectId;if(!id)throw new Error("Open a project first.");await open()}catch(e){const st=$("status");if(st)st.textContent="Report error: "+e.message}})}};
-const timer=setInterval(()=>{currentSetter();if($("openProjectReport")?.dataset.reportBound){clearInterval(timer)}},100);
-const origDetail=window.renderDetail;
+const observer=new MutationObserver(bind);observer.observe(document.body,{childList:true,subtree:true});bind();
+
 })();
