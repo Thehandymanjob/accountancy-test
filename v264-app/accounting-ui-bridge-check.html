@@ -4,7 +4,9 @@
 document.getElementById('run').addEventListener('click',async()=>{
  const out=document.getElementById('out'),results={};let ids=[];
  const id='ui-bridge-'+Date.now(),customerId=id+'-customer',entryId=id+'-entry';
+ const storageCalls=[];const originals={};const methods=['getItem','setItem','removeItem','clear','key'];
  try{
+  for(const name of methods){originals[name]=Storage.prototype[name];Storage.prototype[name]=function(){if(this===window.localStorage)storageCalls.push(name);return originals[name].apply(this,arguments)}}
   const bridge=HandymanAccountingUIBridgeV264;
   const boot=await bridge.initialize();results.bootstrap=boot.ok&&boot.mode==='indexeddb-only'&&boot.legacyImport===false;
   const before=await bridge.load();
@@ -23,10 +25,12 @@ document.getElementById('run').addEventListener('click',async()=>{
   results.atomicMutation=mutated.ok&&mutated.verified;
   const clean=await bridge.load();
   results.syntheticCleanup=!clean.entries.some(x=>x.id===entryId)&&!clean.customers.some(x=>x.id===customerId);
-  results.noLegacyStorageAccess=!Object.keys(localStorage).some(k=>k==='tha_test226_accounting_v1');
   results.health=(await HandymanStorageV264.health()).ok;
+  results.noLegacyStorageAccess=storageCalls.length===0;
   results.overall=Object.entries(results).filter(([k])=>k!=='health'&&k!=='overall').every(([,v])=>v===true)&&results.health===true;
   out.textContent=JSON.stringify(results,null,2);
- }catch(e){results.error=String(e?.stack||e);results.overall=false;out.textContent=JSON.stringify(results,null,2)}
+ }catch(e){results.error=String(e?.stack||e);results.overall=false}
+ finally{for(const name of methods)if(originals[name])Storage.prototype[name]=originals[name];}
+ out.textContent=JSON.stringify(results,null,2);
 });
 </script></body></html>
