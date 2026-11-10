@@ -15,7 +15,8 @@
   contracts:Object.freeze(["contracts"]),
   businessProfile:Object.freeze(["business_profile"]),
   support:Object.freeze(["preferences","preference_meta","diagnostics","reports","report_notifications","report_settings","report_workflow","notifications","recovery","factory_reset_recovery","help_contact_drafts"]),
-  media:Object.freeze(["media"])
+  media:Object.freeze(["media"]),
+  helpContactDrafts:Object.freeze(["help_contact_drafts"])
  });
  const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
  function scope(name){if(!own(DOMAINS,name))throw new Error("Unknown v264 domain scope: "+name);return DOMAINS[name];}
