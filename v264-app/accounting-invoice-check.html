@@ -39,7 +39,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 document.getElementById("run").onclick=async()=>{
  const results={},errors={},id="acct-invoice-check-"+Date.now();
  const original={get:Storage.prototype.getItem,set:Storage.prototype.setItem,remove:Storage.prototype.removeItem,clear:Storage.prototype.clear};
- const customerId=id+"-customer",entryId=id+"-entry",invoiceId=id+"-invoice",blobEntryId=id+"-blob",mediaId=id+"-media",draftId=id+"-help-draft";
+ const customerId=id+"-customer",entryId=id+"-entry",invoiceId=id+"-invoice",blobEntryId=id+"-blob",mediaId=id+"-media",mediaId2=id+"-media-2",draftId=id+"-help-draft";
  let before=null,started=false;
  try{
   Storage.prototype.getItem=function(){throw new Error("LocalStorage read attempted during IndexedDB-only check.");};
@@ -94,13 +94,13 @@ document.getElementById("run").onclick=async()=>{
   await HandymanMediaV264.saveAsset({id:mediaId,name:"synthetic-photo.jpg",ownerType:"project",ownerId:id,role:"project-photo",blob:mediaBlob});
   const mediaRead=await HandymanMediaV264.getAsset(mediaId);
   results.mediaAssetRoundTrip=mediaRead&&mediaRead.blob instanceof Blob&&mediaRead.blob.size===mediaBlob.size&&await mediaRead.blob.text()==="synthetic project photo bytes";
-  results.mediaMetadataList=(await HandymanMediaV264.list({ownerType:"project",ownerId:id})).some(x=>x.id===mediaId&&x.role==="project-photo");
+  results.mediaMetadataList=(await HandymanMediaV264.list({ownerType:"project",ownerId:id})).some(x=>x.id===mediaId&&x.role==="project-photo");\n  await HandymanMediaV264.saveAsset({id:mediaId2,name:"synthetic-receipt.jpg",ownerType:"accounting-entry",ownerId:id,role:"receipt",blob:new Blob(["second independent asset"],{type:"image/jpeg"})});\n  results.independentMediaRecords=(await HandymanMediaV264.list()).filter(x=>[mediaId,mediaId2].includes(x.id)).length===2;\n  await HandymanMediaV264.deleteAsset(mediaId);\n  results.singleAssetDeleteIsolation=!(await HandymanMediaV264.getAsset(mediaId))&&(await HandymanMediaV264.getAsset(mediaId2))?.blob instanceof Blob;
   await HandymanSupportV264.saveHelpContactDraft({id:draftId,name:"Synthetic",email:"test@example.invalid",subject:"Test",message:"Temporary draft",createdAt:new Date().toISOString()});
   results.helpDraftRoundTrip=(await HandymanSupportV264.load("helpContactDrafts")).some(x=>x.id===draftId);
   const recovery=HandymanRecoveryV264.create();
   const backup=await recovery.createBackup();
   const backupDomains=backup.blob?JSON.parse(await backup.blob.text()).payload.domains:[];
-  results.backupIncludesMediaAndHelpDrafts=backup.verification.ok&&backupDomains.includes("media")&&backupDomains.includes("help_contact_drafts");
+  const backupPayload=backup.blob?JSON.parse(await backup.blob.text()).payload:null;\n  results.backupIncludesMediaAndHelpDrafts=backup.verification.ok&&backupDomains.includes("media")&&backupDomains.includes("help_contact_drafts");\n  results.backupContainsEachMediaRecord=!!backupPayload&&backupPayload.records.filter(x=>x.domain==="media"&&[mediaId,mediaId2].includes(x.key)).length===1;
   await HandymanMediaV264.deleteAsset(mediaId);
   await HandymanSupportV264.deleteHelpContactDraft(draftId);
   results.mediaAndDraftCleanup=!(await HandymanMediaV264.getAsset(mediaId))&&!(await HandymanSupportV264.load("helpContactDrafts")).some(x=>x.id===draftId);
@@ -111,7 +111,7 @@ document.getElementById("run").onclick=async()=>{
  finally{
   Storage.prototype.getItem=original.get;Storage.prototype.setItem=original.set;Storage.prototype.removeItem=original.remove;Storage.prototype.clear=original.clear;
   if(started){
-   try{await HandymanAccountingV264.update(state=>{state.entries=state.entries.filter(x=>![entryId,blobEntryId].includes(String(x.id)));state.invoices=state.invoices.filter(x=>String(x.id)!==invoiceId);state.customers=state.customers.filter(x=>String(x.id)!==customerId);return state;});await HandymanMediaV264.deleteAsset(mediaId);await HandymanSupportV264.deleteHelpContactDraft(draftId);results.syntheticCleanup=true;}catch(e){results.syntheticCleanup=false;errors.cleanup=String(e&&e.message||e);}
+   try{await HandymanAccountingV264.update(state=>{state.entries=state.entries.filter(x=>![entryId,blobEntryId].includes(String(x.id)));state.invoices=state.invoices.filter(x=>String(x.id)!==invoiceId);state.customers=state.customers.filter(x=>String(x.id)!==customerId);return state;});await HandymanMediaV264.deleteAsset(mediaId);await HandymanMediaV264.deleteAsset(mediaId2);await HandymanSupportV264.deleteHelpContactDraft(draftId);results.syntheticCleanup=true;}catch(e){results.syntheticCleanup=false;errors.cleanup=String(e&&e.message||e);}
   }
  }
  const bools=Object.entries(results).filter(([k,v])=>typeof v==="boolean"&&k!=="failed");
