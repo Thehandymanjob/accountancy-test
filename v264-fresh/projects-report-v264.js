@@ -13,6 +13,14 @@ function ledgers(project){return [{ledger:project,name:"Main project"},...(Array
 function excluded(key,r){return (key==="expenses"&&(String(r.paidBy||"").toLowerCase()==="customer"||/customer reimbursed/i.test(String(r.description||""))))||(key==="materials"&&(String(r.settled||"").toLowerCase()==="yes"||String(r.paidBy||"").toLowerCase()==="customer"))}
 function totals(entries){const seen=new Set(),out={income:0,costs:0};for(const {ledger} of entries){for(const r of ledger.income||[]){const k=r.id?"income:"+r.id:null;if(k&&seen.has(k))continue;if(k)seen.add(k);out.income+=Number(r.amount)||0}for(const key of keys)for(const r of ledger[key]||[]){const k=r.id?key+":"+r.id:null;if(k&&seen.has(k))continue;if(k)seen.add(k);if(!excluded(key,r))out.costs+=Number(r.amount)||0}}return out}
 function ledgerTotals(l){return totals([{ledger:l}])}
+function selfTest(){
+ const main={income:[{id:"i1",amount:100}],expenses:[{id:"e1",amount:20},{id:"cx",amount:999,paidBy:"customer"}],materials:[{id:"m1",amount:500,settled:"yes"}]};
+ const sub={income:[{id:"i2",amount:50}],wages:[{id:"w1",amount:10}],expenses:[{id:"e1",amount:20}]};
+ const combined=totals([{ledger:main},{ledger:sub}]);
+ const one=ledgerTotals(main);
+ const checks={combinedIncome:combined.income===150,combinedCostsDeduplicateByCategoryAndId:combined.costs===30,customerPaidExcluded:one.costs===20,settledMaterialsExcluded:one.costs===20,subprojectPriceOnly:[sub].reduce((n,x)=>n+Number(x.price||200),0)===200};
+ return {ok:Object.values(checks).every(Boolean),checks,syntheticOnly:true,noDatabaseWrites:true};
+}
 function recordRows(l){const rows=[];for(const r of l.income||[])rows.push({date:r.date,description:r.description||r.reference||r.method||"Receipt",category:r.method||"Income / receipt",amount:Number(r.amount)||0,type:"Income"});for(const key of keys)for(const r of l[key]||[]){if(excluded(key,r))continue;const label={expenses:"Project expense",wages:"Worker wages",tools:"Tools / equipment",food:"Food & other",contractors:"Contractor / subcontractor",materials:"Material record"}[key];rows.push({date:r.date,description:r.name||r.contractorName||r.workerName||r.supplier||r.description||label,category:r.category||label,amount:Number(r.amount)||0,type:"Cost"})}return rows.sort((a,b)=>String(a.date||"").localeCompare(String(b.date||"")))}
 function reportMarkup(project,profile){
  const entries=ledgers(project),all=totals(entries),agreed=project.hasSubprojects?entries.slice(1).reduce((n,x)=>n+Math.max(0,Number(x.ledger.price)||0),0):0;
@@ -42,6 +50,6 @@ function bind(){
  btn.dataset.reportBound="1";
  btn.addEventListener("click",async()=>{try{if(!window.__thaCurrentProjectId)throw new Error("Open a project first.");await open()}catch(e){const status=$("status");if(status){status.textContent="Report could not be opened: "+(e.message||e);status.style.background="#fde8e8";}}});
 }
-const observer=new MutationObserver(bind);observer.observe(document.body,{childList:true,subtree:true});bind();window.addEventListener("afterprint",()=>document.body.classList.remove("tha-print-report"));
+window.HandymanProjectsReportV264=Object.freeze({selfTest});const observer=new MutationObserver(bind);observer.observe(document.body,{childList:true,subtree:true});bind();window.addEventListener("afterprint",()=>document.body.classList.remove("tha-print-report"));
 
 })();
