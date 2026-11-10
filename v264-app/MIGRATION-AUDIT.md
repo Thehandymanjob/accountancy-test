@@ -62,3 +62,13 @@ Production repository: NOT TOUCHED
 ## Immediate next implementation slice
 
 Start with an exact mapping of accounting and invoice event handlers to the async controllers, including invoice numbering and customer IDs. Do not edit the main UI file until the handler map and missing API behavior are understood. The full v262 UI file remains unchanged in the root; `v264-app/index.html` is the isolated work copy.
+
+
+## Progress update — 2026-11-10 (continued)
+
+- Added `v264-app/v264-accounting-bridge.js`: async in-memory view-model bridge over IndexedDB controllers. It exposes initialize/refresh/getState/subscribe, entry CRUD, customer CRUD, invoice save/mark-paid/mark-unpaid/soft-delete, invoice number reservation, and settings updates. Mutating bridge actions are serialized; no Storage API access is present.
+- Added `v264-app/accounting-invoice-check.html`: isolated browser verification for the bridge and accounting/invoice controllers. It blocks LocalStorage reads/writes during the test, checks Blob media round-trip, persistence on a fresh IndexedDB read, invoice full-payment lifecycle and synthetic cleanup.
+- Corrected `v264-app/v264-app-bootstrap.js` to start modules through the actual `HandymanUIAdapterV264.startAll()` API. The module bootstrap itself exposes individual start methods only.
+- The invoice UI inspected in v262 uses a binary paid/unpaid workflow; it does not expose a partial-payment amount field. The v264 full-payment restriction therefore matches the visible invoice form, but this still needs browser regression verification.
+- No full UI cutover has occurred. `v264-app/index.html` remains unchanged; original root UI and production remain untouched.
+- The new browser test has not yet been run by the user. Do not mark the accounting/invoice slice as passed until its JSON output confirms every check and synthetic cleanup.
