@@ -10,6 +10,10 @@ document.getElementById('run').addEventListener('click',async()=>{
   const bridge=HandymanAccountingUIBridgeV264;
   const boot=await bridge.initialize();results.bootstrap=boot.ok&&boot.mode==='indexeddb-only'&&boot.legacyImport===false;
   const before=await bridge.load();
+  const replaceCheck=await bridge.replaceState(current=>current);
+  results.replaceStateVerified=replaceCheck.ok&&replaceCheck.verified;
+  const rollbackCheck=await bridge.commitWithRollback(before,before);
+  results.commitWithRollbackVerified=rollbackCheck.ok&&rollbackCheck.verified;
   const next=structuredClone(before);
   next.customers.push({id:customerId,name:'Synthetic UI Bridge Customer',phone:'',address:'',workAddress:'',email:''});
   next.entries.push({id:entryId,type:'expense',date:'2026-11-10',amount:12.34,method:'bank',category:'Materials - Test',reference:'Synthetic UI bridge',receiptImage:new Blob(['receipt-bridge-check'],{type:'text/plain'}),createdAt:new Date().toISOString()});
