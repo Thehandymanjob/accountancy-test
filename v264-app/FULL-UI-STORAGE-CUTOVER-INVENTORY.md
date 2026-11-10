@@ -1,61 +1,62 @@
-# v264 full UI storage cutover inventory
+# Full UI Storage Cutover Inventory — refreshed 2026-11-10
 
-Date: 2026-11-10
-Source: `v264-app/index.html` copied from test-repository v262 root.
-Status: inventory only; no UI or CSS changes made.
+## Active application surface
 
-## Result
+Candidate: `v264-app/index.html` (currently metadata version 262; not yet a released v264 build).
 
-The current full UI is still a LocalStorage application. A source scan found 73 lines matching storage access or core storage entry points. This count is a line-match count, not a count of individual API calls. The full UI must not be enabled with the v264 IndexedDB modules until every listed domain has an asynchronous persistence path and the browser test confirms zero legacy storage access.
+The preserved legacy UI is now wired to the v264 IndexedDB gateway for the principal business domains. The UI keeps in-memory objects such as `db`, `prDB`, and contract/report caches for rendering only; durable writes go through asynchronous controller/gateway calls.
 
-## Storage domains and consumers
+## Active storage domains
 
-| UI area | Current source evidence | Required v264 owner |
+| UI feature | IndexedDB domain(s) | Write behavior |
 |---|---|---|
-| Accounting entries, customers, invoices, categories, settings | `KEY`, `loadDB`, `persist`, save/delete handlers, invoice sequence | Accounting controller + invoice workflow + sequences |
-| Project workspace, project financials, people, partners, contractors, completion | `PR_KEY`, `prLoad`, `prPersist`, project sync and completion handlers | Projects controller; accounting transfer must remain separately approved |
-| Contracts | `CT_KEY`, `ctRead`, `ctWrite`, contract CRUD | Contracts controller |
-| Business profile and logo | Project workspace `profile`, report logo, launcher logo, contract profile | Business profile controller; media must be persisted and backed up |
-| Language preference | `APP_LANG_KEY`, `APP_LANG_PREF_VERSION_KEY`, report archive language | Preferences domain |
-| Monitor and diagnostics | `MONITOR_LOG_KEY`, monitor context and self-check | Diagnostics domain; do not keep app data in browser Storage |
-| Help contact drafts | Help contact submission and prior domain audit | Add a dedicated support/help-draft domain; current support controller does not cover this key |
-| Receipt, project, contract and payment documents | File inputs, data URLs, Blob/File values, report and print rendering | Media domain or typed media records; backup/restore must include binary bytes and metadata |
-| Backup and restore | Current comprehensive backup reads LocalStorage and IndexedDB inventories | Replace with a single IndexedDB snapshot/export and verified restore; no legacy storage inventory dependency |
-| Factory reset / recovery | Reset confirmation, reset locks and recovery workflow | Recovery controller; must be fail-closed and preserve a verified backup |
+| Accounting entries, customers, invoices, categories and settings | `accounting` | `persist()` waits for gateway save and verified read-back; 12 call sites awaited |
+| Invoice number high-water mark | `sequences` | Reserved through the accounting controller; reservation is awaited on startup and invoice operations |
+| Projects, sub-projects, workers, partners, contractors, companies, jobs and project ledgers | `projects` | `prPersist()` waits for verified save; 31 call sites awaited; failed save restores last verified state |
+| Business name, owner, phone, email, address, logo and payment details | `business_profile` | Separate domain; project/profile writes are coordinated and rollback is attempted if either side fails |
+| Contracts | `contracts` | Async save, read-back and equality verification; both UI write call sites awaited |
+| Application language | `preferences`, `preference_meta` | Support controller write queue |
+| Monitor history | `diagnostics` | Async diagnostics queue |
+| Report archive | `reports` | Async report write queue |
+| Report notifications | `report_notifications` | Async report write queue |
+| Report settings, including accountant recipient details | `report_settings` | Async report write queue |
+| Reporting workflow | `report_workflow` | Async report write queue |
+| Help/contact drafts | `help_contact_drafts` | Support controller write queue |
+| Media assets | `media` | Dedicated controller/domain available; current legacy UI still stores its attachments within owning records |
 
-## Critical synchronous call sites
+Recovery domains additionally include `notifications`, `recovery`, and `factory_reset_recovery`.
 
-- Accounting startup: `loadDB()`, cleanup helpers, invoice sequence repair, and direct startup writes.
-- Accounting writes: `persist()` is called from entries, customers, invoices, settings, categories, and invoice payment state.
-- Projects startup: `prLoad()` is called when opening Projects and at script initialization.
-- Projects writes: `prPersist()`, project completion, project financial sync and removal.
-- Contracts: synchronous `ctRead()` / `ctWrite()` are used by save, load, delete, list and print.
-- Reports and launcher read profile logo synchronously.
-- Monitor and language preference code reads/writes browser Storage directly.
-- Backup/restore currently expects both LocalStorage and IndexedDB data and therefore cannot be reused unchanged for the IndexedDB-only architecture.
+## Storage API boundary
 
-## Cutover rules
+The candidate HTML and its 15 loaded external scripts were statically scanned:
 
-1. Keep the copied v262 HTML, CSS, component structure, print CSS, report markup and button layout unchanged. Replace data access behind handlers, not visual markup.
-2. Startup must await required domain initialization and loads before enabling any write-capable UI.
-3. Keep `db` and `prDB` only as in-memory render models, populated from IndexedDB. They must never be authoritative or synchronously persisted.
-4. Every mutating handler must await a controller transaction, verify success, then refresh its in-memory view. On failure, retain/restore the previous view and show an error.
-5. No LocalStorage/SessionStorage/cookie access, no synchronous compatibility shim, no shadow write, no silent fallback and no legacy import.
-6. Preserve existing project/accounting separation: project-to-accounting transfer only after explicit approval; transfer must not alter project P&L.
-7. Backup/restore must cover every domain and every binary asset. A Blob round-trip in accounting alone does not prove all media fields are included.
-8. Do not change print templates, font sizes, logo sizing, page breaks, margins, report layout or invoice/contract print markup.
+- Direct LocalStorage API calls: 0
+- Direct SessionStorage API calls: 0
+- `Storage.prototype` instrumentation: 0
+- `document.cookie` access: 0
+- Legacy storage-foundation dependency: removed from the active page
 
-## Next implementation order
+Legacy-looking identifiers such as old key names may remain as logical IDs or labels; they are not used through browser Storage APIs in the active candidate.
 
-1. Finish storage-domain inventory and add explicit media/help-draft coverage to the domain registry and backup allowlist.
-2. Build an async app state coordinator that loads accounting, projects, contracts, profile, preferences, diagnostics, reports, support drafts and media before UI activation.
-3. Migrate accounting handlers as a complete vertical slice, then run browser regression tests.
-4. Migrate projects and their linked financial/third-party records; preserve the explicit transfer approval boundary.
-5. Migrate contracts, profile/logo and media.
-6. Migrate backup/restore, reports, diagnostics and preferences.
-7. Run a whole-app scan and runtime trap proving zero legacy Storage API access.
-8. Compare v264-app print output against the v262 source for invoice, contract, report and project P&L before enabling the app.
+## Write completion and rollback
 
-## Current test status
+- Accounting, project, contract and report writes are asynchronous and awaited by their UI call sites.
+- Project persistence restores the last verified project snapshot after a failed write.
+- Project and Business Profile saves are coordinated by the gateway; rollback writes and read-back checks are attempted on failure.
+- Report notification/read-state and workflow changes are reverted in memory when their corresponding write fails.
+- Help-contact drafts and language preference writes are serialized through the Support write queue.
 
-The user-provided v264 accounting/invoice browser result is PASS for the isolated bridge checks. It does not certify the full app UI, projects, contracts, backup/restore, reports, print output or media backup coverage. No full UI cutover is approved.
+## Backup coverage
+
+The portable recovery module snapshots 17 domains and encodes Blob/File/binary data. The full backup/restore UI waits for all active write queues and a gateway read barrier before operating.
+
+A separate project-only JSON export remains distinct from the full portable backup. The full portable backup is the authoritative route for complete application recovery, including media-domain records.
+
+## Known functional gaps / verification work
+
+- The candidate has no active Pay Contractor button and no explicit Transfer to Accounting action. Project completion changes status only. Do not infer that project data is transferred to accounting.
+- Company Contracts & Jobs payment records remain in the Projects domain and are not automatically added to Accounting.
+- The invoice payment modal records the full invoice amount; partial payment is not represented in the current UI.
+- The dedicated media controller is loaded but not yet used by the preserved UI; verify all actual attachment fields through Safari backup/restore.
+- iPhone Safari runtime tests and print/PDF visual regression tests remain outstanding.
+- The app metadata still identifies version 262. Version 264 release metadata and updater configuration are deferred until the candidate passes testing.
