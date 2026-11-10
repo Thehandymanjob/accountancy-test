@@ -1336,22 +1336,22 @@ function printReport(){
      if(raw!==''&&Number.isFinite(Number(raw))&&Number(raw)===0)row.remove();
    });
  });
- // Capture a live DOM node; a detached clone can produce blank or incomplete output.
+ // PDF generation uses only this detached clone, not the interactive report page.
  directOpenReportPDF(node,'The-Handyman-Financial-Report-'+Date.now()+'.pdf',[8,8,8,8]);
 }
-function directOpenReportPDF(node,filename,margin){
+async function directOpenReportPDF(node,filename,margin){
+ // Open a tab synchronously from the button tap, then replace it with the generated PDF.
  const tab=window.open('about:blank','_blank');
- if(!tab){alert('Safari blocked the report preview. Allow pop-ups for this app and try again.');return}
+ if(!tab){alert('Safari blocked the PDF tab. Allow pop-ups for this app and try again.');return}
  try{
-  const styles=Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map(x=>'<link rel="stylesheet" href="'+x.href+'">').join('');
-  const inlineStyles=Array.from(document.querySelectorAll('style')).map(x=>x.outerHTML).join('');
-  const pageCss='<style>html,body{margin:0;padding:0;background:#fff;color:#172b45;font-family:Arial,Helvetica,sans-serif}.tha-native-print-toolbar{position:sticky;top:0;z-index:9999;display:flex;justify-content:center;gap:10px;padding:12px;background:#142b4a}.tha-native-print-toolbar button{border:0;border-radius:9px;padding:12px 18px;min-height:46px;background:#e5b63f;color:#142b4a;font-size:16px;font-weight:700}.tha-native-print-hint{text-align:center;padding:10px;background:#f3f5f8;color:#142b4a;font-size:13px}.tha-native-print-paper{width:794px;max-width:100%;margin:0 auto;background:#fff}@page{size:A4 portrait;margin:8mm}@media print{html,body{background:#fff!important}.tha-native-print-toolbar,.tha-native-print-hint{display:none!important}.tha-native-print-paper{width:100%!important;max-width:none!important;margin:0!important;overflow:visible!important}}</style>';
-  tab.document.open();
-  tab.document.write('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Handyman Financial Report</title>'+styles+inlineStyles+pageCss+'</head><body><div class="tha-native-print-toolbar"><button id="nativePrintButton" type="button">Print / Save PDF</button><button id="nativeCloseButton" type="button">Close</button></div><div class="tha-native-print-hint">Tap Print / Save PDF. In the iPhone print preview, use the Share icon to save or send the PDF.</div><main class="tha-native-print-paper">'+node.outerHTML+'</main></body></html>');
-  tab.document.close();
-  tab.document.getElementById('nativePrintButton').addEventListener('click',()=>{tab.focus();tab.print()});
-  tab.document.getElementById('nativeCloseButton').addEventListener('click',()=>tab.close());
- }catch(e){try{tab.close()}catch(_){}alert('The financial report preview could not be opened: '+(e&&e.message?e.message:'unknown error'))}
+  tab.document.open();tab.document.write('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Creating PDF…</title></head><body style="font:16px Arial;padding:24px;color:#142b4a">Creating your PDF…</body></html>');tab.document.close();
+  if(!window.html2pdf){await new Promise((resolve,reject)=>{let sc=document.querySelector('script[data-direct-report-pdf]');if(sc){if(window.html2pdf){resolve();return}sc.addEventListener('load',resolve,{once:true});sc.addEventListener('error',()=>reject(new Error('PDF library failed to load')),{once:true});return}sc=document.createElement('script');sc.dataset.directReportPdf='1';sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';sc.onload=resolve;sc.onerror=()=>reject(new Error('PDF library failed to load'));document.head.appendChild(sc)});}
+  if(!window.html2pdf)throw new Error('PDF library is unavailable');
+  await Promise.all(Array.from(node.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;setTimeout(resolve,2500)})));
+  const blob=await window.html2pdf().set({margin:margin||[8,8,8,8],filename,image:{type:'jpeg',quality:.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#fff',logging:false,scrollY:0,windowWidth:794,windowHeight:Math.max(node.scrollHeight,1123)},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css'],avoid:['.uc-head','.uc-group tr','.uc-summary tr']}}).from(node).outputPdf('blob');
+  if(!blob||blob.type!=='application/pdf'||blob.size<1000)throw new Error('Generated PDF is empty or invalid');
+  const url=URL.createObjectURL(blob);tab.location.replace(url);setTimeout(()=>URL.revokeObjectURL(url),120000);
+ }catch(e){try{tab.document.body.innerHTML='<main style="font:16px Arial;padding:24px"><h2>PDF could not be created</h2><p>Check the internet connection and return to the app to try again.</p></main>'}catch(_){}alert('PDF creation failed: '+(e&&e.message?e.message:'unknown error'));}
 }
 function openReportPdfView(){
  const report=$('report');
