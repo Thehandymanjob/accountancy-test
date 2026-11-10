@@ -11,7 +11,7 @@
   const STORE = "records";
   const META = "metadata";
   const BUILD = "THA-264-FRESH-IDB-RECOVERY-GUARD-2";
-  const RECOVERY_DOMAINS = Object.freeze(["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"].sort());
+  const RECOVERY_DOMAINS = Object.freeze(["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences","help_contact_drafts","media"].sort());
 
   const validDomain = value => typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value);
   const validKey = value => typeof value === "string" && value.length > 0 && value.length <= 512;
