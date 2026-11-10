@@ -18,8 +18,8 @@ button{padding:12px 16px;border:0;border-radius:8px;background:#17365d;color:#ff
 <button id="run">Run accounting and invoice checks</button><pre id="out">Waiting…</pre>
 </section></main>
 <script src="../v264-fresh/storage-idb-v264.js?v=264g"></script>
-<script src="../v264-fresh/v264-strict-domain-boundary.js?v=264d"></script>
-<script src="../v264-fresh/app-storage-v264.js?v=264d"></script>
+<script src="../v264-fresh/v264-strict-domain-boundary.js?v=264e"></script>
+<script src="../v264-fresh/app-storage-v264.js?v=264e"></script>
 <script src="../v264-fresh/v264-accounting-controller-accounting-v2.js?v=264d"></script>
 <script src="../v264-fresh/v264-invoice-workflow-v263.js?v=264d"></script>
 <script src="../v264-fresh/v264-projects-controller.js?v=264d"></script>
@@ -101,6 +101,10 @@ document.getElementById("run").onclick=async()=>{
   results.singleAssetDeleteIsolation=!(await HandymanMediaV264.getAsset(mediaId))&&(await HandymanMediaV264.getAsset(mediaId2))?.blob instanceof Blob;
   await HandymanSupportV264.saveHelpContactDraft({id:draftId,name:"Synthetic",email:"test@example.invalid",subject:"Test",message:"Temporary draft",createdAt:new Date().toISOString()});
   results.helpDraftRoundTrip=(await HandymanSupportV264.load("helpContactDrafts")).some(x=>x.id===draftId);
+  const helpDraftBackup=await HandymanAppStorageV264.backup("helpContactDrafts");
+  await HandymanSupportV264.deleteHelpContactDraft(draftId);
+  const helpDraftRestore=await HandymanAppStorageV264.restore("helpContactDrafts",helpDraftBackup);
+  results.helpDraftScopedBackupRestore=helpDraftRestore.verified===true&&(await HandymanSupportV264.load("helpContactDrafts")).some(x=>x.id===draftId);
   const recovery=HandymanRecoveryV264.create();
   const backup=await recovery.createBackup();
   const backupDomains=backup.blob?JSON.parse(await backup.blob.text()).payload.domains:[];
