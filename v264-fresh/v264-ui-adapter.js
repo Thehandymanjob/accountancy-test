@@ -21,6 +21,7 @@
  const contracts=()=>required("HandymanContractsV264");
  const profile=()=>required("HandymanBusinessProfileV264");
  const support=()=>required("HandymanSupportV264");
+ const media=()=>required("HandymanMediaV264");
  async function setProjectCompletion(projectId,complete){
   if(typeof complete!=="boolean")throw new Error("Completion state must be an explicit boolean.");
   return projects().updateProject(projectId,{status:complete?"complete":"open"});
@@ -45,7 +46,8 @@
   projects:Object.freeze({load:()=>projects().load(),save:value=>projects().save(value),update:fn=>projects().update(fn),add:item=>projects().addProject(item),updateProject:(id,patch)=>projects().updateProject(id,patch),remove:id=>projects().deleteProject(id),addSubproject:(id,item)=>projects().addSubproject(id,item),updateSubproject:(id,subId,patch)=>projects().updateSubproject(id,subId,patch),removeSubproject:(id,subId)=>projects().deleteSubproject(id,subId),saveDirectory:(kind,item)=>projects().saveDirectory(kind,item),deleteDirectory:(kind,id)=>projects().deleteDirectory(kind,id),saveLedgerRecord:(projectId,subprojectId,collection,item)=>projects().saveLedgerRecord(projectId,subprojectId,collection,item),deleteLedgerRecord:(projectId,subprojectId,collection,id)=>projects().deleteLedgerRecord(projectId,subprojectId,collection,id),setComplete:setProjectCompletion,transferToAccounting:transferProjectToAccounting}),
   contracts:Object.freeze({load:()=>contracts().load(),save:value=>contracts().save(value),add:item=>contracts().add(item),update:(id,patch)=>contracts().updateContract(id,patch),remove:id=>contracts().remove(id),get:id=>contracts().get(id)}),
   businessProfile:Object.freeze({load:()=>profile().load(),save:value=>profile().save(value),update:patch=>profile().update(patch),backup:()=>profile().backup(),restore:pkg=>profile().restore(pkg)}),
-  support:Object.freeze({load:name=>support().load(name),save:(name,value)=>support().save(name,value),update:(name,fn)=>support().update(name,fn),setLanguage:(lang,version)=>support().setLanguage(lang,version),appendDiagnostic:event=>support().appendDiagnostic(event),loadReportWorkspace:()=>support().loadReportWorkspace(),saveReportWorkspace:value=>support().saveReportWorkspace(value)}),
+  support:Object.freeze({load:name=>support().load(name),save:(name,value)=>support().save(name,value),update:(name,fn)=>support().update(name,fn),setLanguage:(lang,version)=>support().setLanguage(lang,version),appendDiagnostic:event=>support().appendDiagnostic(event),loadReportWorkspace:()=>support().loadReportWorkspace(),saveReportWorkspace:value=>support().saveReportWorkspace(value),saveHelpContactDraft:draft=>support().saveHelpContactDraft(draft),deleteHelpContactDraft:id=>support().deleteHelpContactDraft(id)}),
+  media:Object.freeze({initialize:()=>media().initialize(),saveAsset:item=>media().saveAsset(item),getAsset:id=>media().getAsset(id),deleteAsset:id=>media().deleteAsset(id),list:filter=>media().list(filter)}),
   health:()=>required("HandymanStorageV264").health(),
   backup:()=>required("HandymanRecoveryV264").create()
  });
