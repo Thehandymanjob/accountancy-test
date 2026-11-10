@@ -1203,7 +1203,7 @@ function renderRecords(){
  $('recordRows').innerHTML=pg.items.map(x=>{
   if(x.__kind==='invoice'){
    const deleted=!!(x.deletedAt||x.deleted===true);
-   const status=deleted?'<span class="small deleted-record-label">DELETED</span>':(x.paymentStatus==='paid'?'<span class="small">Paid</span>':'<span class="small">Issued</span>');
+   const invoiceStatus=String(x.status??'draft').trim().toLowerCase();const status=deleted?'<span class="small deleted-record-label">DELETED</span>':(invoiceStatus==='draft'?'<span class="small">Draft</span>':(invoiceStatus==='issued'?(x.paymentStatus==='paid'?'<span class="small">Paid</span>':'<span class="small">Issued</span>'):'<span class="small">Unknown status</span>'));
    return '<tr class="'+(deleted?'record-deleted-invoice':'')+'"><td class="no-print action-cell"><div class="table-actions"><button class="mini" onclick="viewRecordInvoice(\''+esc(x.id)+'\')">View</button></div></td><td>'+esc(x.number)+'</td><td>'+esc(x.date)+'</td><td>Invoice '+status+'</td><td>'+esc(x.customerName||'')+'</td><td>'+money(x.amount)+'</td><td>Invoice '+esc(x.number)+(deleted?' · Deleted':'')+'</td></tr>';
   }
   const linked=!!invoiceLinkedToEntry(x);
