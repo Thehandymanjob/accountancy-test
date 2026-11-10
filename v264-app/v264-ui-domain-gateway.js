@@ -35,8 +35,12 @@
  async function load(name){
   requireReady();
   let value;
-  if(name==="support")value=await api(name).loadReportWorkspace();
-  else if(name==="projects"){const pair=await Promise.all([api(name).load(),api("businessProfile").load()]);value={...pair[0],profile:pair[1]};}
+  if(name==="support"){
+   value=await api(name).loadReportWorkspace();
+   const workspace=value;
+   states.support={...states.support,reports:clone(workspace.archive||[]),reportNotifications:clone(workspace.notifications||[]),reportSettings:clone(workspace.settings||{}),reportWorkflow:clone(workspace.workflow||{})};
+   return clone(workspace);
+  }else if(name==="projects"){const pair=await Promise.all([api(name).load(),api("businessProfile").load()]);value={...pair[0],profile:pair[1]};}
   else value=await api(name).load();
   states[name]=clone(value);return clone(value);
  }
@@ -44,7 +48,7 @@
   requireReady();
   let result;
   if(name==="accounting")result=await api(name).save(value);
-  else if(name==="projects"){const projectState=clone(value);const profile=projectState.profile||{};delete projectState.profile;const profileResult=await api("businessProfile").save(profile);if(!profileResult||profileResult.ok!==true)throw new Error("Business Profile was not saved.");result=await api(name).save(projectState);}
+  else if(name==="projects"){const projectState=clone(value);const profile=projectState.profile||{};delete projectState.profile;const profileResult=await api("businessProfile").save(profile);if(!profileResult||profileResult.ok!==true)throw new Error("Business Profile was not saved.");states.businessProfile=clone(profile);result=await api(name).save(projectState);}
   else if(name==="contracts")result=await api(name).save(value);
   else if(name==="businessProfile")result=await api(name).save(value);
   else if(name==="support")result=await api(name).saveReportWorkspace(value);
