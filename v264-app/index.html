@@ -2252,6 +2252,7 @@ select.native-select-hidden{position:absolute!important;width:1px!important;heig
    window.__thaContractSaveOk=true;
    monitorLogCache=Array.isArray(result.states.support.diagnostics)?result.states.support.diagnostics:[];
    if(typeof ctRenderSaved==='function')await ctRenderSaved();
+   if(typeof window.report188Hydrate==='function')await window.report188Hydrate();
    if(typeof applyAppLanguage==='function')applyAppLanguage(window.HandymanUIDomainGatewayV264.states.support.preferences||'en');
    if(typeof syncLauncherBrand==='function')syncLauncherBrand();
    return result;
@@ -2390,19 +2391,8 @@ const pad=n=>String(n).padStart(2,'0');
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const dateFrom=(y,m,d)=>new Date(y,m-1,d,12,0,0);
 const nice=x=>{if(!x)return '—';const d=new Date(x+'T12:00:00');return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});};
-const load=(key,fallback)=>{try{const v=JSON.parse(localStorage.getItem(key)||'null');return v===null?fallback:v}catch(e){return fallback}};
-const save=(key,v)=>{
- try{localStorage.setItem(key,JSON.stringify(v));return true}
- catch(e){
-  // Background initialisation must never trigger repeated blocking alerts.
-  // Keep all existing records intact and surface a single inline warning instead.
-  const msg='گزارش در حافظه مرورگر ذخیره نشد. لطفاً فضای ذخیره‌سازی Safari را بررسی کنید و از اطلاعات نسخه پشتیبان بگیرید.';
-  const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');
-  if(status){status.textContent=msg;status.hidden=false;status.classList.add('storage-error')}
-  else {window.__thaStorageSaveFailed=true;console.warn('Report storage write failed',key,e)}
-  return false
- }
-};
+const supportDomain=key=>key===ARCH?'reports':key===NOTIFS?'reportNotifications':key===CFG?'reportSettings':key===FLOW?'reportWorkflow':null;let reportCache={reports:[],reportNotifications:[],reportSettings:{periodMode:'calendar'},reportWorkflow:{}};let reportWriteTail=Promise.resolve();const load=(key,fallback)=>{const domain=supportDomain(key);if(!domain)return fallback;const value=reportCache[domain];return value===undefined?fallback:structuredClone(value)};
+const save=(key,v)=>{const domain=supportDomain(key);if(!domain)return false;try{const next=structuredClone(v);reportCache[domain]=next;const support=window.HandymanSupportV264;if(!support||!window.HandymanUIDomainGatewayV264?.ready)throw new Error('IndexedDB support domain is not ready.');const operation=reportWriteTail.then(()=>support.save(domain,next));reportWriteTail=operation.catch(error=>{const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');if(status){status.textContent='IndexedDB report save failed: '+(error&&error.message||error);status.hidden=false;status.classList.add('storage-error')}console.error('IndexedDB report storage failure:',error)});return true}catch(e){const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');if(status){status.textContent='Report could not be queued in IndexedDB: '+(e&&e.message||e);status.hidden=false;status.classList.add('storage-error')}return false}};
 let cfg=load(CFG,{periodMode:'calendar'});let archive=load(ARCH,[]);let notifications=load(NOTIFS,[]);let flow=load(FLOW,{});
 if(!Array.isArray(archive))archive=[];if(!Array.isArray(notifications))notifications=[];
 function addNotif(id,title,message,kind='info'){if(notifications.some(n=>n.id===id))return false;notifications.unshift({id,title,message,kind,createdAt:new Date().toISOString(),read:false});return true}
@@ -2467,6 +2457,7 @@ window.report188Navigate=function(name){if(!report188Views[name])return;if(name!
 window.report188Back=function(){if(report188Stack.length){const target=report188Stack.pop();report188Current=target;Object.entries(report188Views).forEach(([k,id])=>{const el=$188(id);if(el){el.hidden=k!==target;el.classList.toggle('active',k===target)}});const back=document.querySelector('#report > .section-topbar > button');if(back)back.textContent=target==='menu'?'← Back to Dashboard':'← Back';const title=document.querySelector('#report > .section-topbar h2');if(title)title.textContent=({menu:'Reports & Tax',builder:'Prepare a report',archive:'Saved reports archive',inbox:'Notifications inbox',notifDetail:'Notification details',calendar:'Tax calendar',email:'Accountant email'})[target]||'Reports & Tax';if(target==='inbox')renderNotifications();if(target==='archive')renderArchive();window.scrollTo({top:0,behavior:'auto'});return}if(typeof show==='function'&&document.getElementById('accountancyHome'))show('accountancyHome');else if(typeof returnToLauncher==='function')returnToLauncher();else show('accountancyHome')};
 window.report188SaveEmailSettings=function(){const email=($188('report188AccountantEmail')?.value||'').trim();if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){alert('Enter a valid email address.');return}const data={email,name:($188('report188EmailName')?.value||'').trim(),updatedAt:new Date().toISOString()};if(save('tha_test226_report_email_settings_v1',data))$188('report188EmailStatus').textContent='Recipient details saved on this device. No email has been sent; email sending is not connected.'};
 window.report188Init=function(){Object.entries(report188Views).forEach(([k,id])=>{const el=$188(id);if(el){el.hidden=k!=='menu';el.classList.toggle('active',k==='menu')}});report188Current='menu';report188Stack=[];const mode=$188('report188PeriodMode');if(mode)mode.value=cfg.periodMode||'calendar';if(!$188('reportFrom').value||!$188('reportTo').value){}if($188('reportPreset')){preset();if(typeof refreshReport==='function')refreshReport();}renderArchive();renderNotifications();renderCalendar();checkDue(false)};
+window.report188Hydrate=async function(){try{const state=await window.HandymanSupportV264.loadReportWorkspace();reportCache={reports:state.archive||[],reportNotifications:state.notifications||[],reportSettings:state.settings||{periodMode:'calendar'},reportWorkflow:state.workflow||{}};cfg=load(CFG,{periodMode:'calendar'});archive=load(ARCH,[]);notifications=load(NOTIFS,[]);flow=load(FLOW,{});if(!Array.isArray(archive))archive=[];if(!Array.isArray(notifications))notifications=[];window.report188Init?.();return true}catch(error){console.error('Report workspace IndexedDB load failed:',error);const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');if(status){status.textContent='Reports could not be loaded from IndexedDB. '+(error&&error.message||error);status.classList.add('storage-error')}return false}};
 // Language preference foundation (v195 test build). Does not alter accounting records.
 const APP_LANG_KEY='tha_test226_app_language_v1';
 const APP_UI_TRANSLATION_VERSION=204;
