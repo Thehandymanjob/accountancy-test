@@ -58,11 +58,10 @@
  async function replaceState(mutator){
   if(typeof mutator!=="function")throw new TypeError("A synchronous accounting state mutator is required.");
   if(!initialized)throw new Error("Accounting UI bridge is not initialized.");
-  return mutate(current=>{
-   const next=mutator(clone(current));
-   if(next&&typeof next.then==="function")throw new Error("Accounting state mutator must be synchronous.");
-   return assertState(next===undefined?current:next);
-  });
+  const current=await load();
+  const next=mutator(clone(current));
+  if(next&&typeof next.then==="function")throw new Error("Accounting state mutator must be synchronous.");
+  return commit(assertState(next===undefined?current:next));
  }
  async function commitWithRollback(nextState,previousState){
   try{return await commit(nextState);}
