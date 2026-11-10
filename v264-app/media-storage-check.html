@@ -39,8 +39,11 @@ document.getElementById("run").onclick=async()=>{
   const receipt=new Blob(["synthetic receipt image"],{type:"image/png"});
   await HandymanMediaV264.saveAsset({id:ids[0],name:"photo.jpg",ownerType:"project",ownerId:id,role:"project-photo",blob:photo});
   await HandymanMediaV264.saveAsset({id:ids[1],name:"receipt.png",ownerType:"accounting-entry",ownerId:id,role:"receipt",blob:receipt});
-  const file=new File(["synthetic file payload"],"test-receipt.pdf",{type:"application/pdf",lastModified:1700000000000});\n  await HandymanMediaV264.saveAsset({id:ids[2],name:file.name,ownerType:"accounting-entry",ownerId:id,role:"receipt-file",blob:file});\n  const [a,b,c]=await Promise.all(ids.map(x=>HandymanMediaV264.getAsset(x)));
-  results.twoIndependentBlobRecords=!!a&&!!b&&a.blob instanceof Blob&&b.blob instanceof Blob&&await a.blob.text()==="synthetic project photo"&&await b.blob.text()==="synthetic receipt image";\n  results.fileRoundTrip=!!c&&c.blob instanceof File&&c.blob.name==="test-receipt.pdf"&&c.blob.type==="application/pdf"&&await c.blob.text()==="synthetic file payload";
+  const file=new File(["synthetic file payload"],"test-receipt.pdf",{type:"application/pdf",lastModified:1700000000000});
+  await HandymanMediaV264.saveAsset({id:ids[2],name:file.name,ownerType:"accounting-entry",ownerId:id,role:"receipt-file",blob:file});
+  const [a,b,c]=await Promise.all(ids.map(x=>HandymanMediaV264.getAsset(x)));
+  results.twoIndependentBlobRecords=!!a&&!!b&&a.blob instanceof Blob&&b.blob instanceof Blob&&await a.blob.text()==="synthetic project photo"&&await b.blob.text()==="synthetic receipt image";
+  results.fileRoundTrip=!!c&&c.blob instanceof File&&c.blob.name==="test-receipt.pdf"&&c.blob.type==="application/pdf"&&await c.blob.text()==="synthetic file payload";
   const listed=await HandymanMediaV264.list();
   results.metadataFiltering=listed.some(x=>x.id===ids[0]&&x.ownerType==="project"&&x.role==="project-photo")&&listed.some(x=>x.id===ids[1]&&x.ownerType==="accounting-entry"&&x.role==="receipt")&&listed.some(x=>x.id===ids[2]&&x.role==="receipt-file");
   await HandymanMediaV264.deleteAsset(ids[0]);
@@ -49,7 +52,8 @@ document.getElementById("run").onclick=async()=>{
   const pkg=JSON.parse(await backup.blob.text()),rows=pkg.payload.records.filter(x=>x.domain==="media"&&ids.includes(x.key));
   results.backupIncludesIndependentMedia=backup.verification.ok&&rows.length===2&&rows.some(x=>x.key===ids[1])&&rows.some(x=>x.key===ids[2]);
   results.backupIntegrity=backup.verification.records===pkg.payload.records.length&&backup.verification.digest===pkg.digest;
-  results.noLegacyStorageAccess=true;\n  const engineTest=await HandymanStorageV264.selfTest();results.engineBlobAndSnapshotSelfTest=engineTest.ok===true;results.engineSelfTest=engineTest;
+  results.noLegacyStorageAccess=true;
+  const engineTest=await HandymanStorageV264.selfTest();results.engineBlobAndSnapshotSelfTest=engineTest.ok===true;results.engineSelfTest=engineTest;
  }catch(e){results.failed=true;results.error=String(e&&e.message||e);}
  finally{
   Storage.prototype.getItem=original.get;Storage.prototype.setItem=original.set;Storage.prototype.removeItem=original.remove;Storage.prototype.clear=original.clear;
