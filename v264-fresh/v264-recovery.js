@@ -84,60 +84,71 @@
   return Array.from(new Uint8Array(hash)).map(x=>x.toString(16).padStart(2,"0")).join("");
  }
  const canonical=value=>JSON.stringify(value);
- function create(engine,adapter){
+ function create(engine,adapter,scopeName){
   if(!engine||!adapter)throw new Error("Storage engine and application adapter are required.");
   const DB=engine.databaseName;
   if(typeof DB!=="string"||!DB)throw new Error("Storage engine database identity is unavailable.");
+  const SCOPES=Object.freeze({
+   accounting:["accounting","sequences"],
+   projects:["projects"],
+   contracts:["contracts"],
+   businessProfile:["business_profile"],
+   support:["preferences","preference_meta","diagnostics","reports","report_notifications","report_settings","report_workflow","notifications","recovery","factory_reset_recovery","help_contact_drafts"],
+   media:["media"]
+  });
+  if(!Object.prototype.hasOwnProperty.call(SCOPES,scopeName))throw new Error("A single supported application domain must be selected for backup or restore.");
+  const allowed=SCOPES[scopeName].slice().sort();
+  function assertScope(pkg){
+   if(!pkg||pkg.format!==SNAPSHOT_FORMAT||pkg.database!==DB||!Array.isArray(pkg.domains)||!Array.isArray(pkg.records))throw new Error("Invalid v264 scoped backup.");
+   const actual=[...pkg.domains].sort();
+   if(actual.length!==allowed.length||actual.some((d,i)=>d!==allowed[i]))throw new Error("Backup does not match the selected independent domain: "+scopeName+".");
+   for(const row of pkg.records)if(!row||!allowed.includes(row.domain))throw new Error("Backup contains a record outside the selected domain.");
+   return pkg;
+  }
   async function capture(){
    await adapter.initialize();
-   const status=await engine.health();
-   const appDomains=adapter.domains;
-   if(!Array.isArray(appDomains)||!appDomains.length)throw new Error("Application adapter domain registry is unavailable.");
-   // Explicit physical IndexedDB stores. Never ask the adapter for a cross-domain backup:
-   // the adapter deliberately permits only one domain per backup call.
-   const domains=[
-    "accounting","projects","contracts","business_profile","sequences",
-    "preferences","preference_meta","diagnostics","reports","report_notifications",
-    "report_settings","report_workflow","notifications","recovery","factory_reset_recovery","help_contact_drafts","media"
-   ];
-   const snapshot=await engine.snapshot(domains);
-   if(!snapshot||!Array.isArray(snapshot.records)||snapshot.records.length!==status.totalRecords)throw new Error("Backup completeness check failed: database record count changed during capture.");
-   const unexpected=snapshot.records.some(row=>!domains.includes(row.domain));
-   if(unexpected)throw new Error("Backup contains a record outside the registered v264 application domains.");
-   return {format:SNAPSHOT_FORMAT,database:DB,createdAt:snapshot.createdAt,domains:snapshot.domains,records:snapshot.records};
+   const snapshot=assertScope(await adapter.backup(scopeName));
+   const ids=new Set();
+   for(const row of snapshot.records){
+    const id=row.domain+":"+encodeURIComponent(row.key);
+    if(row.id!==id||ids.has(id))throw new Error("Scoped backup contains an invalid or duplicate record identity.");
+    ids.add(id);
+   }
+   return snapshot;
   }
   async function packageSnapshot(snapshot){
-   const payload={format:SNAPSHOT_FORMAT,database:DB,createdAt:snapshot.createdAt,domains:snapshot.domains,records:[]};
+   assertScope(snapshot);
+   const payload={format:SNAPSHOT_FORMAT,database:DB,scope:scopeName,createdAt:snapshot.createdAt,domains:snapshot.domains,records:[]};
    for(const row of snapshot.records)payload.records.push({id:row.id,domain:row.domain,key:row.key,value:await encode(row.value,new WeakSet())});
    const body=canonical(payload);
    return {format:FORMAT,algorithm:"SHA-256",digest:await digest(body),payload};
   }
   async function verifyPackage(pkg){
-   if(!pkg||pkg.format!==FORMAT||pkg.algorithm!=="SHA-256"||typeof pkg.digest!=="string"||!pkg.payload)throw new Error("This is not a supported v264 portable backup.");
+   if(!pkg||pkg.format!==FORMAT||pkg.algorithm!=="SHA-256"||typeof pkg.digest!=="string"||!pkg.payload)throw new Error("This is not a supported v264 domain backup.");
    const actual=await digest(canonical(pkg.payload));
    if(actual!==pkg.digest)throw new Error("Backup integrity check failed: SHA-256 does not match.");
    const p=pkg.payload;
-   if(p.format!==SNAPSHOT_FORMAT||p.database!==DB||!Array.isArray(p.domains)||!Array.isArray(p.records))throw new Error("Backup structure or database identity is invalid.");
-   const domains=[...new Set(p.domains)];
-   if(domains.length!==p.domains.length||domains.some(d=>typeof d!=="string"||!/^[a-z][a-z0-9_-]{0,63}$/.test(d)))throw new Error("Backup domain list is invalid.");
+   if(p.format!==SNAPSHOT_FORMAT||p.database!==DB||p.scope!==scopeName||!Array.isArray(p.domains)||!Array.isArray(p.records))throw new Error("Backup scope or database identity is invalid.");
+   const domains=[...p.domains].sort();
+   if(domains.length!==allowed.length||domains.some((d,i)=>d!==allowed[i]))throw new Error("Backup belongs to a different independent domain.");
    const ids=new Set();
    for(const row of p.records){
-    if(!row||typeof row.domain!=="string"||typeof row.key!=="string"||!domains.includes(row.domain))throw new Error("Backup contains a record outside its declared domains.");
+    if(!row||typeof row.domain!=="string"||typeof row.key!=="string"||!allowed.includes(row.domain))throw new Error("Backup contains a record outside its selected domain.");
     const id=row.domain+":"+encodeURIComponent(row.key);
     if(row.id!==id||ids.has(id))throw new Error("Backup record identity is invalid or duplicated.");
     ids.add(id);
    }
-   return {ok:true,digest:actual,domains:domains.length,records:p.records.length,createdAt:p.createdAt};
+   return {ok:true,scope:scopeName,algorithm:"SHA-256",digest:actual,domains:domains.length,records:p.records.length,createdAt:p.createdAt};
   }
   async function createBackup(){
    const snapshot=await capture(),pkg=await packageSnapshot(snapshot);
    const check=await verifyPackage(pkg);
-   if(check.records!==snapshot.records.length)throw new Error("Backup record count verification failed.");
-   const blob=new Blob([JSON.stringify(pkg)],{type:"application/vnd.thehandyman.v264-backup+json"});
-   return {ok:true,blob,filename:"THA-v264-backup-"+new Date().toISOString().replace(/[:.]/g,"-")+".json",verification:check};
+   if(check.records!==snapshot.records.length)throw new Error("Domain backup record-count verification failed.");
+   const blob=new Blob([JSON.stringify(pkg)],{type:"application/vnd.thehandyman.v264-domain-backup+json"});
+   return {ok:true,blob,filename:"THA-v264-"+scopeName+"-backup-"+new Date().toISOString().replace(/[:.]/g,"-")+".json",verification:check};
   }
   async function readFile(file){
-   if(!file||typeof file.text!=="function")throw new Error("Select a valid backup file from the Files app.");
+   if(!file||typeof file.text!=="function")throw new Error("Select a valid domain backup file from the Files app.");
    let pkg;try{pkg=JSON.parse(await file.text());}catch(_){throw new Error("The selected file is not valid backup JSON.");}
    const verification=await verifyPackage(pkg),records=[];
    for(const row of pkg.payload.records)records.push({domain:row.domain,key:row.key,value:await decode(row.value)});
@@ -146,55 +157,23 @@
   async function inspectFile(file){const parsed=await readFile(file);return {ok:true,...parsed.verification};}
   async function restoreFromFile(file){
    const parsed=await readFile(file);
-   const result=await engine.restore(parsed.snapshot);
-   const after=await engine.snapshot(parsed.snapshot.domains);
+   const result=await adapter.restore(scopeName,parsed.snapshot);
+   const after=assertScope(await adapter.backup(scopeName));
    const afterPkg=await packageSnapshot(after);
    const afterData={...afterPkg.payload};delete afterData.createdAt;
    const expectedData={...parsed.pkg.payload};delete expectedData.createdAt;
-   if(await digest(canonical(afterData))!==await digest(canonical(expectedData)))throw new Error("Restore verification failed: restored records do not exactly match the selected backup.");
-   const health=await engine.health();
-   if(health.resetLocked){if(typeof engine.completeRecovery!=="function")throw new Error("Full recovery completion API is unavailable; database remains locked.");await engine.completeRecovery(parsed.snapshot);}
-   return {ok:true,restored:result.restored,domains:result.domains.length,verified:true,recoveryCompleted:health.resetLocked};
-  }
-  async function resetFromBackupFile(file){
-   const parsed=await readFile(file);
-   const current=await capture();
-   const currentPkg=await packageSnapshot(current);
-   const currentData={...currentPkg.payload};delete currentData.createdAt;const backupData={...parsed.pkg.payload};delete backupData.createdAt;if(await digest(canonical(currentData))!==await digest(canonical(backupData)))throw new Error("Factory Reset blocked: the selected backup is not an exact snapshot of the current database. Create and save a fresh backup, then select that file.");
-   // Close the time-of-check/time-of-use race: acquire the persistent lock first,
-   // then compare the current database while all normal write paths are blocked.
-   if(typeof engine.beginResetLock!=="function"||typeof engine.clearWhileResetLocked!=="function")throw new Error("Factory Reset blocked: lock-first reset APIs are unavailable.");
-   const locked=await engine.beginResetLock();
-   if(!locked||locked.ok!==true||locked.locked!==true)throw new Error("Factory Reset blocked: persistent lock could not be verified.");
-   let lockedSnapshot;
-   try {
-    lockedSnapshot=await capture();
-    const lockedPkg=await packageSnapshot(lockedSnapshot);
-    const lockedData={...lockedPkg.payload};delete lockedData.createdAt;
-    const selectedData={...parsed.pkg.payload};delete selectedData.createdAt;
-    const stillExact=await digest(canonical(lockedData))===await digest(canonical(selectedData));
-    if(!stillExact){
-     await engine.releaseResetLock();
-     throw new Error("Factory Reset cancelled: database changed before the reset lock was acquired. No records were cleared; create a fresh backup and retry.");
-    }
-    const cleared=await engine.clearWhileResetLocked();
-    if(!cleared||cleared.ok!==true||cleared.locked!==true||cleared.remainingRecords!==0)throw new Error("Factory Reset failed: locked database clear was not verified.");
-    const health=await engine.health();
-    if(health.totalRecords!==0)throw new Error("Factory Reset verification failed: records remain in IndexedDB.");
-    return {ok:true,clearedRecords:lockedSnapshot.records.length,remainingRecords:0,domains:lockedSnapshot.domains.length,backupDigest:parsed.pkg.digest,resetLocked:true,recoveryRequired:true,lockedSnapshotVerified:true};
-   } catch(error) {
-    // Preserve the lock on unexpected errors. A valid backup restore is the recovery route.
-    throw error;
-   }
+   if(await digest(canonical(afterData))!==await digest(canonical(expectedData)))throw new Error("Scoped restore verification failed: restored records do not exactly match the selected backup.");
+   return {ok:true,restored:result.restored??after.records.length,domains:allowed.length,verified:true,scope:scopeName};
   }
   async function downloadBackup(){
    const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
    a.href=url;a.download=result.filename;a.style.display="none";root.document.body.appendChild(a);a.click();a.remove();
    setTimeout(()=>URL.revokeObjectURL(url),60000);
-   return {ok:true,filename:result.filename,verification:result.verification,instructions:"Save this downloaded file in the iPhone Files app. To authorize Factory Reset, select that same saved file in the reset screen."};
+   return {ok:true,scope:scopeName,filename:result.filename,verification:result.verification,instructions:"Save this domain-specific file in the iPhone Files app. Restore it only with the same domain selected."};
   }
-  return Object.freeze({createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
+  async function resetFromBackupFile(){throw new Error("Global Factory Reset is disabled. Domain backups can restore only their selected domain.");}
+  return Object.freeze({scope:scopeName,domains:allowed,createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
  }
  const engine=()=>root.HandymanStorageV264,adapter=()=>root.HandymanAppStorageV264;
- root.HandymanRecoveryV264=Object.freeze({build:"THA-264-RECOVERY-2",create:()=>create(engine(),adapter()),createWithDependencies:create});
+ root.HandymanRecoveryV264=Object.freeze({build:"THA-264-SCOPED-RECOVERY-1",create:scopeName=>create(engine(),adapter(),scopeName),createWithDependencies:create});
 })(window);
