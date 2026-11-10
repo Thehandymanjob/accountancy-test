@@ -210,9 +210,9 @@
       const store = tx.objectStore(STORE);
       const rows = await Promise.all(prepared.map(x => requestResult(store.get(x.id))));
       await done;
-      return { ok: true, records: rows.map((row, i) => ({
+      return { ok: true, records: await Promise.all(rows.map(async (row, i) => ({
         domain: prepared[i].domain, key: prepared[i].key, value: row ? await decodeStored(row.value) : null
-      })) };
+      }))) };
     } finally { db.close(); }
   }
 
