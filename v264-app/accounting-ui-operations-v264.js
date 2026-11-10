@@ -54,5 +54,21 @@
   if(!saved||String(saved.number)!==String(result.number))throw new Error("Invoice save read-back verification failed.");
   return {ok:true,verified:true,state,invoice:clone(saved)};
  }
- root.HandymanAccountingUIOperationsV264=Object.freeze({saveEntry,deleteEntry,saveCustomer,deleteCustomer,saveInvoice});
+ async function invoiceAction(action,id,payment){
+  const workflow=root.HandymanInvoiceWorkflowV264;
+  if(!workflow||typeof workflow[action]!=="function")throw new Error("IndexedDB invoice action is unavailable: "+action);
+  const result=await workflow[action](String(id),payment?clone(payment):undefined);
+  const state=await bridge().load();
+  if(!result||result.ok!==true)throw new Error("Invoice action was not confirmed: "+action);
+  const invoice=state.invoices.find(x=>String(x.id)===String(id));
+  if(!invoice)throw new Error("Invoice action read-back failed: invoice not found.");
+  if(action==="markPaid"&&(invoice.paymentStatus!=="paid"||!state.entries.some(e=>String(e.invoiceId)===String(id))))throw new Error("Paid invoice and linked income were not both verified.");
+  if(action==="markUnpaid"&&(invoice.paymentStatus!=="unpaid"||state.entries.some(e=>String(e.invoiceId)===String(id))))throw new Error("Unpaid invoice state or linked income removal was not verified.");
+  if(action==="softDelete"&&!(invoice.deleted===true||invoice.deletedAt))throw new Error("Invoice soft-delete read-back failed.");
+  return {ok:true,verified:true,state,invoice:clone(invoice)};
+ }
+ async function markInvoicePaid(id,payment){return invoiceAction("markPaid",id,payment);}
+ async function markInvoiceUnpaid(id){return invoiceAction("markUnpaid",id);}
+ async function softDeleteInvoice(id){return invoiceAction("softDelete",id);}
+ root.HandymanAccountingUIOperationsV264=Object.freeze({saveEntry,deleteEntry,saveCustomer,deleteCustomer,saveInvoice,markInvoicePaid,markInvoiceUnpaid,softDeleteInvoice});
 })(window);
