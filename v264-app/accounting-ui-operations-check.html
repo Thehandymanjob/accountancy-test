@@ -10,7 +10,7 @@
 <script src="../v264-fresh/v264-accounting-controller-accounting-v2.js?v=264d"></script>
 <script src="../v264-fresh/v264-invoice-workflow-v263.js?v=264g"></script>
 <script src="accounting-ui-idb-bridge.js?v=3"></script>
-<script src="accounting-ui-operations-v264.js?v=1"></script>
+<script src="accounting-ui-operations-v264.js?v=2"></script>
 <script>
 document.getElementById('run').addEventListener('click',async()=>{
  const out=document.getElementById('out'),r={};let phase='setup',storageCalls=[],originals={};
@@ -37,11 +37,11 @@ document.getElementById('run').addEventListener('click',async()=>{
   phase='customer delete protection';let blocked=false;try{await ops.deleteCustomer(cid)}catch(e){blocked=/linked to a saved invoice/i.test(String(e.message||e))}
   const afterBlock=await HandymanAccountingUIBridgeV264.load();
   r.linkedCustomerDeletionBlocked=blocked&&afterBlock.customers.some(c=>c.id===cid)&&afterBlock.invoices.some(i=>i.id===iid);
-  phase='mark invoice paid';await wf.markPaid(iid,{date,method:'bank',amount:125});let state=await HandymanAccountingUIBridgeV264.load();
+  phase='mark invoice paid';await ops.markInvoicePaid(iid,{date,method:'bank',amount:125});let state=await HandymanAccountingUIBridgeV264.load();
   r.invoicePaid=state.invoices.some(i=>i.id===iid&&i.paymentStatus==='paid')&&state.entries.some(e=>e.invoiceId===iid&&e.amount===125);
-  phase='mark invoice unpaid';await wf.markUnpaid(iid);state=await HandymanAccountingUIBridgeV264.load();
+  phase='mark invoice unpaid';await ops.markInvoiceUnpaid(iid);state=await HandymanAccountingUIBridgeV264.load();
   r.invoiceUnpaid=state.invoices.some(i=>i.id===iid&&i.paymentStatus==='unpaid')&&!state.entries.some(e=>e.invoiceId===iid);
-  phase='soft delete invoice';await wf.softDelete(iid);state=await HandymanAccountingUIBridgeV264.load();
+  phase='soft delete invoice';await ops.softDeleteInvoice(iid);state=await HandymanAccountingUIBridgeV264.load();
   r.invoiceSoftDelete=state.invoices.some(i=>i.id===iid&&i.deleted===true)&&!state.entries.some(e=>e.invoiceId===iid);
   phase='synthetic cleanup';const cleanup=await HandymanAccountingUIBridgeV264.mutate(s=>{s.entries=s.entries.filter(e=>e.id!==eid&&e.invoiceId!==iid&&e.id!=='invoice-income-'+iid);s.invoices=s.invoices.filter(i=>i.id!==iid);s.customers=s.customers.filter(c=>c.id!==cid);return s});
   const finalState=await HandymanAccountingUIBridgeV264.load();
