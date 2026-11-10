@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>THA v264 Accounting UI Bridge Check</title><style>body{font:15px -apple-system,BlinkMacSystemFont,Arial,sans-serif;margin:0;padding:20px;background:#f4f6f9;color:#172235}main{max-width:760px;margin:auto;background:white;padding:22px;border-radius:14px}button{padding:12px 18px;background:#f4ca4e;border:0;border-radius:8px;font-weight:700}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101b2c;color:#eaf0f8;padding:14px;border-radius:8px;min-height:120px}</style></head><body><main><h1>Accounting UI Bridge — v264</h1><p>This isolated check exercises the asynchronous IndexedDB boundary intended for the preserved accounting UI. It creates and removes synthetic records only.</p><button id="run">Run bridge checks</button><pre id="out">Waiting…</pre></main>
-<script src="../v264-fresh/storage-idb-v264.js?v=264g"></script><script src="../v264-fresh/v264-strict-domain-boundary.js?v=264e"></script><script src="../v264-fresh/app-storage-v264.js?v=264e"></script><script src="../v264-fresh/v264-accounting-controller-accounting-v2.js?v=264d"></script><script src="accounting-ui-idb-bridge.js?v=2"></script>
+<script src="../v264-fresh/storage-idb-v264.js?v=264g"></script><script src="../v264-fresh/v264-strict-domain-boundary.js?v=264e"></script><script src="../v264-fresh/app-storage-v264.js?v=264e"></script><script src="../v264-fresh/v264-accounting-controller-accounting-v2.js?v=264d"></script><script src="accounting-ui-idb-bridge.js?v=3"></script>
 <script>
 document.getElementById('run').addEventListener('click',async()=>{
  const out=document.getElementById('out'),results={};let ids=[];
@@ -34,7 +34,7 @@ document.getElementById('run').addEventListener('click',async()=>{
   results.noLegacyStorageAccess=storageCalls.length===0;
   results.overall=Object.entries(results).filter(([k])=>k!=='health'&&k!=='overall').every(([,v])=>v===true)&&results.health===true;
   out.textContent=JSON.stringify(results,null,2);
- }catch(e){results.failedAt=phase;results.error=String(e?.stack||e?.message||e);results.overall=false}
+ }catch(e){results.failedAt=phase;results.errorName=String(e?.name||'Error');results.errorMessage=String(e?.message||e);results.errorStack=String(e?.stack||'');results.overall=false}
  finally{for(const name of methods)if(originals[name])Storage.prototype[name]=originals[name];}
  out.textContent=JSON.stringify(results,null,2);
 });
