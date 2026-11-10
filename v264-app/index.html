@@ -727,8 +727,10 @@ body:not(.projects-open) #invoices .invoice-actions button{font-size:11px;min-he
 #prPrintReportOverlay .pr-pdf-preview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1px solid #d8e0ea;border-radius:12px;padding:12px 14px;margin-bottom:12px}
 #prPrintReportOverlay .pr-pdf-preview-toolbar strong{font-size:18px;color:#142b4a}
 #prPrintReportOverlay .pr-pdf-preview-toolbar button{font:700 15px system-ui;padding:11px 20px;border:0;border-radius:9px;background:#e5b63f;color:#142b4a}
-#prPrintReportOverlay .pr-pdf-preview-frame{display:block;width:100%;height:78vh;min-height:520px;border:1px solid #d8e0ea;border-radius:8px;background:#fff}
-@media(max-width:560px){#prPrintReportOverlay .pr-pdf-preview-frame{height:calc(100dvh - 190px);min-height:420px}}
+#prPrintReportOverlay .pr-pdf-preview-pages{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%;max-height:calc(100dvh - 230px);min-height:420px;overflow:auto;overscroll-behavior:contain;padding:10px;background:#e9edf3;border:1px solid #d8e0ea;border-radius:8px}
+#prPrintReportOverlay .pr-pdf-render-status{padding:20px;color:#657286;font-size:14px}
+#prPrintReportOverlay .pr-pdf-page-canvas{display:block;max-width:100%;height:auto!important;background:#fff;box-shadow:0 2px 8px #142b4a22}
+@media(max-width:560px){#prPrintReportOverlay .pr-pdf-preview-pages{max-height:calc(100dvh - 190px);min-height:420px;padding:6px;gap:10px}}
 </style>
 
 
@@ -1992,6 +1994,50 @@ function prRestoreReportPreview(){
  const shell=document.querySelector('#prPrintReportOverlay .pr-print-preview-shell');
  if(shell&&prPdfPreviewReturnHtml){shell.innerHTML=prPdfPreviewReturnHtml;prPdfPreviewReturnHtml='';}
 }
+async function prLoadPdfJs(){
+ if(window.pdfjsLib)return window.pdfjsLib;
+ await new Promise((resolve,reject)=>{
+  const existing=document.querySelector('script[data-pr-pdfjs]');
+  if(existing){
+   if(window.pdfjsLib){resolve();return}
+   existing.addEventListener('load',resolve,{once:true});
+   existing.addEventListener('error',()=>reject(new Error('PDF preview engine could not load')),{once:true});
+   return;
+  }
+  const script=document.createElement('script');
+  script.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  script.dataset.prPdfjs='1';script.onload=resolve;
+  script.onerror=()=>reject(new Error('PDF preview engine could not load'));
+  document.head.appendChild(script);
+ });
+ if(!window.pdfjsLib)throw new Error('PDF preview engine is unavailable');
+ window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+ return window.pdfjsLib;
+}
+async function prRenderPdfPreview(blob,host){
+ host.innerHTML='<p class="pr-pdf-render-status">Preparing PDF preview…</p>';
+ const pdfjs=await prLoadPdfJs();
+ const bytes=await blob.arrayBuffer();
+ const pdf=await pdfjs.getDocument({data:new Uint8Array(bytes)}).promise;
+ host.innerHTML='';
+ for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
+  const page=await pdf.getPage(pageNo);
+  const base=page.getViewport({scale:1});
+  const available=Math.max(260,host.clientWidth-24);
+  const scale=Math.min(1.5,available/base.width);
+  const viewport=page.getViewport({scale});
+  const ratio=Math.min(window.devicePixelRatio||1,2);
+  const canvas=document.createElement('canvas');
+  canvas.className='pr-pdf-page-canvas';
+  canvas.width=Math.floor(viewport.width*ratio);
+  canvas.height=Math.floor(viewport.height*ratio);
+  canvas.style.width=viewport.width+'px';
+  canvas.style.height=viewport.height+'px';
+  canvas.setAttribute('aria-label','PDF page '+pageNo+' of '+pdf.numPages);
+  host.appendChild(canvas);
+  await page.render({canvasContext:canvas.getContext('2d',{alpha:false}),viewport,transform:ratio===1?null:[ratio,0,0,ratio,0,0],background:'#ffffff'}).promise;
+ }
+}
 async function prRunSubReportPrint(){
  const box=document.getElementById('prPrintReportOverlay');
  const node=box&&box.querySelector('.sfr-report');
@@ -2042,7 +2088,9 @@ async function prRunSubReportPrint(){
   const shell=box.querySelector('.pr-print-preview-shell');
   if(!shell)throw new Error('PDF preview container is unavailable');
   prPdfPreviewReturnHtml=shell.innerHTML;
-  shell.innerHTML='<div class="pr-pdf-preview-toolbar"><strong>PDF Preview</strong><button type="button" onclick="prRestoreReportPreview()">Close</button></div><iframe class="pr-pdf-preview-frame" title="PDF Preview" src="'+prSubReportPdfUrl+'"></iframe>';
+  shell.innerHTML='<div class="pr-pdf-preview-toolbar"><strong>PDF Preview</strong><button type="button" onclick="prRestoreReportPreview()">Close</button></div><div class="pr-pdf-preview-pages" role="region" aria-label="PDF document pages"></div>';
+  const pageHost=shell.querySelector('.pr-pdf-preview-pages');
+  await prRenderPdfPreview(prSubReportPdfBlob,pageHost);
   msg.textContent='PDF ready.';
  }catch(e){
   msg.textContent='Could not create the PDF. Check your internet connection and try again. '+(e&&e.message?e.message:'');
