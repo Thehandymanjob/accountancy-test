@@ -1696,21 +1696,10 @@ async function saveInvoicePaidPayment(id,date,method){
  if(!duplicate)db.entries.push({id:`invoice-income-${i.id}`,type:'income',date,amount:total,method,category:'Work income',reference:`Invoice ${i.number}`,notes:`Payment received for invoice ${i.number}`,invoiceId:i.id,createdAt:new Date().toISOString()});
  else{duplicate.date=date;duplicate.amount=total;duplicate.method=method;duplicate.invoiceId=i.id}
  if(!persist()){db=JSON.parse(old);return}
- const savedSnapshot=JSON.stringify(db);let idbVerified=false,verificationError='';
- try{
-  if(!window.__thaAccountingIdbShadowQueue)throw new Error('IndexedDB write queue is unavailable.');
-  await window.__thaAccountingIdbShadowQueue;
-  const storage=window.HandymanStorageFoundation;
-  if(!storage||typeof storage.readAppState!=='function')throw new Error('IndexedDB read API is unavailable.');
-  const stored=await storage.readAppState('accounting');
-  idbVerified=JSON.stringify(stored)===savedSnapshot&&window.__thaAccountingIdbShadowOk===true;
-  if(!idbVerified)verificationError='IndexedDB read-back did not exactly match the saved accounting data.';
- }catch(error){verificationError=String(error&&error.message||error);console.warn('Mark invoice paid: IndexedDB read-back verification failed.',error)}
- window.__thaAccountingSaveOk=idbVerified;
- logMonitorEvent(idbVerified?'activity':'storage',idbVerified?'invoice_marked_paid':'invoice_marked_paid_idb_unverified','invoice',String(i.number||i.id),idbVerified?'success':'failed',{invoiceId:i.id,paymentDate:date,paymentMethod:method,total,linkedIncomeCreated:!duplicate,indexedDBVerified:idbVerified,error:verificationError});
- refreshAll();renderInvoices();
- if(idbVerified)alert('Invoice marked as paid. IndexedDB copy verified.');
- else alert('Invoice marked as paid in this browser, but the IndexedDB copy could not be verified. Do not reset or delete any data. Check Monitor & Diagnostics before continuing.');
+ let idbVerified=false,verificationError='';try{await flushAccountingWrites();idbVerified=true}catch(error){verificationError=String(error&&error.message||error);db=JSON.parse(old);window.__thaAccountingSaveOk=false;alert('Invoice payment was not saved in IndexedDB. '+verificationError);return}
+ window.__thaAccountingSaveOk=true;
+ logMonitorEvent('activity','invoice_marked_paid','invoice',String(i.number||i.id),'success',{invoiceId:i.id,paymentDate:date,paymentMethod:method,total,linkedIncomeCreated:!duplicate,indexedDBVerified:true});
+ refreshAll();renderInvoices();alert('Invoice marked as paid and verified in IndexedDB.');
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){const m=document.getElementById('invoicePaidModal');if(m&&!m.hidden)closeInvoicePaidModal()}});
 async function markInvoiceUnpaid(id){
@@ -1720,21 +1709,7 @@ async function markInvoiceUnpaid(id){
  db.entries=db.entries.filter(e=>e.invoiceId!==i.id&&!(e.type==='income'&&e.reference===`Invoice ${i.number}`));
  i.paymentStatus='unpaid';i.paymentDate='';i.paymentMethod='';
  if(!persist()){db=JSON.parse(old);return}
- const savedSnapshot=JSON.stringify(db);let idbVerified=false,verificationError='';
- try{
-  if(!window.__thaAccountingIdbShadowQueue)throw new Error('IndexedDB write queue is unavailable.');
-  await window.__thaAccountingIdbShadowQueue;
-  const storage=window.HandymanStorageFoundation;
-  if(!storage||typeof storage.readAppState!=='function')throw new Error('IndexedDB read API is unavailable.');
-  const stored=await storage.readAppState('accounting');
-  idbVerified=JSON.stringify(stored)===savedSnapshot&&window.__thaAccountingIdbShadowOk===true;
-  if(!idbVerified)verificationError='IndexedDB read-back did not exactly match the saved accounting data.';
- }catch(error){verificationError=String(error&&error.message||error);console.warn('Mark invoice unpaid: IndexedDB read-back verification failed.',error)}
- window.__thaAccountingSaveOk=idbVerified;
- logMonitorEvent(idbVerified?'activity':'storage',idbVerified?'invoice_marked_unpaid':'invoice_marked_unpaid_idb_unverified','invoice',String(i.number||i.id),idbVerified?'success':'failed',{invoiceId:i.id,linkedIncomeRemoved:true,indexedDBVerified:idbVerified,error:verificationError});
- refreshAll();renderInvoices();
- if(idbVerified)alert('Invoice marked as unpaid. IndexedDB copy verified.');
- else alert('Invoice marked as unpaid in this browser, but the IndexedDB copy could not be verified. Do not reset or delete any data. Check Monitor & Diagnostics before continuing.');
+ try{await flushAccountingWrites();window.__thaAccountingSaveOk=true;logMonitorEvent('activity','invoice_marked_unpaid','invoice',String(i.number||i.id),'success',{invoiceId:i.id,linkedIncomeRemoved:true,indexedDBVerified:true});refreshAll();renderInvoices();alert('Invoice marked as unpaid and verified in IndexedDB.')}catch(error){db=JSON.parse(old);window.__thaAccountingSaveOk=false;alert('Invoice unpaid change was not saved in IndexedDB. '+(error&&error.message||error))}
 }
 
 function removeOrphanedInvoiceIncome(){
