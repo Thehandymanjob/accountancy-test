@@ -2020,27 +2020,38 @@ async function prLoadPdfJs(){
  throw lastError||new Error('PDF preview engine could not load');
 }
 async function prRenderPdfPreview(blob,host){
- host.innerHTML='<p class="pr-pdf-render-status">Preparing PDF preview…</p>';
+ host.innerHTML='<p class="pr-pdf-render-status">Checking generated PDF…</p>';
+ if(!blob||!blob.size)throw new Error('Generated PDF is empty (0 bytes)');
+ const bytes=new Uint8Array(await blob.arrayBuffer());
+ const signature=String.fromCharCode.apply(null,Array.from(bytes.slice(0,5)));
+ if(signature!=='%PDF-')throw new Error('Generated file is not a valid PDF ('+signature+')');
  const pdfjs=await prLoadPdfJs();
- const bytes=await blob.arrayBuffer();
- const pdf=await pdfjs.getDocument({data:new Uint8Array(bytes)}).promise;
+ host.innerHTML='<p class="pr-pdf-render-status">Opening PDF document…</p>';
+ const loading=pdfjs.getDocument({data:bytes,disableWorker:true,isEvalSupported:false,useWorkerFetch:false});
+ const pdf=await loading.promise;
+ if(!pdf.numPages)throw new Error('PDF contains no pages');
+ host.innerHTML='<p class="pr-pdf-render-status">PDF loaded: '+pdf.numPages+' page(s). Rendering…</p>';
+ await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+ const availableWidth=Math.max(260,host.clientWidth-32);
  host.innerHTML='';
  for(let pageNo=1;pageNo<=pdf.numPages;pageNo++){
   const page=await pdf.getPage(pageNo);
   const base=page.getViewport({scale:1});
-  const available=Math.max(260,host.clientWidth-24);
-  const scale=Math.min(1.5,available/base.width);
+  const scale=Math.min(1.5,availableWidth/base.width);
   const viewport=page.getViewport({scale});
   const ratio=Math.min(window.devicePixelRatio||1,2);
   const canvas=document.createElement('canvas');
   canvas.className='pr-pdf-page-canvas';
-  canvas.width=Math.floor(viewport.width*ratio);
-  canvas.height=Math.floor(viewport.height*ratio);
+  canvas.width=Math.max(1,Math.floor(viewport.width*ratio));
+  canvas.height=Math.max(1,Math.floor(viewport.height*ratio));
   canvas.style.width=viewport.width+'px';
   canvas.style.height=viewport.height+'px';
   canvas.setAttribute('aria-label','PDF page '+pageNo+' of '+pdf.numPages);
+  const ctx=canvas.getContext('2d',{alpha:false});
+  if(!ctx)throw new Error('Safari could not create a PDF canvas context');
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
   host.appendChild(canvas);
-  await page.render({canvasContext:canvas.getContext('2d',{alpha:false}),viewport,transform:ratio===1?null:[ratio,0,0,ratio,0,0],background:'#ffffff'}).promise;
+  await page.render({canvasContext:ctx,viewport,transform:ratio===1?null:[ratio,0,0,ratio,0,0],background:'#ffffff'}).promise;
  }
 }
 async function prRunSubReportPrint(){
