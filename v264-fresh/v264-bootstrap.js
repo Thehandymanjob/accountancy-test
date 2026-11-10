@@ -37,7 +37,7 @@
     state=await requireApi("HandymanBusinessProfileV264","load").load();capabilities={businessProfile:true};
    }else if(name==="support"){
     const support=requireApi("HandymanSupportV264","load");
-    const names=["preferences","preferenceMeta","diagnostics","reports","reportNotifications","reportSettings","reportWorkflow","notifications","recovery","factoryResetRecovery"];
+    const names=["preferences","preferenceMeta","diagnostics","reports","reportNotifications","reportSettings","reportWorkflow","notifications","recovery","factoryResetRecovery","helpContactDrafts"];
     const values=await Promise.all(names.map(domain=>support.load(domain)));
     state={};names.forEach((domain,index)=>state[domain]=values[index]);capabilities={support:true};
    }else throw new Error("Unknown v264 module bootstrap: "+name);
