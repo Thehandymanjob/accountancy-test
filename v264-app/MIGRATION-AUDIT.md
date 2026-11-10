@@ -1,74 +1,62 @@
-# THA v264 full-application migration audit
-
-Date: 2026-11-10
-Target repository: `Thehandymanjob/accountancy-test`
-Working branch: `main`
-UI source: root `index.html` (v262)
-Isolated working copy: `v264-app/index.html`
-Production repository: NOT TOUCHED
+# v264 UI Migration Audit — refreshed 2026-11-10
 
 ## Status
 
-**NOT READY FOR USER OPERATION.** The copied v262 interface is present, but its persistence and workflow code still uses legacy browser storage. The v264 IndexedDB controllers are separate modules and have not yet replaced the legacy UI data paths. The startup coordinator is not loaded by the working HTML and intentionally does not activate the UI.
+**Static integration has advanced substantially. The candidate is not yet approved for production or important user data entry.** Safari runtime tests, backup/restore round-trip tests, and visual/PDF regression tests are still outstanding.
 
-## Confirmed legacy persistence entry points
+## Candidate identity and isolation
 
-| UI area | Current legacy path | Migration requirement |
-|---|---|---|
-| Accounting | `loadDB()`, `persist()`; `KEY` reads/writes LocalStorage | Await controller load/save/update; no shadow writes or fallback |
-| Invoice/customer | Accounting `db`, invoice sequence key and synchronous callers | Convert every mutating handler to async; use atomic number reservation and workflow APIs |
-| Projects/subprojects | `prLoad()`, `prPersist()`, completion and project backup use LocalStorage | Convert load/save and every project mutation to awaited Projects controller calls |
-| Contracts | `ctRead()`, `ctWrite()`, `ctProfile()` use LocalStorage | Async contract controller and separate business-profile controller |
-| Language/preferences | Language functions read/write LocalStorage | Support controller preference API |
-| Reports/diagnostics | Archive, notification, settings and monitor log use LocalStorage | Support domains; preserve report output and print rendering |
-| Backup/restore/reset | Existing portable backup and restore explicitly enumerate LocalStorage plus IndexedDB | Replace with complete v264 IndexedDB backup including all media; verify before restore/reset |
-| Logo and receipt media | Legacy profile/project structures and backup code | Verify Blob/File/base64 preservation and include every media-bearing domain in full backup |
-| Help/contact drafts | Legacy key `tha_test226_help_contact_drafts_v1` exists in old UI | Add an explicit v264 domain/controller and include in backup |
-| External scripts | `storage-foundation.js`, `version-manager.js` referenced by HTML | Audit/copy only after checking their storage access and runtime dependencies |
+- Candidate path: `v264-app/index.html` in the `main` branch of the `accountancy-test` repository.
+- Current index SHA: `4586863d89cda8124294a932c30a5a3c3c71ed00` at the time of this audit.
+- The directory is named `v264-app`, but the HTML metadata still reports app version `262` and build `THA-262-RESTORE-ROLLBACK-REBUILD-20261108`. Do not describe this as a released version 264 yet.
+- Production repository/root `index.html` has not been changed.
+- The production updater was intentionally disabled in this test build. The root `version-manager.js` points to `release239` and must not be loaded by this candidate.
 
-## v264 module API facts
+## Static verification performed
 
-- Accounting controller: `initialize/load/save/update/addEntry/updateEntry/deleteEntry/saveCustomer/deleteCustomer/reserveInvoiceNumber`.
-- Invoice workflow: `saveInvoice/markPaid/markUnpaid/softDelete/total`.
-- Projects controller: async state CRUD, project/subproject CRUD, directories and project ledger records.
-- Contracts controller: async load/save/add/update/remove/get.
-- Business profile controller: async load/save/update; current profile stores logo as a string field.
-- Support controller: preferences, preference metadata, diagnostics, reports, report notifications/settings/workflow and notifications.
-- UI adapter: `startAll/loadAll` and async facades for each controller.
-- Module bootstrap: separate `startAccounting/startProjects/startContracts/startBusinessProfile/startSupport` methods; it does **not** expose a `startAll` method.
-- App storage registry currently has no `media` or `helpContactDrafts` domain.
-- App storage `writeMany()` deliberately throws; report workspace save currently performs sequential independent writes, not an atomic multi-domain transaction.
-- UI adapter currently rejects partial invoice payments and blocks project-to-accounting transfer. These are known functional gaps, not acceptable assumptions of parity.
-- Project completion currently changes status only; it does not transfer project data to Accounting.
-- Projects controller intentionally removes an empty profile object and rejects non-empty embedded profile data; profile must be moved to the separate Business Profile domain before saving.
+- All 7 non-empty inline JavaScript blocks in the candidate compile successfully.
+- The v264 UI domain gateway compiles successfully.
+- All 15 external script references resolve to files in `v264-app/` or `v264-fresh/`.
+- All loaded external JavaScript modules compile successfully.
+- Static scan of the active HTML and loaded modules found zero direct calls to `localStorage`, `sessionStorage`, `Storage.prototype`, or `document.cookie`.
+- The old `storage-foundation.js` dependency and its LocalStorage inspection hooks were removed from the candidate.
+- No runtime browser/Safari execution is implied by these static checks.
 
-## Startup coordinator check
+## Current UI-to-IndexedDB integration
 
-`v264-app-bootstrap.js` is fail-closed and does not access LocalStorage. Its expected public methods were checked against the current module sources: storage `ready/health`, domain boundary `createScope`, app storage `initialize`, each domain `load`, recovery `create`, module bootstrap `startAll` (NOTE: this name is currently wrong on the module-bootstrap object), and UI adapter `startAll`.
+| Area | Current integration |
+|---|---|
+| Accounting | UI state loads through the v264 gateway. The async `persist()` path waits for verified IndexedDB read-back. All 12 persistence call sites are awaited. |
+| Projects | UI state loads through the gateway. All 31 `prPersist()` call sites are awaited. Failed saves restore the last verified project state. |
+| Business Profile | Separate IndexedDB domain. Project/profile writes are coordinated by the gateway with rollback attempts and read-back verification. |
+| Contracts | Async contract controller writes are read back and compared. Both contract write call sites are awaited. |
+| Reports, notifications, report settings and workflow | Support controller writes are queued and awaited. All 13 report save call sites are awaited. Accountant recipient settings are stored under the report-settings domain. |
+| Language preference and help-contact drafts | Both use the Support controller and a shared write queue. |
+| Diagnostics | Monitor events are queued to the IndexedDB diagnostics domain. The full-backup barrier waits for the diagnostics queue. |
+| Media | The media controller and media domain are loaded. Existing UI attachments are still represented in their owning records (for example, image data URLs); the separate media controller is not yet used by the legacy UI. The portable backup includes the media domain. |
 
-**Required correction:** `HandymanModuleBootstrapV264` exposes five separate start methods, not `startAll`. The coordinator must call the five explicit module starts or use `HandymanUIAdapterV264.startAll()` without separately requiring a nonexistent method. Do not wire this coordinator into the HTML until corrected and tested.
+## Backup and restore
 
-## Mandatory cutover gates
+- Full backup uses the v264 recovery module and covers 17 physical domains, including accounting, projects, contracts, business profile, sequences, preferences, diagnostics, reports, notifications, workflow, help-contact drafts and media.
+- Backup encoding supports Blob, File, ArrayBuffer and typed-array data.
+- Before backup or restore, the UI now waits for accounting, project, contract, report, Support and diagnostics write queues, then performs a gateway read barrier.
+- Restore verifies the backup digest and compares the restored snapshot with the selected backup.
+- These are code-path/static findings; a real iPhone Safari file export/import round trip remains required.
 
-1. Complete key/function inventory for all old storage and backup paths.
-2. Add and test missing domains, especially media and help/contact drafts; ensure backup includes every registered domain.
-3. Convert one vertical slice at a time to awaited IndexedDB APIs. No synchronous shim, LocalStorage shadow-write, silent fallback, or swallowed persistence error.
-4. Add regression tests for create/read/update/delete, reload persistence, quota/blocked database errors, media round-trip, and exact backup/restore verification.
-5. Verify all old UI actions still work, including partial invoice payments (if present in v262), project/subproject accounting, contractor/partner workflows, project completion/reopen, and explicit project-to-accounting transfer with duplicate prevention.
-6. Keep all v262 CSS, layout, logo placement, report HTML/CSS, print dimensions, and font sizing unchanged. Compare before/after source and rendered print output.
-7. Search final HTML and all loaded scripts for any LocalStorage/SessionStorage/cookie app-data access. Must be zero before release.
-8. Only after all gates pass, enable startup and test the full app in Safari. Do not use production repo or replace the test repo root index.
+## Safety corrections made
 
-## Immediate next implementation slice
+- Removed the legacy startup cleanup that deleted accounting entries tagged as project-synced.
+- Removed unused automatic project-to-accounting sync helpers. Completing a project now changes project status only; it does not silently create, delete or sync accounting entries.
+- Removed hard-coded invoice 133/134 payment migration logic so a newly created invoice with those numbers is not incorrectly marked paid.
+- Disabled the test build's update controls to prevent the candidate from downloading a production release from `release239`.
 
-Start with an exact mapping of accounting and invoice event handlers to the async controllers, including invoice numbering and customer IDs. Do not edit the main UI file until the handler map and missing API behavior are understood. The full v262 UI file remains unchanged in the root; `v264-app/index.html` is the isolated work copy.
+## Outstanding release blockers
 
+1. Run the complete candidate on iPhone Safari and verify create, edit, delete, reload and read-back for accounting entries, customers, invoices, projects, sub-projects, contractors, contracts, business profile, reports, notifications and settings.
+2. Test photos, logos, receipts, company/job attachments and any File/Blob values through save, reload, full backup and full restore.
+3. Compare invoice, contract, project and financial-report print/PDF output against the previous working UI. CSS and print markup were not intentionally redesigned, but visual equivalence has not yet been demonstrated.
+4. Confirm the product scope for the previously requested **Pay Contractor** action and explicit project-to-accounting transfer. No active `Pay Contractor` or `Transfer to Accounting` UI handler was found in this candidate. Project completion currently does not transfer accounting records.
+5. Confirm whether partial invoice payments are required. The current UI payment modal records the full invoice total with date and method; it does not expose a partial-payment amount or payment schedule.
+6. After all tests pass, set the release metadata/build identity to 264, prepare a dedicated release manifest/update channel, then move the verified candidate into Production. Do not enable the production updater before that step.
 
-## Progress update — 2026-11-10 (continued)
-
-- Added `v264-app/v264-accounting-bridge.js`: async in-memory view-model bridge over IndexedDB controllers. It exposes initialize/refresh/getState/subscribe, entry CRUD, customer CRUD, invoice save/mark-paid/mark-unpaid/soft-delete, invoice number reservation, and settings updates. Mutating bridge actions are serialized; no Storage API access is present.
-- Added `v264-app/accounting-invoice-check.html`: isolated browser verification for the bridge and accounting/invoice controllers. It blocks LocalStorage reads/writes during the test, checks Blob media round-trip, persistence on a fresh IndexedDB read, invoice full-payment lifecycle and synthetic cleanup.
-- Corrected `v264-app/v264-app-bootstrap.js` to start modules through the actual `HandymanUIAdapterV264.startAll()` API. The module bootstrap itself exposes individual start methods only.
-- The invoice UI inspected in v262 uses a binary paid/unpaid workflow; it does not expose a partial-payment amount field. The v264 full-payment restriction therefore matches the visible invoice form, but this still needs browser regression verification.
-- No full UI cutover has occurred. `v264-app/index.html` remains unchanged; original root UI and production remain untouched.
-- The new browser test has not yet been run by the user. Do not mark the accounting/invoice slice as passed until its JSON output confirms every check and synthetic cleanup.
+**Decision:** Continue integration and testing in the isolated test repository. Do not publish this candidate to Production yet.
