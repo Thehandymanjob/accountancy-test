@@ -1405,11 +1405,6 @@ function renderCustomers(){const q=($('customerSearch')?.value||'').toLowerCase(
 function populateInvoiceCustomers(){const sel=$('invCustomer');if(!sel)return;const current=sel.value;sel.innerHTML='<option value="">Select a saved customer…</option>'+db.customers.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');if(db.customers.some(c=>c.id===current))sel.value=current}
 function selectInvoiceCustomer(){const c=customerById($('invCustomer').value);if(!c)return;$('invBillName').value=c.name||'';$('invPhone').value=c.phone||'';$('invBillAddress').value=c.address||'';$('invWorkAddress').value=c.workAddress||''}
 const INVOICE_SEQUENCE_KEY='tha_test226_invoice_sequence_v1';
-const ISOLATION_TEST_CLEANUP_KEY='tha_test226_isolation_test_record_cleanup_v1';
-function removeKnownIsolationTestRecord(){try{if(localStorage.getItem(ISOLATION_TEST_CLEANUP_KEY)==='1')return;const before=db.entries.length;db.entries=db.entries.filter(e=>!(e&&e.type==='income'&&Number(e.number)===143&&Math.round(Number(e.amount)*100)===100&&String(e.reference||'').trim()==='ISOLATION TEST'));const removed=before-db.entries.length;if(removed&&!persist())return;localStorage.setItem(ISOLATION_TEST_CLEANUP_KEY,'1');if(removed&&typeof logMonitorEvent==='function')logMonitorEvent('activity','test_isolation_record_removed','accounting','startup','success',{removed,number:143,amount:1,reference:'ISOLATION TEST'})}catch(e){if(typeof logMonitorEvent==='function')logMonitorEvent('storage','test_isolation_cleanup_failed','accounting','startup','failed',{message:String(e.message||e)})}}
-const INVOICE_SEQUENCE_CLEANUP_KEY='tha_test226_invoice_sequence_cleanup_v1';
-function cleanupUncommittedInvoiceNumbers(){try{if(localStorage.getItem(INVOICE_SEQUENCE_CLEANUP_KEY)==='1')return;const persistedMax=Math.max(0,...db.invoices.map(i=>Number(i.number)||0),...db.entries.filter(e=>e.type==='income').map(e=>Number(e.number)||0));localStorage.setItem(INVOICE_SEQUENCE_KEY,String(persistedMax));localStorage.setItem(INVOICE_SEQUENCE_CLEANUP_KEY,'1');if(typeof logMonitorEvent==='function')logMonitorEvent('activity','invoice_sequence_cleanup','app','startup','success',{persistedMax,removedUncommittedReservations:true})}catch(e){if(typeof logMonitorEvent==='function')logMonitorEvent('storage','invoice_sequence_cleanup_failed','app','startup','failed',{message:String(e.message||e)})}}
-const EMPTY_TEST_SEQUENCE_RESET_KEY='tha_test226_empty_invoice_sequence_reset_v229';function resetStaleSequenceOnlyWhenNoSavedRecords(){try{if(localStorage.getItem(EMPTY_TEST_SEQUENCE_RESET_KEY)==='1')return;const savedMax=Math.max(0,...db.invoices.map(i=>Number(i.number)||0),...db.entries.filter(e=>e.type==='income').map(e=>Number(e.number)||0));const remembered=Number(localStorage.getItem(INVOICE_SEQUENCE_KEY))||0;if(savedMax===0){localStorage.setItem(INVOICE_SEQUENCE_KEY,'0')}else if(remembered<savedMax){localStorage.setItem(INVOICE_SEQUENCE_KEY,String(savedMax))}localStorage.setItem(EMPTY_TEST_SEQUENCE_RESET_KEY,'1');if(typeof logMonitorEvent==='function')logMonitorEvent('activity','empty_test_invoice_sequence_reset','app','startup','success',{savedMax,previousHighWaterMark:remembered,resetToZero:savedMax===0})}catch(e){if(typeof logMonitorEvent==='function')logMonitorEvent('storage','empty_test_invoice_sequence_reset_failed','app','startup','failed',{message:String(e.message||e)})}}
 function highestSharedRecordNumber(){return Math.max(0,...(Array.isArray(db.invoices)?db.invoices.map(x=>Number(x.number)||0):[]),...(Array.isArray(db.entries)?db.entries.filter(x=>x.type==='income').map(x=>Number(x.number)||0):[]))}
 function nextSharedRecordNumber(){return highestSharedRecordNumber()+1}
 function nextInvoiceNumber(){return nextSharedRecordNumber()}
@@ -1421,38 +1416,7 @@ function renderInvoiceLineItems(items){const host=$("invoiceLineItems");if(!host
 function readInvoiceItems(){return Array.from({length:4},(_,n)=>({description:$(`invItemDesc${n}`)?.value.trim()||"",price:Math.max(0,Number($(`invItemPrice${n}`)?.value)||0)})).filter(x=>x.description||x.price>0)}
 function syncInvoiceItems(){const a=readInvoiceItems();$('invUnitPrice').value=a.reduce((s,x)=>s+x.price,0);updateInvoiceTotal()}
 function setInvoiceDraftMode(draft){const f=$('invNumber')?.closest('.field');if(f)f.hidden=false;}
-function updateInvoiceStatusDiagnostic(invoiceId){
- const panel=$('invoiceStatusDiagnostic');if(!panel)return;
- const id=String(invoiceId??'');
- const memoryMatches=db.invoices.filter(x=>String(x.id??'')===id);
- let storedMatches=[],storageError='';
- try{
-  const raw=localStorage.getItem(KEY);
-  if(raw===null)storageError='Accounting key not found in LocalStorage';
-  else{
-   const parsed=JSON.parse(raw);
-   const records=Array.isArray(parsed?.invoices)?parsed.invoices:[];
-   storedMatches=records.filter(x=>String(x.id??'')===id);
-  }
- }catch(e){storageError=String(e?.message||e)}
- const memory=memoryMatches[0]||null,stored=storedMatches[0]||null;
- const rawStatus=x=>!x?'(record not found)':x.status===undefined?'(missing)':x.status===null?'(null)':String(x.status);
- const lines=[
-  'READ-ONLY INVOICE DIAGNOSTIC',
-  'Invoice ID: '+(id||'(empty)'),
-  'Memory matches: '+memoryMatches.length,
-  'Memory status: '+rawStatus(memory),
-  'LocalStorage matches: '+storedMatches.length,
-  'LocalStorage status: '+rawStatus(stored),
-  'Payment status (memory): '+(memory?.paymentStatus??'(missing)'),
-  'Status values equal: '+(memory&&stored?String(memory.status)===String(stored.status)?'YES':'NO':'NOT AVAILABLE'),
-  'Form field status: '+($('invStatus')?.value??'(field not found)'),
-  'Form payment status: '+($('invPaymentStatus')?.value??'(field not found)')
- ];
- if(storageError)lines.push('LocalStorage read: '+storageError);
- panel.textContent=lines.join(String.fromCharCode(10));
- panel.hidden=false;
-}
+async function updateInvoiceStatusDiagnostic(invoiceId){const panel=$('invoiceStatusDiagnostic');if(!panel)return;const id=String(invoiceId??''),memoryMatches=db.invoices.filter(x=>String(x.id??'')===id),memory=memoryMatches[0]||null;panel.textContent='READ-ONLY INVOICE DIAGNOSTIC\nInvoice ID: '+(id||'(empty)')+'\nIn-memory matches: '+memoryMatches.length+'\nIn-memory status: '+(memory?.status??'(missing)')+'\nPayment status: '+(memory?.paymentStatus??'(missing)')+'\nIndexedDB verification: checking…\nForm status: '+($('invStatus')?.value??'(field not found)')+'\nForm payment status: '+($('invPaymentStatus')?.value??'(field not found)');panel.hidden=false;try{const stored=await window.HandymanAccountingV264.load(),matches=stored.invoices.filter(x=>String(x.id??'')===id),saved=matches[0]||null;panel.textContent+='\nIndexedDB matches: '+matches.length+'\nIndexedDB status: '+(saved?.status??'(missing)')+'\nStatus values equal: '+(memory&&saved?String(memory.status)===String(saved.status)?'YES':'NO':'NOT AVAILABLE')}catch(error){panel.textContent+='\nIndexedDB read failed: '+(error&&error.message||error)}}
 function updateInvoicePaymentFields(){
  const draft=$('invStatus')?.value==='draft',wrap=$('invoicePaymentFields'),details=$('invoicePaymentDetails'),payment=$('invPaymentStatus'),date=$('invPaymentDate'),method=$('invPaymentMethod');
  if(wrap)wrap.hidden=draft;
@@ -2311,64 +2275,11 @@ async function runFullStorageAudit(){
   // Strict read-only audit: deliberately do not write an activity-log event.
  }finally{if(button){button.disabled=false;button.textContent='Run Full Storage Audit (Read-only)'}}
 }
-function exportDiagnosticReport(){const logs=monitorReadLog(),ctx=monitorContext();let project={};try{project=JSON.parse(localStorage.getItem('tha_test226_projects_v1')||'{}')}catch(e){}const report={reportType:'The Handyman Accountancy Diagnostic Report',schemaVersion:1,createdAt:new Date().toISOString(),app:ctx,storage:{accountingAvailable:!!storageAvailable,accountingDataIntegrityError:!!accountingDataIntegrityError,accountingEntryCount:Array.isArray(db.entries)?db.entries.length:null,customerCount:Array.isArray(db.customers)?db.customers.length:null,invoiceCount:Array.isArray(db.invoices)?db.invoices.length:null,projectWorkspaceAvailable:!!project&&typeof project==='object',projectCount:Array.isArray(project.projects)?project.projects.length:null},diagnostics:{logCount:logs.length,errorCount:logs.filter(x=>x.category==='error').length,integrityCount:logs.filter(x=>x.category==='integrity').length,oldestEvent:logs[0]?.timestamp||null,newestEvent:logs[logs.length-1]?.timestamp||null},events:logs.map(monitorRedactedEventDetails),privacyNote:'Local export only. Personal names, addresses, phone numbers, emails, bank details and free-text descriptions are filtered from event details where recognized. Review this file before sharing.'};downloadMonitorFile('handyman-diagnostic-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json',JSON.stringify(report,null,2),'application/json');logMonitorEvent('activity','diagnostic_report_exported','diagnostic','local-report','success',{eventsIncluded:logs.length})}
+function exportDiagnosticReport(){const logs=monitorReadLog(),ctx=monitorContext();const project=window.HandymanUIDomainGatewayV264?.states?.projects||{};const report={reportType:'The Handyman Accountancy Diagnostic Report',schemaVersion:1,createdAt:new Date().toISOString(),app:ctx,storage:{accountingAvailable:!!storageAvailable,accountingDataIntegrityError:!!accountingDataIntegrityError,accountingEntryCount:Array.isArray(db.entries)?db.entries.length:null,customerCount:Array.isArray(db.customers)?db.customers.length:null,invoiceCount:Array.isArray(db.invoices)?db.invoices.length:null,projectWorkspaceAvailable:!!project&&typeof project==='object',projectCount:Array.isArray(project.projects)?project.projects.length:null},diagnostics:{logCount:logs.length,errorCount:logs.filter(x=>x.category==='error').length,integrityCount:logs.filter(x=>x.category==='integrity').length,oldestEvent:logs[0]?.timestamp||null,newestEvent:logs[logs.length-1]?.timestamp||null},events:logs.map(monitorRedactedEventDetails),privacyNote:'Local export only. Personal names, addresses, phone numbers, emails, bank details and free-text descriptions are filtered from event details where recognized. Review this file before sharing.'};downloadMonitorFile('handyman-diagnostic-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json',JSON.stringify(report,null,2),'application/json');logMonitorEvent('activity','diagnostic_report_exported','diagnostic','local-report','success',{eventsIncluded:logs.length})}
 function exportMonitorCSV(){const logs=monitorReadLog(),headers=['timestamp','id','category','event','recordType','recordId','result','details','appVersion'],csv=[headers.join(',')].concat(logs.map(x=>headers.map(k=>{let v=k==='details'?JSON.stringify(monitorRedactedEventDetails(x).details||{}):(x[k]??'');v=String(v).replace(/"/g,'""');return '"'+v+'"'}).join(','))).join('\r\n');downloadMonitorFile('handyman-activity-log-'+new Date().toISOString().slice(0,10)+'.csv',csv,'text/csv;charset=utf-8');logMonitorEvent('activity','activity_log_exported','monitor','csv','success',{eventsIncluded:logs.length})}
-window.runIndexedDBSelfTest=async function(){const el=document.getElementById('indexedDBSelfTestResult'),button=document.getElementById('runIndexedDBSelfTestButton');if(button){button.disabled=true;button.textContent='Testing…';}if(el)el.textContent='Starting IndexedDB test…';try{const api=window.HandymanStorageFoundation;if(!api||typeof api.selfTest!=='function')throw new Error('IndexedDB foundation or self-test API is not loaded.');const result=await api.selfTest();const checks=result&&result.checks||{};const failed=Object.entries(checks).filter(([k,v])=>v!==true);const lines=['Overall: '+(result.ok?'PASS':'FAIL'),...Object.entries(checks).map(([k,v])=>k+': '+(v?'PASS':'FAIL')),'Legacy LocalStorage changed: '+(result.legacyDataChanged?'YES':'NO')];if(el)el.textContent=lines.join(' · ');logMonitorEvent('storage','indexeddb_self_test', 'storage','indexeddb',result.ok?'success':'failed',{checks,legacyDataChanged:!!result.legacyDataChanged,error:result.error||null});if(failed.length||!result.ok)console.error('IndexedDB self-test failed',result);return result}catch(e){const msg='IndexedDB self-test FAILED: '+String(e&&e.message||e);if(el)el.textContent=msg;logMonitorEvent('error','indexeddb_self_test_failed','storage','indexeddb','failed',{message:String(e&&e.message||e)});console.error(e);return {ok:false,error:String(e&&e.message||e)}}finally{if(button){button.disabled=false;button.textContent='Test IndexedDB Storage';}}};
-window.createAccountingStorageSnapshot=async function(){
- const el=document.getElementById('accountingStorageComparisonResult');
- if(!window.confirm('Create a one-time IndexedDB snapshot by copying the current Accounting data from LocalStorage? Existing IndexedDB accounting data will never be overwritten.'))return {ok:false,cancelled:true};
- if(el)el.textContent='Checking current Accounting data and IndexedDB…';
- try{
-  if(window.__thaAccountingIdbShadowQueue)await window.__thaAccountingIdbShadowQueue;
-  const api=window.HandymanStorageFoundation;
-  if(!api||typeof api.readAppState!=='function'||typeof api.writeAppState!=='function')throw new Error('IndexedDB appState APIs are unavailable.');
-  const existing=await api.readAppState('accounting');
-  if(existing!==null&&existing!==undefined)throw new Error('An IndexedDB accounting snapshot already exists. It was not overwritten.');
-  const raw=window.localStorage.getItem(KEY);
-  if(raw===null)throw new Error('Accounting LocalStorage data is missing. Nothing was copied.');
-  let source;try{source=JSON.parse(raw)}catch(e){throw new Error('Accounting LocalStorage JSON is invalid. Nothing was copied.');}
-  if(!source||typeof source!=='object'||Array.isArray(source)||!Array.isArray(source.entries))throw new Error('Accounting data failed validation. Nothing was copied.');
-  const before=JSON.stringify(source);
-  const write=await api.writeAppState('accounting',source);
-  const verify=await api.readAppState('accounting');
-  if(!write||!write.ok||JSON.stringify(verify)!==before)throw new Error('IndexedDB snapshot read-back verification failed. LocalStorage was not changed.');
-  window.__thaAccountingIdbShadowOk=true;window.__thaAccountingIdbShadowError='';
-  logMonitorEvent('storage','accounting_snapshot_created','indexeddb','accounting','success',{entries:Array.isArray(source.entries)?source.entries.length:0,customers:Array.isArray(source.customers)?source.customers.length:0,invoices:Array.isArray(source.invoices)?source.invoices.length:0});
-  if(el)el.textContent='Snapshot created and verified in IndexedDB. LocalStorage was not changed. Now run Compare Accounting Storage (Read-only).';
-  return {ok:true,verified:true,localStorageChanged:false};
- }catch(e){
-  const message=String(e&&e.message||e);
-  if(el)el.textContent='Snapshot not created: '+message+' No LocalStorage data was changed.';
-  logMonitorEvent('storage','accounting_snapshot_create','indexeddb','accounting','failed',{message});
-  return {ok:false,error:message,localStorageChanged:false};
- }
-};
-window.runAccountingStorageComparison=async function(){
- const el=document.getElementById('accountingStorageComparisonResult');
- if(el)el.textContent='Waiting for queued IndexedDB writes…';
- try{
-  if(window.__thaAccountingIdbShadowQueue)await window.__thaAccountingIdbShadowQueue;
-  const api=window.HandymanStorageFoundation;
-  if(!api||typeof api.readAppState!=='function')throw new Error('IndexedDB appState read API is unavailable.');
-  const raw=window.localStorage.getItem(KEY);
-  if(raw===null)throw new Error('Legacy accounting LocalStorage key is missing; comparison stopped without changing data.');
-  let legacy;try{legacy=JSON.parse(raw)}catch(e){throw new Error('Legacy accounting JSON is invalid; no data was changed.');}
-  const indexed=await api.readAppState('accounting');
-  if(indexed===null||indexed===undefined)throw new Error('IndexedDB accounting snapshot is not present yet.');
-  const same=JSON.stringify(legacy)===JSON.stringify(indexed);
-  const counts={legacy:{entries:Array.isArray(legacy.entries)?legacy.entries.length:null,customers:Array.isArray(legacy.customers)?legacy.customers.length:null,invoices:Array.isArray(legacy.invoices)?legacy.invoices.length:null},indexedDB:{entries:Array.isArray(indexed.entries)?indexed.entries.length:null,customers:Array.isArray(indexed.customers)?indexed.customers.length:null,invoices:Array.isArray(indexed.invoices)?indexed.invoices.length:null}};
-  const result={ok:same,readOnly:true,legacyLocalStoragePresent:true,indexedDBSnapshotPresent:true,exactJSONMatch:same,counts,indexedDBShadowWriteOk:window.__thaAccountingIdbShadowOk===true,indexedDBShadowWriteError:window.__thaAccountingIdbShadowError||null,checkedAt:new Date().toISOString()};
-  if(el)el.textContent=(same?'PASS: ':'MISMATCH: ')+'Read-only comparison · exact JSON match: '+(same?'YES':'NO')+' · entries '+counts.legacy.entries+'/'+counts.indexedDB.entries+' · customers '+counts.legacy.customers+'/'+counts.indexedDB.customers+' · invoices '+counts.legacy.invoices+'/'+counts.indexedDB.invoices+' · IndexedDB last write '+(result.indexedDBShadowWriteOk?'OK':(result.indexedDBShadowWriteError?'ERROR':'not confirmed'))+'. No data was changed.';
-  logMonitorEvent('storage','accounting_storage_comparison','indexeddb','accounting',same?'success':'warning',{exactJSONMatch:same,counts,indexedDBShadowWriteOk:result.indexedDBShadowWriteOk,indexedDBShadowWriteError:result.indexedDBShadowWriteError});
-  return result;
- }catch(e){
-  const message=String(e&&e.message||e);
-  if(el)el.textContent='Comparison unavailable: '+message+' No data was changed.';
-  logMonitorEvent('storage','accounting_storage_comparison','indexeddb','accounting','failed',{message});
-  return {ok:false,readOnly:true,error:message};
- }
-};
-function runMonitorSelfCheck(){const result=[];try{const log=monitorReadLog();result.push('Log storage: readable ('+log.length+' events)')}catch(e){result.push('Log storage: FAILED')}try{const test='monitor-self-check-'+Date.now();localStorage.setItem(test,'ok');const ok=localStorage.getItem(test)==='ok';localStorage.removeItem(test);result.push('Local storage write/read: '+(ok?'PASS':'FAIL'))}catch(e){result.push('Local storage write/read: FAIL ('+String(e.message||e)+')')}result.push('App version: '+(document.querySelector('meta[name="app-version"]')?.content||'unknown'));result.push('Accounting data integrity flag: '+(accountingDataIntegrityError?'WARNING':'no flag raised'));const el=document.getElementById('monitorSelfCheckResult');if(el)el.textContent=result.join(' · ');logMonitorEvent('activity','monitor_self_check','monitor','local','success',{checks:result.map(x=>x.split(':')[0])})}
+window.runIndexedDBSelfTest=async function(){const el=document.getElementById('indexedDBSelfTestResult');try{await flushAccountingWrites();const health=await window.HandymanStorageV264.health();const ok=health&&health.ok===true&&health.database==='the_handyman_accountancy_v264_idb';if(el)el.textContent=ok?'IndexedDB health PASS. The app writes directly to the v264 database; legacy LocalStorage import is disabled.':'IndexedDB health check failed.';return {ok,mode:'indexeddb-only',legacyImport:false,health}}catch(error){if(el)el.textContent='IndexedDB health check failed: '+(error&&error.message||error);return {ok:false,error:String(error&&error.message||error)}}};
+window.runAccountingStorageComparison=async function(){const el=document.getElementById('accountingStorageComparisonResult');try{await flushAccountingWrites();const stored=await window.HandymanAccountingV264.load();const equal=await window.HandymanStorageV264.valuesEqual(stored,db);const counts={entries:stored.entries.length,customers:stored.customers.length,invoices:stored.invoices.length};const result={ok:equal,readOnly:true,mode:'indexeddb-only',legacyLocalStorageUsed:false,indexedDBStateMatchesUI:equal,counts,checkedAt:new Date().toISOString()};if(el)el.textContent='IndexedDB / UI comparison: '+(equal?'PASS':'FAIL')+' · '+counts.entries+' entries · '+counts.customers+' customers · '+counts.invoices+' invoices. Legacy LocalStorage is not part of the active storage path.';return result}catch(error){const message=String(error&&error.message||error);if(el)el.textContent='IndexedDB comparison failed: '+message;return {ok:false,error:message,legacyLocalStorageUsed:false}}};
+async function runMonitorSelfCheck(){const result=[];try{const log=monitorReadLog();result.push('IndexedDB diagnostics archive: readable ('+log.length+' events)')}catch(e){result.push('IndexedDB diagnostics archive: FAILED')}try{const health=await window.HandymanStorageV264.health();result.push('IndexedDB health: '+(health&&health.ok?'PASS':'FAIL'));result.push('Database: '+(health?.database||'unavailable'))}catch(e){result.push('IndexedDB health: FAIL ('+String(e.message||e)+')')}result.push('App version: '+(document.querySelector('meta[name="app-version"]')?.content||'unknown'));result.push('Accounting integrity flag: '+(accountingDataIntegrityError?'WARNING':'no flag raised'));const el=document.getElementById('monitorSelfCheckResult');if(el)el.textContent=result.join(' · ');logMonitorEvent('activity','monitor_self_check','monitor','indexeddb','success',{checks:result.map(x=>x.split(':')[0])})}
 /* Generic click trail gives context; sensitive form values are deliberately never recorded. */
 document.addEventListener('click',function(e){const b=e.target.closest('button,[role="button"]');if(!b)return;const text=(b.innerText||b.getAttribute('aria-label')||'').trim().replace(/\s+/g,' ').slice(0,100);if(!text||b.closest('#monitor'))return;const onclick=b.getAttribute('onclick')||'';const fn=(onclick.match(/^\s*([\w$]+)/)||[])[1]||'button_click';logMonitorEvent('activity','ui_action','ui',fn,'attempted',{label:text,handler:fn})},true);
 /* Record initialization/version and preserve numbering across deletions and reloads. */
@@ -2378,7 +2289,7 @@ try{const maxNow=Math.max(0,...(Array.isArray(db.invoices)?db.invoices.map(i=>Nu
 /* v168 action wrappers log completed operations without changing their original return values. */
 (function(){
  function wrap(name,evt,recordType,identify){const original=window[name];if(typeof original!=='function'||original.__monitorWrapped)return;const wrapped=function(...args){let ident='';try{const x=identify?identify(args):null;if(x)ident=String(x.id||x.number||'')}catch(e){}try{const result=original.apply(this,args);if(name==='backup'||name==='downloadCSV')logMonitorEvent('activity',evt,recordType,'export','attempted',{});return result}catch(e){logMonitorEvent('error',name+'_threw',recordType,ident,'failed',monitorSafeError(e));throw e}};wrapped.__monitorWrapped=true;window[name]=wrapped}
- const originalPersist=window.persist;if(typeof originalPersist==='function'&&!originalPersist.__monitorWrapped){const wrappedPersist=function(...args){let before=null;try{before=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}const result=originalPersist.apply(this,args);if(result===true){try{const after=JSON.parse(localStorage.getItem(KEY)||'null');const count=(x,k)=>Array.isArray(x?.[k])?x[k].length:0;const diff={entriesBefore:count(before,'entries'),entriesAfter:count(after,'entries'),customersBefore:count(before,'customers'),customersAfter:count(after,'customers'),invoicesBefore:count(before,'invoices'),invoicesAfter:count(after,'invoices')};if(JSON.stringify(before)!==JSON.stringify(after))logMonitorEvent('activity','accounting_data_persisted','accounting','local-db','success',diff)}catch(e){logMonitorEvent('integrity','post_save_comparison_failed','accounting','local-db','warning',{message:String(e.message||e)})}}return result};wrappedPersist.__monitorWrapped=true;window.persist=wrappedPersist}
+ /* Legacy LocalStorage persist instrumentation removed: active writes are verified in IndexedDB. */
  wrap('backup','backup_export_started','backup');wrap('restore','backup_restore_started','backup');wrap('downloadCSV','accounting_csv_export_started','export');
 })();
 </script>
