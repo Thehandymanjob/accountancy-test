@@ -1,64 +1,25 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>THA v264 Backup Restore Lab</title>
-<style>body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;background:#f3f5f8;color:#172235;margin:0;padding:16px}main{max-width:820px;margin:auto}section{background:white;border:1px solid #dce2ea;border-radius:12px;padding:16px;margin:12px 0}button{padding:12px 16px;border:0;border-radius:8px;background:#17365d;color:white;font-weight:700;margin:5px}.warn{background:#fff4d6;padding:12px;border-radius:8px}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb;padding:12px;border-radius:8px;font-size:12px}</style></head>
-<body><main><section><h1>THA v264 — Backup / Restore Lab</h1><p class="warn"><b>Isolated lab database only.</b> This test uses a separate database name and synthetic records. It does not access the user's v264 database, production, LocalStorage or legacy records. Factory Reset is tested only inside this isolated synthetic lab database.</p><p><b>Lab DB:</b> <code>the_handyman_accountancy_v264_recovery_guard_lab_idb</code></p><button id="run">Run backup, partial restore and recovery tests</button><pre id="out">Waiting…</pre></section></main>
-<script src="storage-idb-v264-backup-lab.js?v=264d"></script><script src="v264-recovery-backup-lab.js?v=264d"></script>
-<script>
-const out=document.getElementById("out"),show=x=>out.textContent=JSON.stringify(x,null,2);
-const domains=["accounting","projects","contracts","business_profile","sequences","preferences","preference_meta","diagnostics","reports","report_notifications","report_settings","report_workflow","notifications","recovery","factory_reset_recovery"];
-window.HandymanAppStorageV264BackupLab={domains,initialize:async()=>{const s=await HandymanStorageV264BackupLab.ready();return {...s,mode:"indexeddb-only",legacyImport:false};}};
-document.getElementById("run").onclick=async()=>{
- const report={ok:false,tests:{},database:HandymanStorageV264BackupLab.databaseName,productionTouched:false,legacyStorageAccess:false,scope:"isolated synthetic lab database"};
- let file=null;
- try{
-  const e=HandymanStorageV264BackupLab,r=HandymanRecoveryV264BackupLab.create();
-  await e.ready();
-  const receipt=new Blob(["synthetic-receipt-image-v264"],{type:"image/png"});
-  const contract=new Blob(["synthetic-contract-pdf-v264"],{type:"application/pdf"});
-  const original={entries:[{id:"lab-income-1",amount:125.5}],customers:[{id:"lab-customer-1",name:"Synthetic Customer"}],invoices:[{id:"lab-invoice-1",number:"LAB-001"}],receipt,contract,meta:{createdAt:new Date("2026-01-02T03:04:05Z")}};
-  await e.put("accounting","state",original);
-  await e.put("projects","state",{projects:[{id:"lab-project-1",name:"Synthetic Project"}]});
-  await e.put("contracts","state",{contracts:[{id:"lab-contract-1",file:contract}]});
-  const backup=await r.createBackup();
-  report.tests.backupCreated=backup.ok===true&&backup.blob instanceof Blob;
-  report.backupBytes=backup.blob.size;report.backupRecords=backup.verification.records;
-  file=new File([backup.blob],backup.filename,{type:backup.blob.type});
-  const inspected=await r.inspectFile(file);
-  report.tests.backupIntegrity=inspected.ok===true&&inspected.records===backup.verification.records;
-  const projectSnapshot=await e.snapshot(["projects"]);
-  await e.put("accounting","state",{entries:[{id:"mutated-accounting"}],customers:[],invoices:[]});
-  await e.put("projects","state",{projects:[{id:"mutated-project",name:"Changed"}]});
-  const partial=await e.restore(projectSnapshot);
-  const afterPartialAccounting=await e.get("accounting","state");
-  const afterPartialProjects=await e.get("projects","state");
-  report.tests.partialRestorePreservesOtherDomains=partial.domains.length===1&&afterPartialAccounting.entries[0].id==="mutated-accounting"&&afterPartialProjects.projects[0].id==="lab-project-1";
-  const restored=await r.restoreFromFile(file);
-  const a=await e.get("accounting","state"),p=await e.get("projects","state"),c=await e.get("contracts","state");
-  report.tests.fullRestoreVerified=restored.ok===true&&restored.verified===true;
-  report.tests.jsonRestored=a.entries[0].id==="lab-income-1"&&a.customers[0].id==="lab-customer-1";
-  report.tests.blobRestored=a.receipt instanceof Blob&&await a.receipt.text()==="synthetic-receipt-image-v264"&&c.contracts[0].file instanceof Blob&&await c.contracts[0].file.text()==="synthetic-contract-pdf-v264";
-  report.tests.dateRestored=a.meta.createdAt instanceof Date&&a.meta.createdAt.toISOString()==="2026-01-02T03:04:05.000Z";
-  report.tests.projectsRestored=p.projects[0].id==="lab-project-1";
-  const tampered=JSON.parse(await file.text());tampered.payload.records[0].key="tampered-key";
-  const badFile=new File([JSON.stringify(tampered)],"tampered.json",{type:"application/json"});
-  let tamperRejected=false;try{await r.inspectFile(badFile);}catch(_){tamperRejected=true;}
-  report.tests.tamperRejected=tamperRejected;
-  const reset=await r.resetFromBackupFile(file);
-  report.tests.resetClearedAndLocked=reset.ok===true&&reset.resetLocked===true&&reset.remainingRecords===0;
-  let partialRejected=false;try{await e.restore(projectSnapshot);}catch(_){partialRejected=true;}
-  const lockedHealth=await e.health();
-  report.tests.partialRestoreBlockedDuringRecovery=partialRejected&&lockedHealth.resetLocked===true&&lockedHealth.totalRecords===0;
-  const recovered=await r.restoreFromFile(file);
-  const finalHealth=await e.health();
-  report.tests.fullRestoreCompletesRecovery=recovered.ok===true&&recovered.verified===true&&recovered.recoveryCompleted===true&&finalHealth.resetLocked===false;
-  report.tests.finalDataIntact=finalHealth.totalRecords===3&&(await e.get("accounting","state")).entries[0].id==="lab-income-1";
-  report.labHealth=finalHealth;
-  report.ok=Object.values(report.tests).every(Boolean)&&finalHealth.totalRecords===3;
- }catch(error){
-  report.error=String(error&&error.message||error);
-  // If a test fails after the synthetic reset, attempt to recover the isolated lab
-  // database from the in-memory full backup before reporting failure.
-  if(file){try{const r=HandymanRecoveryV264BackupLab.create();report.emergencyRecovery=await r.restoreFromFile(file);report.postFailureHealth=await HandymanStorageV264BackupLab.health();}catch(recoveryError){report.emergencyRecoveryError=String(recoveryError&&recoveryError.message||recoveryError);}}
- }
- show(report);
-};</script></body></html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>THA v264 — Retired Combined Backup Lab</title>
+<style>
+body{font:16px -apple-system,BlinkMacSystemFont,sans-serif;background:#f3f5f8;color:#172235;margin:0;padding:20px}
+main{max-width:760px;margin:auto}
+section{background:#fff;border:1px solid #dce2ea;border-radius:12px;padding:20px}
+.warning{background:#fff4d6;border:1px solid #e7c86d;border-radius:8px;padding:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<main>
+<section>
+<h1>THA v264 — Combined Backup Lab Retired</h1>
+<p class="warning"><strong>Do not run this legacy test.</strong> It tested one combined Accounting + Projects backup and a global reset. That workflow is prohibited by the current architecture and has been retired.</p>
+<p>The active v264 application now uses separate, domain-scoped backup and restore files. Accounting (including invoice numbering) and Projects (including Company Contracts &amp; Jobs) must always be backed up and restored independently.</p>
+<p>Use the domain-specific Backup &amp; Restore controls in <code>v264-app/index.html</code>. This page intentionally performs no storage access and makes no changes.</p>
+</section>
+</main>
+</body>
+</html>
