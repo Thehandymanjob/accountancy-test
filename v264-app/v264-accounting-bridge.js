@@ -30,18 +30,19 @@
   return update(s=>{const i=s.entries.findIndex(x=>String(x.id)===String(entry.id));if(i<0)s.entries.push(clone(entry));else s.entries[i]={...s.entries[i],...clone(entry),id:s.entries[i].id};return s;});
  }
  async function deleteEntry(id){return update(s=>{const item=s.entries.find(x=>String(x.id)===String(id));if(!item)throw new Error("Entry not found.");if(item.invoiceId)throw new Error("Invoice-linked income must be changed through the invoice payment workflow.");s.entries=s.entries.filter(x=>String(x.id)!==String(id));return s;});}
- async function saveCustomer(customer){await accounting().saveCustomer(customer);return refresh();}
- async function deleteCustomer(id){await accounting().deleteCustomer(id);return refresh();}
- async function saveInvoice(invoice,payment){
+ async function saveCustomer(customer){return serialize(async()=>{await accounting().saveCustomer(customer);return refresh();});}
+ async function deleteCustomer(id){return serialize(async()=>{await accounting().deleteCustomer(id);return refresh();});}
+ async function saveInvoice(invoice,payment,customerOverride){
   if(!invoice||typeof invoice!=="object")throw new Error("Invoice data is required.");
-  const snapshot=getState(),customer=snapshot.customers.find(x=>String(x.id)===String(invoice.customerId))||null;
-  const result=await invoices().saveInvoice(invoice,payment,customer);
-  if(!result||result.ok!==true)throw new Error("Invoice workflow did not confirm the save.");
-  return {result,state:await refresh()};
+  return serialize(async()=>{const snapshot=getState(),customer=customerOverride||snapshot.customers.find(x=>String(x.id)===String(invoice.customerId))||null;
+   const result=await invoices().saveInvoice(invoice,payment,customer);
+   if(!result||result.ok!==true)throw new Error("Invoice workflow did not confirm the save.");
+   return {result,state:await refresh()};
+  });
  }
- async function markInvoicePaid(id,payment){const result=await invoices().markPaid(id,payment);return {result,state:await refresh()};}
- async function markInvoiceUnpaid(id){const result=await invoices().markUnpaid(id);return {result,state:await refresh()};}
- async function deleteInvoice(id){const result=await invoices().softDelete(id);return {result,state:await refresh()};}
+ async function markInvoicePaid(id,payment){return serialize(async()=>{const result=await invoices().markPaid(id,payment);return {result,state:await refresh()};});}
+ async function markInvoiceUnpaid(id){return serialize(async()=>{const result=await invoices().markUnpaid(id);return {result,state:await refresh()};});}
+ async function deleteInvoice(id){return serialize(async()=>{const result=await invoices().softDelete(id);return {result,state:await refresh()};});}
  async function reserveInvoiceNumber(){
   const s=getState(),highest=Math.max(0,...s.invoices.map(x=>Number(x.number)||0),...s.entries.filter(x=>x.type==="income").map(x=>Number(x.number)||0));
   return accounting().reserveInvoiceNumber(highest);
