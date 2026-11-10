@@ -69,6 +69,8 @@ document.getElementById("run").onclick=async()=>{
   try{await HandymanUIAdapterV264.accounting.deleteEntry(entryId)}catch(e){}
   try{await HandymanUIAdapterV264.projects.remove(projectId)}catch(e){}
   try{await HandymanUIAdapterV264.contracts.remove(contractId)}catch(e){}
+  try{if(profileBefore)await HandymanUIAdapterV264.businessProfile.save(profileBefore)}catch(e){}
+  try{if(languageBefore!==null)await HandymanUIAdapterV264.support.save("preferences",languageBefore)}catch(e){}
  }
 };
 </script></body></html>
