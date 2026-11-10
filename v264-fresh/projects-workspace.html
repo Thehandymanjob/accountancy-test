@@ -59,6 +59,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#101c2d;color:#e8f0fb
 <div id="subprojectForm" class="item hidden"><h3 id="subprojectFormTitle">New sub-project</h3><input id="subprojectId" type="hidden"><label>Sub-project photo (optional)</label><input id="subprojectPhoto" type="file" accept="image/*,.png,.jpg,.jpeg,.webp,.heic,.heif"><img id="subprojectPhotoPreview" alt="Sub-project photo preview" class="photo-preview hidden"><label>Sub-project name</label><input id="subprojectName" maxlength="160"><label>Agreed price (£)</label><input id="subprojectPrice" type="number" min="0" step="0.01" value="0"><button id="saveSubproject">Save sub-project</button><button class="secondary" id="cancelSubproject">Cancel</button></div>
 <div id="subprojectList"></div>
 <div id="shareSummary" class="item"></div>
+<div class="item"><h3>Project Financial Report</h3><p class="muted">Create a branded report covering this project, every sub-project, receipts, eligible costs and the overall result. Projects data only; no Accounting connection.</p><button type="button" id="openProjectReport">Open full project report</button></div>
 <div id="ledgerEditor">
 <h3>Project ledger</h3>
 <div class="row"><div><label>Record type</label><select id="recordType"><option value="income">Income</option><option value="expenses">Expense</option></select></div><div><label>Amount (£)</label><input id="recordAmount" type="number" min="0.01" step="0.01"></div></div>
@@ -248,4 +249,5 @@ $("recordDate").value=new Date().toISOString().slice(0,10);
 start();
 })();
 </script>
+<script src="projects-report-v264.js?v=264-report-1"></script>
 </body></html>
