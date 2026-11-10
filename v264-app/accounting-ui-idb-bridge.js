@@ -54,7 +54,33 @@
   writeTail=operation.catch(()=>{});
   return operation;
  }
+
+ async function replaceState(mutator){
+  if(typeof mutator!=="function")throw new TypeError("A synchronous accounting state mutator is required.");
+  if(!initialized)throw new Error("Accounting UI bridge is not initialized.");
+  return mutate(current=>{
+   const next=mutator(clone(current));
+   if(next&&typeof next.then==="function")throw new Error("Accounting state mutator must be synchronous.");
+   return assertState(next===undefined?current:next);
+  });
+ }
+ async function commitWithRollback(nextState,previousState){
+  try{return await commit(nextState);}
+  catch(error){
+   if(previousState!==undefined){
+    try{
+     const rollback=await commit(previousState);
+     if(!rollback||rollback.verified!==true)throw new Error("Rollback read-back was not verified.");
+    }catch(rollbackError){
+     const combined=new Error("Accounting save failed and rollback could not be verified: "+String(rollbackError&&rollbackError.message||rollbackError));
+     combined.cause=error;throw combined;
+    }
+   }
+   throw error;
+  }
+ }
+
  async function reserveNumber(minimum){if(!initialized)throw new Error("Accounting UI bridge is not initialized.");return controller().reserveInvoiceNumber(minimum);}
  async function flush(){await writeTail;return {ok:true,initialized,lastState:clone(lastState)};}
- root.HandymanAccountingUIBridgeV264=Object.freeze({initialize,load,commit,mutate,reserveNumber,flush,get initialized(){return initialized;}});
+ root.HandymanAccountingUIBridgeV264=Object.freeze({initialize,load,commit,mutate,replaceState,commitWithRollback,reserveNumber,flush,get initialized(){return initialized;}});
 })(window);
