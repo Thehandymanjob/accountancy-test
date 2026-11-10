@@ -68,6 +68,29 @@
     return true;
   }
 
+  const BINARY_TAG = "__tha_v264_binary_record__";
+  async function encodeStored(value, seen = new WeakSet()) {
+    if (value === null || typeof value !== "object") return value;
+    if (seen.has(value)) throw new Error("Circular values cannot be stored in IndexedDB.");
+    seen.add(value);
+    try {
+      if (typeof File !== "undefined" && value instanceof File) return { [BINARY_TAG]: "File", name: value.name, type: value.type, lastModified: value.lastModified, bytes: new Uint8Array(await value.arrayBuffer()) };
+      if (value instanceof Blob) return { [BINARY_TAG]: "Blob", type: value.type, bytes: new Uint8Array(await value.arrayBuffer()) };
+      if (value instanceof Date || value instanceof ArrayBuffer || ArrayBuffer.isView(value)) return value;
+      if (Array.isArray(value)) return await Promise.all(value.map(v => encodeStored(v, seen)));
+      const out = {}; for (const key of Object.keys(value)) out[key] = await encodeStored(value[key], seen); return out;
+    } finally { seen.delete(value); }
+  }
+  async function decodeStored(value) {
+    if (value === null || typeof value !== "object") return value;
+    if (Array.isArray(value)) return Promise.all(value.map(decodeStored));
+    if (value[BINARY_TAG] === "Blob" || value[BINARY_TAG] === "File") {
+      const bytes = value.bytes instanceof Uint8Array ? value.bytes : new Uint8Array(value.bytes || []);
+      if (value[BINARY_TAG] === "File" && typeof File === "function") return new File([bytes], value.name || "file", { type: value.type || "", lastModified: Number(value.lastModified) || 0 });
+      return new Blob([bytes], { type: value.type || "" });
+    }
+    const out = {}; for (const key of Object.keys(value)) out[key] = await decodeStored(value[key]); return out;
+  }
   const requestResult = request => new Promise((resolve, reject) => {
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("IndexedDB request failed."));
@@ -172,7 +195,7 @@
       const done = transactionDone(tx);
       const row = await requestResult(tx.objectStore(STORE).get(item.id));
       await done;
-      return row ? row.value : null;
+      return row ? await decodeStored(row.value) : null;
     } finally { db.close(); }
   }
 
@@ -188,7 +211,7 @@
       const rows = await Promise.all(prepared.map(x => requestResult(store.get(x.id))));
       await done;
       return { ok: true, records: rows.map((row, i) => ({
-        domain: prepared[i].domain, key: prepared[i].key, value: row ? row.value : null
+        domain: prepared[i].domain, key: prepared[i].key, value: row ? await decodeStored(row.value) : null
       })) };
     } finally { db.close(); }
   }
@@ -196,12 +219,13 @@
   async function put(domain, key, value) {
     const item = validateDescriptor(domain, key);
     validateValue(value);
+    const storedValue = await encodeStored(value);
     const stamp = new Date().toISOString();
     const db = await openDatabase();
     try {
       const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
-      guardWrite(tx, () => tx.objectStore(STORE).put({ ...item, value, updatedAt: stamp }), false);
+      guardWrite(tx, () => tx.objectStore(STORE).put({ ...item, value: storedValue, updatedAt: stamp }), false);
       await done;
       const saved = await get(domain, key);
       // IndexedDB structured cloning preserves binary objects; compare primitive JSON
@@ -232,16 +256,17 @@
     const prepared = writes.map(x => {
       const item = validateDescriptor(x.domain, x.key);
       validateValue(x.value);
-      return { ...item, value: x.value };
+      return { ...item, value: x.value, storedValue: null };
     });
     assertUnique(prepared, "transaction");
+    for (const item of prepared) item.storedValue = await encodeStored(item.value);
     const stamp = new Date().toISOString();
     const db = await openDatabase();
     try {
       const tx = db.transaction([STORE, META], "readwrite");
       const done = transactionDone(tx);
       const store = tx.objectStore(STORE);
-      guardWrite(tx, () => { for (const item of prepared) store.put({ ...item, updatedAt: stamp }); }, false);
+      guardWrite(tx, () => { for (const item of prepared) store.put({ id: item.id, domain: item.domain, key: item.key, value: item.storedValue, updatedAt: stamp }); }, false);
       await done;
       const verify = await readMany(prepared);
       for (let i = 0; i < prepared.length; i++) {
@@ -254,68 +279,39 @@
   }
 
   async function mutateMany(descriptors, updater) {
-    if (!Array.isArray(descriptors) || descriptors.length === 0 || typeof updater !== "function") {
-      throw new Error("A non-empty descriptor list and synchronous updater are required.");
-    }
-    const prepared = descriptors.map(x => ({
-      ...validateDescriptor(x.domain, x.key),
-      initialValue: x.initialValue === undefined ? null : x.initialValue
-    }));
+    if (!Array.isArray(descriptors) || descriptors.length === 0 || typeof updater !== "function") throw new Error("A non-empty descriptor list and synchronous updater are required.");
+    const prepared = descriptors.map(x => ({ ...validateDescriptor(x.domain, x.key), initialValue: x.initialValue === undefined ? null : x.initialValue }));
     assertUnique(prepared, "mutation");
     const db = await openDatabase();
     const stamp = new Date().toISOString();
     try {
+      const readTx = db.transaction([STORE], "readonly");
+      const readDone = transactionDone(readTx);
+      const rawRows = await Promise.all(prepared.map(x => requestResult(readTx.objectStore(STORE).get(x.id))));
+      await readDone;
+      const current = [];
+      for (let i = 0; i < prepared.length; i++) current.push({ domain: prepared[i].domain, key: prepared[i].key, value: rawRows[i] ? await decodeStored(rawRows[i].value) : clone(prepared[i].initialValue) });
+      const next = updater(clone(current));
+      if (next && typeof next.then === "function") throw new Error("IndexedDB mutation callback must be synchronous.");
+      if (!Array.isArray(next) || next.length !== prepared.length) throw new Error("Mutation must return one value per descriptor.");
+      const stored = []; for (const value of next) { validateValue(value); stored.push(await encodeStored(value)); }
       const tx = db.transaction([STORE, META], "readwrite");
-      const done = transactionDone(tx);
-      const store = tx.objectStore(STORE);
-      const currentRows = new Array(prepared.length);
-      let received = 0;
-      let next;
-      let mutationError = null;
-
-      // Keep every operation that touches this transaction inside IndexedDB
-      // request callbacks. Safari may auto-commit a transaction across an
-      // awaited Promise continuation, even when another request is expected.
+      const done = transactionDone(tx); const store = tx.objectStore(STORE);
+      let received = 0, conflict = null;
       guardWrite(tx, () => {
-      const requests = prepared.map((item, index) => {
-        const request = store.get(item.id);
-        request.onsuccess = () => {
-          currentRows[index] = request.result || null;
-          received++;
-          if (received !== prepared.length) return;
-          try {
-            const current = currentRows.map((row, i) => ({
-              domain: prepared[i].domain,
-              key: prepared[i].key,
-              value: row ? row.value : clone(prepared[i].initialValue)
-            }));
-            next = updater(clone(current));
-            if (next && typeof next.then === "function") throw new Error("IndexedDB mutation callback must be synchronous.");
-            if (!Array.isArray(next) || next.length !== prepared.length) throw new Error("Mutation must return one value per descriptor.");
-            // Validate every value before issuing the first write, preventing partial batches.
-            for (const value of next) validateValue(value);
-            for (let i = 0; i < prepared.length; i++) {
-              store.put({ id: prepared[i].id, domain: prepared[i].domain, key: prepared[i].key, value: next[i], updatedAt: stamp });
-            }
-          } catch (error) {
-            mutationError = error;
-            try { tx.abort(); } catch (_) {}
-          }
-        };
-      });
+        prepared.forEach((item, index) => {
+          const req = store.get(item.id);
+          req.onsuccess = () => {
+            const latest = req.result || null, original = rawRows[index] || null;
+            if ((latest && latest.updatedAt || null) !== (original && original.updatedAt || null)) { conflict = new Error("Concurrent IndexedDB update detected for " + item.domain + "/" + item.key + "; retry the operation."); try { tx.abort(); } catch (_) {} return; }
+            received++;
+            if (received === prepared.length) for (let i = 0; i < prepared.length; i++) store.put({ id: prepared[i].id, domain: prepared[i].domain, key: prepared[i].key, value: stored[i], updatedAt: stamp });
+          };
+        });
       }, false);
-
-      try { await done; } catch (error) {
-        if (mutationError) throw mutationError;
-        throw error;
-      }
-      if (mutationError) throw mutationError;
+      try { await done; } catch (error) { if (conflict) throw conflict; throw error; }
       const verified = await readMany(prepared);
-      for (let i = 0; i < prepared.length; i++) {
-        if (!(await valuesEqual(verified.records[i].value, next[i]))) {
-          throw new Error("IndexedDB mutation content read-back failed for " + prepared[i].domain + "/" + prepared[i].key);
-        }
-      }
+      for (let i = 0; i < prepared.length; i++) if (!(await valuesEqual(verified.records[i].value, next[i]))) throw new Error("IndexedDB mutation content read-back failed for " + prepared[i].domain + "/" + prepared[i].key);
       return { ok: true, updated: prepared.length, records: verified.records, updatedAt: stamp };
     } finally { db.close(); }
   }
@@ -371,7 +367,7 @@
         database: DB_NAME,
         createdAt: new Date().toISOString(),
         domains: [...new Set(domains)].sort(),
-        records: rows.filter(x => domains.includes(x.domain)).sort((a, b) => a.id.localeCompare(b.id))
+        records: await Promise.all(rows.filter(x => domains.includes(x.domain)).sort((a, b) => a.id.localeCompare(b.id)).map(async row => ({ ...row, value: await decodeStored(row.value) })))
       };
     } finally { db.close(); }
   }
@@ -387,9 +383,10 @@
       const item = validateDescriptor(row.domain, row.key);
       if (!domains.includes(row.domain)) throw new Error("Backup record is outside the declared domains.");
       validateValue(row.value);
-      return { ...item, value: row.value };
+      return { ...item, value: row.value, storedValue: null };
     });
     assertUnique(prepared, "restore");
+    for (const row of prepared) row.storedValue = await encodeStored(row.value);
     const db = await openDatabase();
     try {
       const tx = db.transaction([STORE, META], "readwrite");
@@ -406,7 +403,7 @@
           }
           for (const row of existing) if (domains.includes(row.domain)) store.delete(row.id);
           const stamp = new Date().toISOString();
-          for (const row of prepared) store.put({ ...row, updatedAt: stamp });
+          for (const row of prepared) store.put({ id: row.id, domain: row.domain, key: row.key, value: row.storedValue, updatedAt: stamp });
           // The reset lock intentionally remains active until Recovery verifies
           // the complete restored database and completes the recovery handshake.
         } catch (error) {
