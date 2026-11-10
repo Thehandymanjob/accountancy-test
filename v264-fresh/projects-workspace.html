@@ -175,7 +175,7 @@ async function saveProject(){
  if(oldId)await api().updateProject(oldId,item);else await api().addProject(item);
  await refresh();show("listView");status("Project saved and verified in the Projects domain.");
 }
-async function openProject(projectId){currentProjectId=projectId;currentSubprojectId=null;renderDetail();show("detailView");}
+async function openProject(projectId){currentProjectId=projectId;window.__thaCurrentProjectId=projectId;currentSubprojectId=null;renderDetail();show("detailView");}
 function current(){return state.projects.find(p=>String(p.id)===String(currentProjectId))||null}
 function activeLedger(){const p=current();return currentSubprojectId?(p?.subprojects||[]).find(s=>String(s.id)===String(currentSubprojectId)):p}
 function renderDetail(){
