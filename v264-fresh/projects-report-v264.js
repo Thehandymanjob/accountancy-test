@@ -40,7 +40,7 @@ async function open(){
  if(!project)throw new Error("The current project could not be found in the Projects database.");
  const profile=await window.HandymanBusinessProfileV264.load();
  close();const shell=document.createElement("div");shell.id="thaProjectReportPreview";shell.className="preview-shell";
- shell.innerHTML=styles()+'<div class="preview-toolbar"><strong>Full project report preview</strong><button type="button" onclick="this.closest(\'.preview-shell\').remove();document.body.style.overflow=\'\'">Close</button><button type="button" class="generate" id="thaGeneratePdf">Generate PDF / Print</button><span style="font-size:12px">Use the iPhone print sheet to save as PDF or share.</span></div><div class="preview-page">'+reportMarkup(project,profile)+'</div>';
+ shell.innerHTML=styles()+'<div class="preview-toolbar"><strong>Full project report preview</strong><button type="button" id="thaCloseReport">Close</button><button type="button" class="generate" id="thaGeneratePdf">Generate PDF / Print</button><span style="font-size:12px">Use the iPhone print sheet to save as PDF or share.</span></div><div class="preview-page">'+reportMarkup(project,profile)+'</div>';
  document.body.appendChild(shell);document.body.style.overflow="hidden";
  $("thaCloseReport").onclick=close;$("thaGeneratePdf").onclick=()=>{document.body.classList.add("tha-print-report");window.print();};
 }
