@@ -40,7 +40,7 @@
    const workspace=value;
    states.support={...states.support,reports:clone(workspace.archive||[]),reportNotifications:clone(workspace.notifications||[]),reportSettings:clone(workspace.settings||{}),reportWorkflow:clone(workspace.workflow||{})};
    return clone(workspace);
-  }else if(name==="projects"){const pair=await Promise.all([api(name).load(),api("businessProfile").load()]);value={...pair[0],profile:pair[1]};}
+  }else if(name==="projects"){const pair=await Promise.all([api(name).load(),api("businessProfile").load()]);states.businessProfile=clone(pair[1]);value={...pair[0],profile:pair[1]};}
   else value=await api(name).load();
   states[name]=clone(value);return clone(value);
  }
@@ -48,7 +48,37 @@
   requireReady();
   let result;
   if(name==="accounting")result=await api(name).save(value);
-  else if(name==="projects"){const projectState=clone(value);const profile=projectState.profile||{};delete projectState.profile;const profileResult=await api("businessProfile").save(profile);if(!profileResult||profileResult.ok!==true)throw new Error("Business Profile was not saved.");states.businessProfile=clone(profile);result=await api(name).save(projectState);}
+  else if(name==="projects"){
+   const projectState=clone(value),profile=projectState.profile||{};
+   delete projectState.profile;
+   const [previousProjects,previousProfile]=await Promise.all([api(name).load(),api("businessProfile").load()]);
+   try{
+    result=await api(name).save(projectState);
+    if(!result||result.ok!==true)throw new Error("Projects domain did not confirm its save.");
+    const profileResult=await api("businessProfile").save(profile);
+    if(!profileResult||profileResult.ok!==true)throw new Error("Business Profile did not confirm its save.");
+    const verified=await load("projects");
+    if(!(await root.HandymanStorageV264.valuesEqual(verified,value)))throw new Error("Project and Business Profile read-back verification failed.");
+    return {ok:true,verified:true,state:clone(verified)};
+   }catch(error){
+    const rollbackErrors=[];
+    try{
+     const projectRollback=await api(name).save(previousProjects);
+     if(!projectRollback||projectRollback.ok!==true)throw new Error("Projects rollback write failed.");
+     const projectCheck=await api(name).load();
+     if(!(await root.HandymanStorageV264.valuesEqual(projectCheck,previousProjects)))throw new Error("Projects rollback read-back failed.");
+    }catch(rollbackError){rollbackErrors.push("Projects: "+String(rollbackError&&rollbackError.message||rollbackError));}
+    try{
+     const profileRollback=await api("businessProfile").save(previousProfile);
+     if(!profileRollback||profileRollback.ok!==true)throw new Error("Business Profile rollback write failed.");
+     const profileCheck=await api("businessProfile").load();
+     if(!(await root.HandymanStorageV264.valuesEqual(profileCheck,previousProfile)))throw new Error("Business Profile rollback read-back failed.");
+    }catch(rollbackError){rollbackErrors.push("Business Profile: "+String(rollbackError&&rollbackError.message||rollbackError));}
+    states.projects=clone(previousProjects);states.businessProfile=clone(previousProfile);
+    if(rollbackErrors.length)throw new Error("Project save failed: "+String(error&&error.message||error)+". Rollback could not be fully verified: "+rollbackErrors.join("; "));
+    throw error;
+   }
+  }
   else if(name==="contracts")result=await api(name).save(value);
   else if(name==="businessProfile")result=await api(name).save(value);
   else if(name==="support")result=await api(name).saveReportWorkspace(value);
