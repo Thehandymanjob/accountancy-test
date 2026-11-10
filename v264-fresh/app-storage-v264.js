@@ -20,9 +20,11 @@
   reportWorkflow:{domain:"report_workflow",key:"workflow",scope:"support",fallback:()=>({})},
   notifications:{domain:"notifications",key:"items",scope:"support",fallback:()=>[]},
   recovery:{domain:"recovery",key:"last-reset-snapshot",scope:"support",fallback:()=>null},
-  factoryResetRecovery:{domain:"factory_reset_recovery",key:"factory-reset-recovery",scope:"support",fallback:()=>null}
+  factoryResetRecovery:{domain:"factory_reset_recovery",key:"factory-reset-recovery",scope:"support",fallback:()=>null},
+  helpContactDrafts:{domain:"help_contact_drafts",key:"drafts",scope:"support",fallback:()=>[]},
+  media:{domain:"media",key:"assets",scope:"media",fallback:()=>({items:[]})}
  });
- const scopeNames=Object.freeze({accounting:"accounting",accountingState:"accountingState",invoiceSequence:"invoiceSequence",projects:"projects",contracts:"contracts",businessProfile:"businessProfile",support:"support"});
+ const scopeNames=Object.freeze({accounting:"accounting",accountingState:"accountingState",invoiceSequence:"invoiceSequence",projects:"projects",contracts:"contracts",businessProfile:"businessProfile",support:"support",media:"media"});
  const descriptor=name=>{const item=domains[name];if(!item)throw new Error("Unknown application storage domain: "+name);return item;};
  const scoped=name=>boundary().createScope(scopeNames[name]);
  async function initialize(){
