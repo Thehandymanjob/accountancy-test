@@ -24,24 +24,25 @@
  function assertSnapshot(name,pkg){
   const allowed=scope(name);
   if(!pkg||pkg.format!=="tha-v264-indexeddb-snapshot-v1"||!Array.isArray(pkg.domains)||!Array.isArray(pkg.records))throw new Error("Invalid v264 scoped backup.");
-  if(pkg.domains.length!==1||pkg.domains[0]!==allowed[0])throw new Error("Backup must contain exactly one domain: "+allowed[0]+".");
-  for(const row of pkg.records){if(!row||row.domain!==allowed[0])throw new Error("Mixed-domain backup rejected.");}
+  const actual=[...pkg.domains].sort(),expected=[...allowed].sort();
+  if(actual.length!==expected.length||actual.some((domain,index)=>domain!==expected[index]))throw new Error("Backup does not match the selected independent domain scope: "+name+".");
+  for(const row of pkg.records){if(!row||!allowed.includes(row.domain))throw new Error("Mixed-domain backup rejected.");}
   return pkg;
  }
  function createScope(name){
-  const allowed=scope(name),only=allowed.length===1?allowed[0]:null;
+  const allowed=scope(name);
   function check(domain){if(!allowed.includes(domain))throw new Error("Cross-domain access rejected for "+name+": "+domain);}
   async function snapshot(){
-   if(!only)throw new Error("This scope contains multiple independent domains. Create a backup for one domain at a time.");
-   const pkg=await ENGINE().snapshot([only]);assertSnapshot(name,pkg);return pkg;
+   const pkg=await ENGINE().snapshot(allowed);assertSnapshot(name,pkg);return pkg;
   }
   async function restore(pkg){
-   if(!only)throw new Error("Restore must target exactly one domain. Use the accounting or projects scope separately.");
    assertSnapshot(name,pkg);const result=await ENGINE().restore(pkg);
-   const verified=await ENGINE().snapshot([only]);
+   const verified=await ENGINE().snapshot(allowed);
    if(verified.records.length!==pkg.records.length)throw new Error("Scoped restore record-count verification failed.");
-   for(let i=0;i<pkg.records.length;i++){
-    const a=verified.records[i],b=pkg.records.slice().sort((x,y)=>x.id.localeCompare(y.id))[i];
+   const actual=verified.records.slice().sort((x,y)=>x.id.localeCompare(y.id));
+   const expected=pkg.records.slice().sort((x,y)=>x.id.localeCompare(y.id));
+   for(let i=0;i<expected.length;i++){
+    const a=actual[i],b=expected[i];
     if(!a||!b||a.id!==b.id||!(await ENGINE().valuesEqual(a.value,b.value)))throw new Error("Scoped restore verification failed.");
    }
    return {...result,verified:true,scope:name};
