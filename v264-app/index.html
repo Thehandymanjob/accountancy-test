@@ -1336,22 +1336,38 @@ function printReport(){
      if(raw!==''&&Number.isFinite(Number(raw))&&Number(raw)===0)row.remove();
    });
  });
- // PDF generation uses only this detached clone, not the interactive report page.
+ // Capture a live DOM node; a detached clone can produce blank or incomplete output.
  directOpenReportPDF(node,'The-Handyman-Financial-Report-'+Date.now()+'.pdf',[8,8,8,8]);
 }
 async function directOpenReportPDF(node,filename,margin){
- // Open a tab synchronously from the button tap, then replace it with the generated PDF.
  const tab=window.open('about:blank','_blank');
  if(!tab){alert('Safari blocked the PDF tab. Allow pop-ups for this app and try again.');return}
+ let host=null,blobUrl='';
  try{
-  tab.document.open();tab.document.write('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Creating PDF…</title></head><body style="font:16px Arial;padding:24px;color:#142b4a">Creating your PDF…</body></html>');tab.document.close();
+  tab.document.open();
+  tab.document.write('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preparing financial report</title><style>body{margin:0;background:#f3f5f8;font:15px Arial;color:#142b4a}.bar{position:sticky;top:0;z-index:2;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;padding:12px;background:#142b4a}.bar button{border:0;border-radius:10px;min-height:46px;padding:11px 18px;font-weight:700;font-size:15px}.share{background:#e5b63f;color:#142b4a}.print{background:#fff;color:#142b4a}.close{background:#b52d38;color:#fff}.status{padding:13px;text-align:center;background:#fff}.viewer{height:calc(100dvh - 112px);min-height:65vh;background:#dce2ea}.viewer iframe{width:100%;height:100%;border:0;background:#fff}.share svg{width:18px;height:18px;vertical-align:middle;margin-right:7px}</style></head><body><div class="bar"><button class="share" id="sharePdf"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3"/><path d="m7 8 5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>Share PDF</button><button class="print" id="printPdf">Print</button><button class="close" id="closePdf">Close ✕</button></div><div class="status" id="pdfStatus">Creating the financial report…</div><div class="viewer" id="pdfViewer"></div></body></html>');
+  tab.document.close();
+  const getStatus=()=>tab.document.getElementById('pdfStatus');
   if(!window.html2pdf){await new Promise((resolve,reject)=>{let sc=document.querySelector('script[data-direct-report-pdf]');if(sc){if(window.html2pdf){resolve();return}sc.addEventListener('load',resolve,{once:true});sc.addEventListener('error',()=>reject(new Error('PDF library failed to load')),{once:true});return}sc=document.createElement('script');sc.dataset.directReportPdf='1';sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';sc.onload=resolve;sc.onerror=()=>reject(new Error('PDF library failed to load'));document.head.appendChild(sc)});}
   if(!window.html2pdf)throw new Error('PDF library is unavailable');
-  await Promise.all(Array.from(node.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;setTimeout(resolve,2500)})));
-  const blob=await window.html2pdf().set({margin:margin||[8,8,8,8],filename,image:{type:'jpeg',quality:.98},html2canvas:{scale:2,useCORS:true,backgroundColor:'#fff',logging:false,scrollY:0,windowWidth:794,windowHeight:Math.max(node.scrollHeight,1123)},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css'],avoid:['.uc-head','.uc-group tr','.uc-summary tr']}}).from(node).outputPdf('blob');
+  host=document.createElement('div');host.id='thaFinancialReportRenderHost';
+  host.style.cssText='position:absolute;left:0;top:0;width:794px;z-index:-1;pointer-events:none;background:#fff;contain:layout style;';
+  node.style.cssText+=';display:block!important;position:relative!important;width:794px!important;max-width:794px!important;margin:0!important;background:#fff!important;box-sizing:border-box!important;';
+  host.appendChild(node);document.body.appendChild(host);
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  await Promise.all(Array.from(node.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;setTimeout(resolve,3000)})));
+  if(!document.body.contains(node))throw new Error('Financial report render node is not attached to the page.');
+  const blob=await window.html2pdf().set({margin:margin||[8,8,8,8],filename,image:{type:'jpeg',quality:.96},html2canvas:{scale:1.5,useCORS:true,backgroundColor:'#fff',logging:false,scrollX:0,scrollY:0,windowWidth:794,windowHeight:Math.max(node.scrollHeight,1123)},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css'],avoid:['.uc-head','.uc-group tr','.uc-summary tr']}}).from(node).outputPdf('blob');
   if(!blob||blob.type!=='application/pdf'||blob.size<1000)throw new Error('Generated PDF is empty or invalid');
-  const url=URL.createObjectURL(blob);tab.location.replace(url);setTimeout(()=>URL.revokeObjectURL(url),120000);
- }catch(e){try{tab.document.body.innerHTML='<main style="font:16px Arial;padding:24px"><h2>PDF could not be created</h2><p>Check the internet connection and return to the app to try again.</p></main>'}catch(_){}alert('PDF creation failed: '+(e&&e.message?e.message:'unknown error'));}
+  blobUrl=URL.createObjectURL(blob);tab.__pdfBlob=blob;tab.__pdfUrl=blobUrl;
+  const frame=tab.document.createElement('iframe');frame.title='Financial report PDF';frame.src=blobUrl;tab.document.getElementById('pdfViewer').appendChild(frame);
+  getStatus().textContent='PDF ready. Use Share PDF to send it through WhatsApp or another app, or Print to print it.';
+  tab.document.getElementById('sharePdf').addEventListener('click',async()=>{try{const file=new File([blob],'The-Handyman-Financial-Report.pdf',{type:'application/pdf'});if(tab.navigator.share&&(!tab.navigator.canShare||tab.navigator.canShare({files:[file]}))){await tab.navigator.share({files:[file],title:'The Handyman Financial Report'});getStatus().textContent='Share sheet opened. Select WhatsApp, Mail, or another destination.'}else{const a=tab.document.createElement('a');a.href=blobUrl;a.download='The-Handyman-Financial-Report.pdf';a.click();getStatus().textContent='PDF downloaded. Open it in Files and use Share.'}}catch(e){if(e.name!=='AbortError')getStatus().textContent='Sharing unavailable. Use the Safari Share menu or open the PDF in Files.'}});
+  tab.document.getElementById('printPdf').addEventListener('click',()=>{const w=tab.open(blobUrl,'_blank');if(!w)getStatus().textContent='Safari blocked print preview. Choose Share PDF, then Print.';else getStatus().textContent='PDF opened. Use the Share menu and choose Print.'});
+  tab.document.getElementById('closePdf').addEventListener('click',()=>tab.close());
+  tab.addEventListener('pagehide',()=>URL.revokeObjectURL(blobUrl),{once:true});
+ }catch(e){try{getStatus().textContent='PDF creation failed: '+(e&&e.message?e.message:'unknown error')}catch(_){}alert('PDF creation failed: '+(e&&e.message?e.message:'unknown error'))}
+ finally{if(host)host.remove()}
 }
 function openReportPdfView(){
  const report=$('report');
