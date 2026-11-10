@@ -58,16 +58,13 @@
  async function writeMany(){throw new Error("Multi-domain writes are disabled. Save one independent domain at a time.");}
  async function reserveInvoiceNumber(minimum){return scoped("accounting").reserveCounter("sequences","invoice-number",minimum||0);}
  async function backup(name){
-  if(!domains[name])throw new Error("A single application domain name is required for backup.");
-  const d=descriptor(name);const backupScope=d.domain==="sequences"?"invoiceSequence":d.scope==="accounting"?"accountingState":d.scope;return scoped(backupScope).snapshot();
+  if(!["accounting","projects","contracts","businessProfile","support","media"].includes(name))throw new Error("Choose exactly one independent application domain for backup.");
+  return scoped(name).snapshot();
  }
  async function restore(name,pkg){
-  if(!domains[name])throw new Error("A single application domain name is required for restore.");
+  if(!["accounting","projects","contracts","businessProfile","support","media"].includes(name))throw new Error("Choose exactly one independent application domain for restore.");
   if(!pkg||!Array.isArray(pkg.domains))throw new Error("Invalid scoped backup package.");
-  const d=descriptor(name);
-  if(pkg.domains.length!==1||pkg.domains[0]!==d.domain)throw new Error("Backup does not belong to the selected domain.");
-  const backupScope=d.domain==="sequences"?"invoiceSequence":d.scope==="accounting"?"accountingState":d.scope;
-  return scoped(backupScope).restore(pkg);
+  return scoped(name).restore(pkg);
  }
  async function health(){return root.HandymanStorageV264.health();}
  root.HandymanAppStorageV264=Object.freeze({
