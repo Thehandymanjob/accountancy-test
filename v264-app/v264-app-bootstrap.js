@@ -51,7 +51,7 @@
    const appStorage=await root.HandymanAppStorageV264.initialize();
    if(!appStorage||appStorage.ok!==true||appStorage.mode!=="indexeddb-only"||appStorage.legacyImport!==false)
     throw new Error("Application storage did not confirm the clean v264 storage policy.");
-   const boot=await root.HandymanModuleBootstrapV264.startAll();
+   const boot=await root.HandymanUIAdapterV264.startAll();
    if(!boot||boot.ok!==true)throw new Error("One or more application domains failed to initialize.");
    const finalHealth=await engine.health();
    if(!finalHealth||finalHealth.ok!==true||finalHealth.database!==engine.databaseName)
