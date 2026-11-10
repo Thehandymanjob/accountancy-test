@@ -1351,13 +1351,13 @@ async function directOpenReportPDF(node,filename,margin){
   if(!window.html2pdf){await new Promise((resolve,reject)=>{let sc=document.querySelector('script[data-direct-report-pdf]');if(sc){if(window.html2pdf){resolve();return}sc.addEventListener('load',resolve,{once:true});sc.addEventListener('error',()=>reject(new Error('PDF library failed to load')),{once:true});return}sc=document.createElement('script');sc.dataset.directReportPdf='1';sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';sc.onload=resolve;sc.onerror=()=>reject(new Error('PDF library failed to load'));document.head.appendChild(sc)});}
   if(!window.html2pdf)throw new Error('PDF library is unavailable');
   host=document.createElement('div');host.id='thaFinancialReportRenderHost';
-  host.style.cssText='position:absolute;left:0;top:0;width:794px;z-index:-1;pointer-events:none;background:#fff;contain:layout style;';
+  host.style.cssText='position:fixed;left:0;top:0;width:794px;z-index:2147483000;pointer-events:none;background:#fff;contain:layout style;';
   node.style.cssText+=';display:block!important;position:relative!important;width:794px!important;max-width:794px!important;margin:0!important;background:#fff!important;box-sizing:border-box!important;';
   host.appendChild(node);document.body.appendChild(host);
   await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   await Promise.all(Array.from(node.querySelectorAll('img')).map(img=>img.complete?Promise.resolve():new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;setTimeout(resolve,3000)})));
   if(!document.body.contains(node))throw new Error('Financial report render node is not attached to the page.');
-  const blob=await window.html2pdf().set({margin:margin||[8,8,8,8],filename,image:{type:'jpeg',quality:.96},html2canvas:{scale:1.5,useCORS:true,backgroundColor:'#fff',logging:false,scrollX:0,scrollY:0,windowWidth:794,windowHeight:Math.max(node.scrollHeight,1123)},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css'],avoid:['.uc-head','.uc-group tr','.uc-summary tr']}}).from(node).outputPdf('blob');
+  const blob=await window.html2pdf().set({margin:margin||[8,8,8,8],filename,image:{type:'jpeg',quality:.96},html2canvas:{scale:1,useCORS:true,backgroundColor:'#fff',logging:false,scrollX:0,scrollY:0,windowWidth:794,windowHeight:Math.max(node.scrollHeight,1123)},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css']}}).from(node).outputPdf('blob');
   if(!blob||blob.type!=='application/pdf'||blob.size<1000)throw new Error('Generated PDF is empty or invalid');
   blobUrl=URL.createObjectURL(blob);tab.__pdfBlob=blob;tab.__pdfUrl=blobUrl;
   const frame=tab.document.createElement('iframe');frame.title='Financial report PDF';frame.src=blobUrl;tab.document.getElementById('pdfViewer').appendChild(frame);
