@@ -219,7 +219,14 @@
    a.href=url;a.download=result.filename;a.style.display="none";root.document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
    return {ok:true,filename:result.filename,verification:result.verification,instructions:"Save this complete backup in the iPhone Files app, then select that exact file in the reset confirmation."};
   }
-  async function inspectFile(file){const parsed=await readFile(file);return parsed.verification}
+  async function inspectFile(file){
+   const parsed=await readFile(file),current=await capture(),expected=parsed.snapshot.records.slice().sort((a,b)=>a.id.localeCompare(b.id));
+   if(current.records.length!==expected.length)throw new Error("Selected backup does not exactly match current database record count.");
+   for(let i=0;i<current.records.length;i++){
+    if(current.records[i].id!==expected[i].id||!(await engine.valuesEqual(current.records[i].value,expected[i].value)))throw new Error("Selected backup differs from current data at "+(expected[i]?.domain||"unknown")+"/"+(expected[i]?.key||"unknown")+".");
+   }
+   return {...parsed.verification,currentDatabaseMatch:true};
+  }
   async function restoreFromFile(file){
    const parsed=await readFile(file);
    const result=await engine.restore(parsed.snapshot);
