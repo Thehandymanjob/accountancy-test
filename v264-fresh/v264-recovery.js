@@ -174,6 +174,84 @@
   async function resetFromBackupFile(){throw new Error("Global Factory Reset is disabled. Domain backups can restore only their selected domain.");}
   return Object.freeze({scope:scopeName,domains:allowed,createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
  }
+
+ const FULL_DOMAINS=["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","help_contact_drafts","media","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"].sort();
+ function createFull(engine){
+  if(!engine||typeof engine.snapshot!=="function"||typeof engine.restore!=="function"||typeof engine.beginResetLock!=="function"||typeof engine.clearWhileResetLocked!=="function"||typeof engine.completeRecovery!=="function")throw new Error("Full IndexedDB recovery engine is unavailable.");
+  const DB=engine.databaseName;
+  async function capture(){
+   const snap=await engine.snapshot(FULL_DOMAINS);
+   if(!snap||snap.format!==SNAPSHOT_FORMAT||snap.database!==DB||!Array.isArray(snap.records))throw new Error("Full database snapshot is invalid.");
+   const ids=new Set();
+   for(const row of snap.records){
+    if(!row||!FULL_DOMAINS.includes(row.domain)||typeof row.key!=="string"||row.id!==row.domain+":"+encodeURIComponent(row.key)||ids.has(row.id))throw new Error("Full snapshot contains an invalid or duplicate record.");
+    ids.add(row.id);
+   }
+   return snap;
+  }
+  async function packageSnapshot(snap){
+   const payload={format:SNAPSHOT_FORMAT,database:DB,scope:"full",createdAt:snap.createdAt,domains:FULL_DOMAINS,records:[]};
+   for(const row of snap.records)payload.records.push({id:row.id,domain:row.domain,key:row.key,value:await encode(row.value,new WeakSet())});
+   const body=canonical(payload);
+   return {format:"tha-v264-full-backup-v1",algorithm:"SHA-256",digest:await digest(body),payload};
+  }
+  async function readFile(file){
+   if(!file||typeof file.text!=="function")throw new Error("Select the complete full-database backup file.");
+   let pkg;try{pkg=JSON.parse(await file.text())}catch(_){throw new Error("The selected file is not valid backup JSON.")};
+   if(!pkg||pkg.format!=="tha-v264-full-backup-v1"||pkg.algorithm!=="SHA-256"||!pkg.payload||typeof pkg.digest!=="string")throw new Error("This is not a supported full database backup.");
+   const p=pkg.payload;
+   if(await digest(canonical(p))!==pkg.digest)throw new Error("Full backup SHA-256 integrity check failed.");
+   if(p.format!==SNAPSHOT_FORMAT||p.database!==DB||p.scope!=="full"||!Array.isArray(p.domains)||p.domains.slice().sort().join("|")!==FULL_DOMAINS.join("|")||!Array.isArray(p.records))throw new Error("Backup database identity or full-domain coverage is invalid.");
+   const ids=new Set(),records=[];
+   for(const row of p.records){
+    if(!row||!FULL_DOMAINS.includes(row.domain)||typeof row.key!=="string"||row.id!==row.domain+":"+encodeURIComponent(row.key)||ids.has(row.id))throw new Error("Backup has an invalid, duplicate or out-of-scope record.");
+    ids.add(row.id);records.push({id:row.id,domain:row.domain,key:row.key,value:await decode(row.value)});
+   }
+   return {pkg,snapshot:{format:SNAPSHOT_FORMAT,database:DB,createdAt:p.createdAt,domains:FULL_DOMAINS,records},verification:{ok:true,scope:"full",database:DB,domains:FULL_DOMAINS.length,records:records.length,digest:pkg.digest,createdAt:p.createdAt}};
+  }
+  async function createBackup(){
+   const snap=await capture(),pkg=await packageSnapshot(snap),check=(await readFile({text:async()=>JSON.stringify(pkg)})).verification;
+   if(check.records!==snap.records.length)throw new Error("Full backup record-count verification failed.");
+   return {ok:true,blob:new Blob([JSON.stringify(pkg)],{type:"application/vnd.thehandyman.v264-full-backup+json"}),filename:"THA-v264-FULL-backup-"+new Date().toISOString().replace(/[:.]/g,"-")+".json",verification:check};
+  }
+  async function downloadBackup(){
+   const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
+   a.href=url;a.download=result.filename;a.style.display="none";root.document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+   return {ok:true,filename:result.filename,verification:result.verification,instructions:"Save this complete backup in the iPhone Files app, then select that exact file in the reset confirmation."};
+  }
+  async function inspectFile(file){const parsed=await readFile(file);return parsed.verification}
+  async function restoreFromFile(file){
+   const parsed=await readFile(file);
+   const result=await engine.restore(parsed.snapshot);
+   const after=await capture();
+   if(after.records.length!==parsed.snapshot.records.length)throw new Error("Full restore verification failed: record count differs.");
+   for(let i=0;i<after.records.length;i++){
+    const a=after.records[i],b=parsed.snapshot.records.slice().sort((x,y)=>x.id.localeCompare(y.id))[i];
+    if(a.id!==b.id||!(await engine.valuesEqual(a.value,b.value)))throw new Error("Full restore verification failed at "+b.domain+"/"+b.key);
+   }
+   return {ok:true,restored:result.restored??after.records.length,domains:FULL_DOMAINS.length,verified:true};
+  }
+  async function resetFromBackupFile(file){
+   const parsed=await readFile(file);
+   if(!parsed.verification.ok)throw new Error("Full backup verification failed; reset blocked.");
+   const before=await capture();
+   if(before.records.length!==parsed.snapshot.records.length)throw new Error("The selected backup does not match the current database record count; reset blocked.");
+   await engine.beginResetLock();
+   try{
+    const locked=await engine.health();
+    if(!locked||locked.resetLocked!==true)throw new Error("Persistent reset lock could not be verified.");
+    await engine.clearWhileResetLocked();
+    const empty={format:SNAPSHOT_FORMAT,database:DB,createdAt:new Date().toISOString(),domains:FULL_DOMAINS,records:[]};
+    const restored=await engine.restore(empty);
+    await engine.completeRecovery(empty);
+    const health=await engine.health(),after=await capture();
+    if(!health||health.resetLocked!==false||after.records.length!==0)throw new Error("Empty database verification failed; reset remains blocked.");
+    return {ok:true,reset:true,backupVerified:true,domains:FULL_DOMAINS.length,previousRecords:before.records.length,remainingRecords:0,unlocked:true};
+   }catch(error){throw new Error("Reset stopped safely. The database may remain locked and requires full-backup recovery: "+String(error&&error.message||error))}
+  }
+  return Object.freeze({domains:FULL_DOMAINS.slice(),createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile});
+ }
+
  const engine=()=>root.HandymanStorageV264,adapter=()=>root.HandymanAppStorageV264;
- root.HandymanRecoveryV264=Object.freeze({build:"THA-264-SCOPED-RECOVERY-1",create:scopeName=>create(engine(),adapter(),scopeName),createWithDependencies:create});
+ root.HandymanRecoveryV264=Object.freeze({build:"THA-264-SCOPED-RECOVERY-2-FULL",create:scopeName=>create(engine(),adapter(),scopeName),createFull:()=>createFull(engine()),createWithDependencies:create});
 })(window);
