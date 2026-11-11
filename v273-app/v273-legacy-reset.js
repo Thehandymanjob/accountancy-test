@@ -116,11 +116,19 @@ async function finalAction(){
   setStatus((e.resetLockActive?"RECOVERY LOCK ACTIVE — keep this page open and retry using the converted backup. ":"Reset stopped — ")+(e.message||e),true);
  }
 }
+function updateFinalAvailability(){
+ const final=$("factoryResetFinalButton");
+ if(!final)return;
+ const ready=root.__thaV273Converted===true&&root.__thaV273EmergencyCreated===true&&$("factoryResetConfirmEmergency").checked===true&&$("factoryResetConfirmPhrase").value.trim()==="RESET 273"&&$("factoryResetConvertedFile").files.length===1;
+ final.disabled=!ready;
+}
 function bind(){
  const convert=$("factoryResetConvertButton"),emergency=$("factoryResetEmergencyButton"),final=$("factoryResetFinalButton");
  if(convert)convert.addEventListener("click",convertAction);
  if(emergency)emergency.addEventListener("click",emergencyAction);
  if(final)final.addEventListener("click",finalAction);
+ ["factoryResetConfirmEmergency","factoryResetConfirmPhrase","factoryResetConvertedFile"].forEach(id=>{const el=$(id);if(el)el.addEventListener("input",updateFinalAvailability);if(el)el.addEventListener("change",updateFinalAvailability);});
+ updateFinalAvailability();
 }
 if(root.document.readyState==="loading")root.document.addEventListener("DOMContentLoaded",bind);else bind();
 root.HandymanV273LegacyReset=Object.freeze({convertLegacy,inspectImportFile,emergencyBackup,resetWithImport});
