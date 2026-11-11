@@ -234,8 +234,11 @@
   async function resetFromBackupFile(file){
    const parsed=await readFile(file);
    if(!parsed.verification.ok)throw new Error("Full backup verification failed; reset blocked.");
-   const before=await capture();
-   if(before.records.length!==parsed.snapshot.records.length)throw new Error("The selected backup does not match the current database record count; reset blocked.");
+   const before=await capture(),expected=parsed.snapshot.records.slice().sort((a,b)=>a.id.localeCompare(b.id));
+   if(before.records.length!==expected.length)throw new Error("The selected backup does not exactly match the current database; reset blocked.");
+   for(let i=0;i<before.records.length;i++){
+    if(before.records[i].id!==expected[i].id||!(await engine.valuesEqual(before.records[i].value,expected[i].value)))throw new Error("The selected backup differs from current data at "+(expected[i]?.domain||"unknown")+"/"+(expected[i]?.key||"unknown")+"; reset blocked.");
+   }
    await engine.beginResetLock();
    try{
     const locked=await engine.health();
