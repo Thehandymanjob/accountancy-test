@@ -67,12 +67,30 @@ async function emergencyBackup(){
 async function resetWithImport(file){
  const e=engine(),pkg=await inspectImportFile(file);
  const health=await e.health();assert(health&&health.ok===true,"Database health check failed.");
- assert(health.resetLocked!==true,"Database is already locked; use recovery instead of starting another reset.");
- const lock=await e.beginResetLock();assert(lock&&lock.ok===true&&lock.locked===true,"Could not acquire reset lock.");
  let cleared=false;
- try{
+ if(health.resetLocked===true){
+  // Resume an interrupted reset: a pre-clear lock is advanced to recovery;
+  // an already-cleared recovery lock is left in place and used for restore.
+  try{
+   const resumedClear=await e.clearWhileResetLocked();
+   assert(resumedClear&&resumedClear.ok===true&&resumedClear.remainingRecords===0,"Could not resume the locked database clear.");
+  }catch(resumeError){
+   // If still in preclear, cancel that lock and start the normal sequence.
+   try{
+    const released=await e.releaseResetLock();
+    if(released&&released.unlocked===true){
+     const newLock=await e.beginResetLock();assert(newLock&&newLock.ok===true,"Could not reacquire reset lock.");
+     const newClear=await e.clearWhileResetLocked();assert(newClear&&newClear.ok===true&&newClear.remainingRecords===0,"Database clear was not verified.");
+    }
+   }catch(ignore){/* Existing recovery-phase lock is retained; restore below is the safe next step. */}
+  }
+  cleared=true;
+ }else{
+  const lock=await e.beginResetLock();assert(lock&&lock.ok===true&&lock.locked===true,"Could not acquire reset lock.");
   const clear=await e.clearWhileResetLocked();assert(clear&&clear.ok===true&&clear.remainingRecords===0,"Database clear was not verified.");
   cleared=true;
+ }
+ try{
   const restored=await e.restore(pkg);assert(restored&&restored.ok===true&&restored.fullRecovery===true,"Full restore was not verified.");
   const done=await e.completeRecovery(pkg);assert(done&&done.ok===true&&done.unlocked===true,"Final recovery verification failed.");
   const finalHealth=await e.health();assert(finalHealth.ok===true&&finalHealth.resetLocked===false,"Database remains locked.");
