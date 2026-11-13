@@ -6,7 +6,7 @@
 const DB="the_handyman_accountancy_v264_idb";
 const FORMAT="tha-v264-indexeddb-snapshot-v1";
 const SOURCE_SHA="07b6170db9169e3b59d0b4527b88e26d589bd18c178ec9a1b1975b55f403db90";
-const DOMAINS=["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences","help_contact_drafts","media"];
+const DOMAINS=["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","help_contact_drafts","media","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"];
 const REQUIRED=["accounting:state","business_profile:identity","contracts:state","projects:state","sequences:invoice-number","preferences:language","preference_meta:language-pref-version","diagnostics:monitor-log","reports:archive","report_notifications:notifications","report_settings:settings","report_workflow:workflow","notifications:items","recovery:last-reset-snapshot","factory_reset_recovery:factory-reset-recovery","help_contact_drafts:drafts","media:assets"];
 const $=id=>root.document.getElementById(id);
 const assert=(v,m)=>{if(!v)throw new Error(m);};
