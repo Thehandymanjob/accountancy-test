@@ -3,7 +3,7 @@
 */
 (function(root){
 "use strict";
-const DB="the_handyman_accountancy_v264_idb";
+const DB="the_handyman_accountancy_v273_clean_idb";
 const FORMAT="tha-v264-indexeddb-snapshot-v1";
 const SOURCE_SHA="07b6170db9169e3b59d0b4527b88e26d589bd18c178ec9a1b1975b55f403db90";
 const DOMAINS=["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","help_contact_drafts","media","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"];
