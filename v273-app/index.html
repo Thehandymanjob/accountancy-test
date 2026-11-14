@@ -380,7 +380,7 @@ body.accountancy-open .section-topbar .back-to-home,body.accountancy-open .histo
 
 /* v192 navigation audit: one main back control per page; no legacy dashboard nav */
 body.accountancy-open main>nav.accountancy-nav{display:none!important}
-body.accountancy-open main>.panel:not(.active){display:none!important} body.accountancy-open main>#settings.active{display:block!important;visibility:visible!important;opacity:1!important} body.accountancy-open main>#settings.active .settings-only-shortcuts{display:grid!important}
+body.accountancy-open main>.panel:not(.active){display:none!important}
 body.accountancy-open main>#accountancyHome.active{display:block!important}
 body.accountancy-landing-active main>nav.accountancy-nav{display:none!important}
 body.accountancy-landing-active main>.notice,body.accountancy-landing-active main>#status{display:none!important}
@@ -1441,7 +1441,7 @@ async function openAccountancy(){accountingPageStack=[];currentAccountingPage=nu
 function openContractsApp(){document.body.classList.remove('accountancy-open','projects-open');document.body.classList.add('contracts-open');if(typeof window.ctShowSection==='function'){window.ctShowSection('contracts')}else{const app=document.getElementById('contractsApp');if(app)app.style.display='block';}}
 function closeContractsApp(){document.body.classList.remove('contracts-open');const app=document.getElementById('contractsApp');if(app)app.style.display='';syncLauncherBrand()}
 function returnToLauncher(){document.body.classList.remove('accountancy-open','accountancy-landing-active','projects-open','contracts-open');accountingPageStack=[];currentAccountingPage=null;syncLauncherBrand()}
-function openSettingsHub(){try{const panel=document.getElementById('settings');const main=document.querySelector('body>main');if(!panel||!main||!main.contains(panel))throw new Error('Settings panel is missing from the main application.');document.body.classList.add('accountancy-open','settings-view');document.body.classList.remove('accountancy-landing-active');document.querySelectorAll('main>.panel').forEach(p=>p.classList.remove('active','printable'));panel.classList.add('active');panel.style.setProperty('display','block','important');panel.style.setProperty('visibility','visible','important');panel.style.setProperty('opacity','1','important');panel.scrollIntoView({block:'start',behavior:'auto'});currentAccountingPage='settings';accountingPageStack=[];return true}catch(error){console.error('Settings navigation failed:',error);const status=document.getElementById('status');if(status){status.textContent='Settings could not open: '+String(error&&error.message||error);status.className='status error'}return false}}
+async function openSettingsHub(){try{const panel=document.getElementById('settings');const main=document.querySelector('body>main');if(!panel||!main||!main.contains(panel))throw new Error('Settings panel is missing from the main application.');document.body.classList.add('accountancy-open');if(window.__thaAccountingStartupPromise){const ready=await window.__thaAccountingStartupPromise;if(ready===false)throw new Error('Accountancy startup did not complete.')}else if(typeof initializeAccountingUI==='function'){const ready=await initializeAccountingUI();if(!ready)throw new Error('Accountancy could not initialize.')}panel.style.removeProperty('display');panel.style.removeProperty('visibility');panel.style.removeProperty('opacity');show('settings');panel.scrollIntoView({block:'start',behavior:'auto'});return true}catch(error){document.body.classList.remove('accountancy-open');console.error('Settings navigation failed:',error);const status=document.getElementById('status');if(status){status.textContent='Settings could not open: '+String(error&&error.message||error);status.className='status error'}return false}}
 function syncLauncherBrand(){const title=document.getElementById('launcherName');if(title)title.textContent='The Handyman Accountancy';const img=document.getElementById('launcherBusinessLogo');if(!img)return;const profile=window.HandymanUIDomainGatewayV264?.states?.businessProfile||{};const logo=typeof profile.logo==='string'?profile.logo:'';if(logo){img.src=logo;img.hidden=false;img.classList.add('has-logo')}else{img.removeAttribute('src');img.hidden=true;img.classList.remove('has-logo')}}
 
 function chooseBackup(){const input=$('restoreFile');input.value='';input.click()}
@@ -1474,13 +1474,36 @@ async function refreshRestoredDomain(scopeName){
  }
  if(scopeName==="media")return;
 }
+let pendingFullBackupFile=null;
 async function fullDatabaseBackup(){
  const button=$("fullBackupButton"),status=$("fullBackupStatus");
  if(button.disabled)return;
+ if(pendingFullBackupFile){
+  const file=pendingFullBackupFile;
+  let canShareFile=false;
+  try{canShareFile=typeof navigator.share==="function"&&typeof navigator.canShare==="function"&&navigator.canShare({files:[file]})}catch(_){canShareFile=false}
+  if(canShareFile){
+   let sharePromise;
+   try{sharePromise=navigator.share({files:[file],title:"The Handyman full database backup"})}
+   catch(error){status.textContent="The verified backup is ready, but the iPhone share panel could not open: "+(error&&error.message||error)+". Tap Save to Files to retry.";return}
+   try{
+    await sharePromise;
+    pendingFullBackupFile=null;button.textContent="Backup";
+    status.textContent="The verified backup was shared. Confirm that you selected Save to Files and chose the destination folder.";
+   }catch(error){
+    if(error&&error.name==="AbortError")status.textContent="Sharing was cancelled. The verified backup is still ready. Tap Save to Files to try again.";
+    else status.textContent="The verified backup is still ready, but sharing failed: "+(error&&error.message||error)+". Tap Save to Files to retry.";
+   }
+  }else{
+   downloadFile(file,file.name);pendingFullBackupFile=null;button.textContent="Backup";
+   status.textContent="The verified backup download was started. Check the Files app or browser downloads.";
+  }
+  return;
+ }
  const suggested="The-Handyman-Full-Database-Backup-"+new Date().toISOString().slice(0,10);
  const entered=window.prompt("Enter a name for the complete database backup:",suggested);
  if(entered===null)return;
- let name=entered.trim().replace(/[\\/:*?"<>|]/g,"-").replace(/\\s+/g,"-").replace(/-+/g,"-").replace(/^[-.]+|[-.]+$/g,"");
+ let name=entered.trim().replace(/[\\/:*?"<>|]/g,"-").replace(/\s+/g,"-").replace(/-+/g,"-").replace(/^[-.]+|[-.]+$/g,"");
  if(!name){alert("Enter a valid backup file name.");return}
  if(!name.toLowerCase().endsWith(".json"))name+=".json";
  try{
@@ -1493,10 +1516,8 @@ async function fullDatabaseBackup(){
   const result=await recovery.createFullBackup();
   if(!result.ok||result.verification.domains!==17)throw new Error("Full backup verification failed.");
   const file=new File([result.blob],name,{type:"application/vnd.thehandyman.v264-full-backup+json",lastModified:Date.now()});
-  if(!navigator.share||!navigator.canShare||!navigator.canShare({files:[file]}))throw new Error("This browser does not provide the iOS Files save panel. Open this page in Safari on iPhone.");
-  status.textContent="Backup verified: "+result.verification.records+" records in 17 domains. Choose Save to Files in the next panel.";
-  await navigator.share({files:[file],title:"The Handyman full database backup"});
-  status.textContent="Full database backup prepared and shared. Confirm that you selected Save to Files and chose the destination folder.";
+  pendingFullBackupFile=file;button.textContent="Save to Files";
+  status.textContent="Backup verified: "+result.verification.records+" records across all 17 domains. Tap Save to Files to open the iPhone share panel, then choose Save to Files and select a folder.";
  }catch(error){
   status.textContent="Backup not completed: "+(error&&error.message||error);
   if(error&&error.name!=="AbortError")console.error("Full database backup:",error);
@@ -2542,7 +2563,7 @@ const save=async(key,v)=>{
   if(status){status.textContent='IndexedDB report save failed: '+(error&&error.message||error);status.hidden=false;status.classList.add('storage-error')}
   window.__thaReportSaveOk=false;return false;
  }
-};window.reportFlushWrites=async function(){await reportWriteTail;if(window.__thaReportSaveOk===false)throw new Error("Reports have an unverified pending save.");return true};let cfg=load(CFG,{periodMode:'calendar'});let archive=load(ARCH,[]);let notifications=load(NOTIFS,[]);let flow=load(FLOW,{});
+};window.reportFlushWrites=async function(){await reportWriteTail;const pending=[[ARCH,archive],[NOTIFS,notifications],[CFG,cfg],[FLOW,flow]];for(const item of pending){if(!await save(item[0],item[1]))throw new Error("Reports save could not be verified for "+supportDomain(item[0])+".");}await reportWriteTail;const persisted=await window.HandymanSupportV264.loadReportWorkspace();const checks=[["reports",archive,persisted.archive],["reportNotifications",notifications,persisted.notifications],["reportSettings",cfg,persisted.settings],["reportWorkflow",flow,persisted.workflow]];for(const check of checks){if(JSON.stringify(check[1])!==JSON.stringify(check[2])){window.__thaReportSaveOk=false;throw new Error("Reports IndexedDB read-back verification failed for "+check[0]+".");}}if(window.__thaReportSaveOk!==true)throw new Error("Reports save verification did not complete.");return true};let cfg=load(CFG,{periodMode:'calendar'});let archive=load(ARCH,[]);let notifications=load(NOTIFS,[]);let flow=load(FLOW,{});
 if(!Array.isArray(archive))archive=[];if(!Array.isArray(notifications))notifications=[];
 function addNotif(id,title,message,kind='info'){if(notifications.some(n=>n.id===id))return false;notifications.unshift({id,title,message,kind,createdAt:new Date().toISOString(),read:false});return true}
 function nextTaxYear(now=new Date()){const y=now.getFullYear();return now>=dateFrom(y,4,6)?y:y-1}
