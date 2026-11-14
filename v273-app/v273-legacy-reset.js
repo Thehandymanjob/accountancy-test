@@ -74,8 +74,7 @@ async function resetWithImport(file){
    // continue directly with the verified full-domain restore.
    cleared=true;
   }else if(health.resetLockPhase==="preclear"){
-   // The clear transaction has not started. Cancel the old lock,
-   // acquire a fresh lock, then perform exactly one verified clear.
+   // Cancel only a lock that proves no data has been cleared.
    const released=await e.releaseResetLock();
    assert(released&&released.ok===true&&released.unlocked===true&&released.cancelledBeforeClear===true,"Could not safely cancel the pre-clear reset lock.");
    const newLock=await e.beginResetLock();
@@ -94,30 +93,17 @@ async function resetWithImport(file){
   cleared=true;
  }
  try{
-   const resumedClear=await e.clearWhileResetLocked();
-   assert(resumedClear&&resumedClear.ok===true&&resumedClear.remainingRecords===0,"Could not resume the locked database clear.");
-  }catch(resumeError){
-   // If still in preclear, cancel that lock and start the normal sequence.
-   try{
-    const released=await e.releaseResetLock();
-    if(released&&released.unlocked===true){
-     const newLock=await e.beginResetLock();assert(newLock&&newLock.ok===true,"Could not reacquire reset lock.");
-     const newClear=await e.clearWhileResetLocked();assert(newClear&&newClear.ok===true&&newClear.remainingRecords===0,"Database clear was not verified.");
-    }
-   }catch(ignore){/* Existing recovery-phase lock is retained; restore below is the safe next step. */}
-  }
-  cleared=true;
- }else{
-  const lock=await e.beginResetLock();assert(lock&&lock.ok===true&&lock.locked===true,"Could not acquire reset lock.");
-  const clear=await e.clearWhileResetLocked();assert(clear&&clear.ok===true&&clear.remainingRecords===0,"Database clear was not verified.");
-  cleared=true;
- }
- try{
-  const restored=await e.restore(pkg);assert(restored&&restored.ok===true&&restored.fullRecovery===true,"Full restore was not verified.");
-  const done=await e.completeRecovery(pkg);assert(done&&done.ok===true&&done.unlocked===true,"Final recovery verification failed.");
-  const finalHealth=await e.health();assert(finalHealth.ok===true&&finalHealth.resetLocked===false,"Database remains locked.");
+  const restored=await e.restore(pkg);
+  assert(restored&&restored.ok===true&&restored.fullRecovery===true,"Full restore was not verified.");
+  const done=await e.completeRecovery(pkg);
+  assert(done&&done.ok===true&&done.unlocked===true,"Final recovery verification failed.");
+  const finalHealth=await e.health();
+  assert(finalHealth.ok===true&&finalHealth.resetLocked===false,"Database remains locked.");
   return {ok:true,restored:restored.restored,verified:true,domains:17,health:finalHealth};
- }catch(error){error.resetLockActive=cleared;throw error;}
+ }catch(error){
+  error.resetLockActive=cleared;
+  throw error;
+ }
 }
 async function convertAction(){
  try{
