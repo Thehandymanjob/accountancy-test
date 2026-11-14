@@ -59,10 +59,15 @@ async function inspectImportFile(file){
  return pkg;
 }
 async function emergencyBackup(){
- const e=engine(),snapshot=await e.snapshot(DOMAINS);
- assert(snapshot&&Array.isArray(snapshot.records)&&snapshot.domains.length===17,"Could not create a complete emergency snapshot.");
- downloadText("THA-v273-before-reset-emergency-snapshot.json",JSON.stringify(snapshot));
- return snapshot;
+ if(root.__thaV264StartupPromise)await root.__thaV264StartupPromise;
+ assert(root.__thaV264StartupOk!==false,root.__thaV264StartupError||"Application storage startup failed.");
+ assert(typeof root.flushSelectedDomainWrites==="function","Verified save-queue flush is unavailable.");
+ for(const scope of ["accounting","projects","contracts","businessProfile","support","media"])await root.flushSelectedDomainWrites(scope);
+ const recovery=root.HandymanRecoveryV264;
+ assert(recovery&&typeof recovery.createFullBackup==="function","Verified full-database backup engine is unavailable.");
+ const result=await recovery.createFullBackup();
+ assert(result&&result.ok===true&&result.verification&&result.verification.ok===true&&result.verification.domains===17,"Full emergency backup verification failed.");
+ return result;
 }
 async function resetWithImport(file){
  const e=engine(),pkg=await inspectImportFile(file);
@@ -118,11 +123,15 @@ async function convertAction(){
 }
 async function emergencyAction(){
  try{
-  const snapshot=await emergencyBackup();
+  const result=await emergencyBackup();
+  const filename="THA-v273-before-reset-emergency-full-backup.json";
+  const url=root.URL.createObjectURL(result.blob),a=root.document.createElement("a");
+  a.href=url;a.download=filename;root.document.body.appendChild(a);a.click();a.remove();
+  root.setTimeout(()=>root.URL.revokeObjectURL(url),60000);
   root.__thaV273EmergencyCreated=true;
   $("factoryResetConfirmEmergency").disabled=false;
-  setStatus("Emergency snapshot downloaded. Records captured: "+snapshot.records.length+". Save that file in Files before proceeding.",false);
- }catch(e){setStatus("Emergency backup failed: "+(e.message||e),true);}
+  setStatus("Verified emergency full backup prepared: "+result.verification.records+" persisted records across "+result.verification.domains+" domains. SHA-256: "+result.verification.digest+". Save the downloaded file in Files before proceeding.",false);
+ }catch(e){root.__thaV273EmergencyCreated=false;setStatus("Emergency backup failed: "+(e.message||e),true);}
 }
 async function finalAction(){
  try{
