@@ -935,7 +935,7 @@ body.pr-report-preview-open{overflow:hidden!important;position:relative!importan
 <script src="../v264-fresh/v264-business-profile-controller.js?v=264-independent-domains-9-20261110"></script>
 <script src="../v264-fresh/v264-support-controller-v2.js?v=264-independent-domains-9-20261110"></script>
 <script src="../v264-fresh/v264-media-controller.js?v=264-independent-domains-9-20261110"></script>
-<script src="../v264-fresh/v264-recovery.js?v=264-full-db-backup-20261114-r3"></script>
+<script src="../v264-fresh/v264-recovery.js?v=264-full-db-backup-20261114-r4"></script>
 <script src="../v264-fresh/v264-bootstrap.js?v=264-independent-domains-9-20261110"></script>
 <script src="v264-ui-domain-gateway.js?v=264-independent-domains-9-20261110"></script>
 <script src="accounting-ui-idb-bridge.js?v=264-independent-domains-9-20261110"></script>
@@ -1449,7 +1449,7 @@ function downloadFile(blob,name){const url=URL.createObjectURL(blob),a=document.
 async function flushSelectedDomainWrites(scopeName){
  if(scopeName==="accounting"){await flushAccountingWrites();return true}
  if(scopeName==="projects"||scopeName==="businessProfile"){await prFlush();return true}
- if(scopeName==="contracts"){await ctWriteTail;if(window.__thaContractSaveOk===false)throw new Error("The Contracts save is not verified.");return true}
+ if(scopeName==="contracts"){if(typeof window.ctFlushWrites!=="function")throw new Error("Contracts save queue is unavailable.");await window.ctFlushWrites();return true}
  if(scopeName==="support"){
   await reportWriteTail;await supportWriteTail;await monitorWriteTail;
   if(window.__thaReportSaveOk===false)throw new Error("The Reports save is not verified.");
@@ -2311,6 +2311,7 @@ async function prBackup(){try{await prFlush();const result=await window.Handyman
  const ctMoney=n=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(Number(n)||0);
  let ctCachedContracts=[];let ctContractsReady=false;let ctWriteTail=Promise.resolve();function ctRead(){if(!ctContractsReady)throw new Error('Contracts are still loading from IndexedDB. Please wait and try again.');return ctCachedContracts.map(c=>({...c}))}
  async function ctWrite(list){if(!Array.isArray(list)||list.some(c=>!c||typeof c.id!=='string'||!c.id.trim()))throw new Error('Invalid contract list. No data was changed.');const next=list.map(c=>({...c}));const gateway=window.HandymanUIDomainGatewayV264;if(!gateway||!gateway.ready)throw new Error('IndexedDB is not ready. Contract changes were not saved.');const operation=ctWriteTail.then(async()=>{const result=await window.HandymanContractsV264.save({contracts:next});if(!result||result.ok!==true)throw new Error('IndexedDB did not confirm the contract save.');const check=await window.HandymanContractsV264.load();if(!await window.HandymanStorageV264.valuesEqual(check,{contracts:next}))throw new Error('Contract read-back verification failed.');ctCachedContracts=next;ctContractsReady=true;window.__thaContractSaveOk=true;return true});ctWriteTail=operation.catch(()=>{});try{return await operation}catch(e){window.__thaContractSaveOk=false;throw e}}
+ window.ctFlushWrites=async function(){await ctWriteTail;if(window.__thaContractSaveOk===false)throw new Error('Contracts have an unverified pending save.');return true};
  function ctVal(){return {id:ctEditingId||('ct-'+Date.now()+'-'+Math.random().toString(36).slice(2,7)),documentType:$ct('ctDocumentType')?.value||'contract',title:$ct('ctTitle').value.trim()||'Work Contract',date:$ct('ctDate').value||ctDate(),customer:$ct('ctCustomer').value.trim(),contact:$ct('ctContact').value.trim(),address:$ct('ctAddress').value.trim(),price:$ct('ctPrice').value,start:$ct('ctStart').value,body:$ct('ctBody').value,updated:new Date().toISOString()}}
  function ctLoadForm(c){ctEditingId=c?.id||'';if($ct('ctDocumentType'))$ct('ctDocumentType').value=c?.documentType||'contract';$ct('ctTitle').value=c?.title||'Work Contract';$ct('ctDate').value=c?.date||ctDate();$ct('ctCustomer').value=c?.customer||'';$ct('ctContact').value=c?.contact||'';$ct('ctAddress').value=c?.address||'';$ct('ctPrice').value=c?.price??'';$ct('ctStart').value=c?.start||'';$ct('ctBody').value=c?.body||'';}
  window.ctShowSection=function(which){
