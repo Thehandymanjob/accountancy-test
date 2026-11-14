@@ -935,7 +935,7 @@ body.pr-report-preview-open{overflow:hidden!important;position:relative!importan
 <script src="../v264-fresh/v264-business-profile-controller.js?v=264-independent-domains-9-20261110"></script>
 <script src="../v264-fresh/v264-support-controller-v2.js?v=264-independent-domains-9-20261110"></script>
 <script src="../v264-fresh/v264-media-controller.js?v=264-independent-domains-9-20261110"></script>
-<script src="../v264-fresh/v264-recovery.js?v=264-full-db-backup-20261114-r4"></script>
+<script src="../v264-fresh/v264-recovery.js?v=264-full-db-backup-20261114-r5"></script>
 <script src="../v264-fresh/v264-bootstrap.js?v=264-independent-domains-9-20261110"></script>
 <script src="v264-ui-domain-gateway.js?v=264-independent-domains-9-20261110"></script>
 <script src="accounting-ui-idb-bridge.js?v=264-independent-domains-9-20261110"></script>
@@ -1451,7 +1451,7 @@ async function flushSelectedDomainWrites(scopeName){
  if(scopeName==="projects"||scopeName==="businessProfile"){await prFlush();return true}
  if(scopeName==="contracts"){if(typeof window.ctFlushWrites!=="function")throw new Error("Contracts save queue is unavailable.");await window.ctFlushWrites();return true}
  if(scopeName==="support"){
-  await reportWriteTail;await supportWriteTail;await monitorWriteTail;
+  if(typeof window.reportFlushWrites!=="function")throw new Error("Reports save queue is unavailable.");await window.reportFlushWrites();await supportWriteTail;await monitorWriteTail;
   if(window.__thaReportSaveOk===false)throw new Error("The Reports save is not verified.");
   if(window.__thaSupportWriteOk===false)throw new Error("The Support save is not verified.");
   return true;
@@ -2561,7 +2561,7 @@ const save=async(key,v)=>{
   if(status){status.textContent='IndexedDB report save failed: '+(error&&error.message||error);status.hidden=false;status.classList.add('storage-error')}
   window.__thaReportSaveOk=false;return false;
  }
-};let cfg=load(CFG,{periodMode:'calendar'});let archive=load(ARCH,[]);let notifications=load(NOTIFS,[]);let flow=load(FLOW,{});
+};window.reportFlushWrites=async function(){await reportWriteTail;if(window.__thaReportSaveOk===false)throw new Error("Reports have an unverified pending save.");return true};let cfg=load(CFG,{periodMode:'calendar'});let archive=load(ARCH,[]);let notifications=load(NOTIFS,[]);let flow=load(FLOW,{});
 if(!Array.isArray(archive))archive=[];if(!Array.isArray(notifications))notifications=[];
 function addNotif(id,title,message,kind='info'){if(notifications.some(n=>n.id===id))return false;notifications.unshift({id,title,message,kind,createdAt:new Date().toISOString(),read:false});return true}
 function nextTaxYear(now=new Date()){const y=now.getFullYear();return now>=dateFrom(y,4,6)?y:y-1}
