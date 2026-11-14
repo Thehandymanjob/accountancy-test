@@ -2549,21 +2549,35 @@ const supportDomain=key=>key===ARCH?'reports':key===NOTIFS?'reportNotifications'
 const save=async(key,v)=>{
  const domain=supportDomain(key);if(!domain)return false;
  try{
-  const next=structuredClone(v),support=window.HandymanSupportV264;window.__thaReportSaveOk=null;
+  const next=structuredClone(v),support=window.HandymanSupportV264;window.__thaReportSaveOk=null;window.__thaReportSaveError='';
   if(!support||!window.HandymanUIDomainGatewayV264?.ready)throw new Error('IndexedDB support domain is not ready.');
   const operation=reportWriteTail.then(()=>support.save(domain,next));
   reportWriteTail=operation.catch(error=>{
+   window.__thaReportSaveError=String(error&&error.message||error);
    const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');
-   if(status){status.textContent='IndexedDB report save failed: '+(error&&error.message||error);status.hidden=false;status.classList.add('storage-error')}
+   if(status){status.textContent='IndexedDB report save failed: '+window.__thaReportSaveError;status.hidden=false;status.classList.add('storage-error')}
    console.error('IndexedDB report storage failure:',error);
   });
-  await operation;reportCache[domain]=next;window.__thaReportSaveOk=true;return true;
+  await operation;reportCache[domain]=next;window.__thaReportSaveOk=true;window.__thaReportSaveError='';return true;
  }catch(error){
+  window.__thaReportSaveOk=false;window.__thaReportSaveError=String(error&&error.message||error);
   const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');
-  if(status){status.textContent='IndexedDB report save failed: '+(error&&error.message||error);status.hidden=false;status.classList.add('storage-error')}
-  window.__thaReportSaveOk=false;return false;
+  if(status){status.textContent='IndexedDB report save failed: '+window.__thaReportSaveError;status.hidden=false;status.classList.add('storage-error')}
+  return false;
  }
-};window.reportFlushWrites=async function(){await reportWriteTail;const pending=[[ARCH,archive],[NOTIFS,notifications],[CFG,cfg],[FLOW,flow]];for(const item of pending){if(!await save(item[0],item[1]))throw new Error("Reports save could not be verified for "+supportDomain(item[0])+".");}await reportWriteTail;const persisted=await window.HandymanSupportV264.loadReportWorkspace();const checks=[["reports",archive,persisted.archive],["reportNotifications",notifications,persisted.notifications],["reportSettings",cfg,persisted.settings],["reportWorkflow",flow,persisted.workflow]];for(const check of checks){if(JSON.stringify(check[1])!==JSON.stringify(check[2])){window.__thaReportSaveOk=false;throw new Error("Reports IndexedDB read-back verification failed for "+check[0]+".");}}if(window.__thaReportSaveOk!==true)throw new Error("Reports save verification did not complete.");return true};let cfg=load(CFG,{periodMode:'calendar'});let archive=load(ARCH,[]);let notifications=load(NOTIFS,[]);let flow=load(FLOW,{});
+};
+window.reportFlushWrites=async function(){
+ await reportWriteTail;
+ if(window.__thaReportHydrated!==true)throw new Error("Reports could not be loaded from IndexedDB; backup stopped to protect existing report records. "+(window.__thaReportHydrateError||""));
+ const pending=[[ARCH,archive],[NOTIFS,notifications],[CFG,cfg],[FLOW,flow]];
+ for(const item of pending){if(!await save(item[0],item[1]))throw new Error("Reports save could not be verified for "+supportDomain(item[0])+": "+(window.__thaReportSaveError||"write failed")+".");}
+ await reportWriteTail;
+ const persisted=await window.HandymanSupportV264.loadReportWorkspace();
+ const checks=[["reports",archive,persisted.archive],["reportNotifications",notifications,persisted.notifications],["reportSettings",cfg,persisted.settings],["reportWorkflow",flow,persisted.workflow]];
+ for(const check of checks){if(JSON.stringify(check[1])!==JSON.stringify(check[2])){window.__thaReportSaveOk=false;throw new Error("Reports IndexedDB read-back verification failed for "+check[0]+".");}}
+ if(window.__thaReportSaveOk!==true)throw new Error("Reports save verification did not complete.");
+ return true;
+};let cfg=load(CFG,{periodMode:'calendar'});let archive=load(ARCH,[]);let notifications=load(NOTIFS,[]);let flow=load(FLOW,{});
 if(!Array.isArray(archive))archive=[];if(!Array.isArray(notifications))notifications=[];
 function addNotif(id,title,message,kind='info'){if(notifications.some(n=>n.id===id))return false;notifications.unshift({id,title,message,kind,createdAt:new Date().toISOString(),read:false});return true}
 function nextTaxYear(now=new Date()){const y=now.getFullYear();return now>=dateFrom(y,4,6)?y:y-1}
@@ -2645,7 +2659,7 @@ window.report188Navigate=function(name){if(!report188Views[name])return;if(name!
 window.report188Back=function(){if(report188Stack.length){const target=report188Stack.pop();report188Current=target;Object.entries(report188Views).forEach(([k,id])=>{const el=$188(id);if(el){el.hidden=k!==target;el.classList.toggle('active',k===target)}});const back=document.querySelector('#report > .section-topbar > button');if(back)back.textContent=target==='menu'?'← Back to Dashboard':'← Back';const title=document.querySelector('#report > .section-topbar h2');if(title)title.textContent=({menu:'Reports & Tax',builder:'Prepare a report',archive:'Saved reports archive',inbox:'Notifications inbox',notifDetail:'Notification details',calendar:'Tax calendar',email:'Accountant email'})[target]||'Reports & Tax';if(target==='inbox')renderNotifications();if(target==='archive')renderArchive();window.scrollTo({top:0,behavior:'auto'});return}if(typeof show==='function'&&document.getElementById('accountancyHome'))show('accountancyHome');else if(typeof returnToLauncher==='function')returnToLauncher();else show('accountancyHome')};
 window.report188SaveEmailSettings=async function(){const email=($188('report188AccountantEmail')?.value||'').trim();if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){alert('Enter a valid email address.');return}const data={email,name:($188('report188EmailName')?.value||'').trim(),updatedAt:new Date().toISOString()},next={...cfg,emailSettings:data};if(await save(CFG,next)){cfg=next;$188('report188EmailStatus').textContent='Recipient details saved in IndexedDB. No email has been sent; email sending is not connected.'}else $188('report188EmailStatus').textContent='Recipient details were not saved. Check IndexedDB storage status.'};
 window.report188Init=async function(){Object.entries(report188Views).forEach(([k,id])=>{const el=$188(id);if(el){el.hidden=k!=='menu';el.classList.toggle('active',k==='menu')}});report188Current='menu';report188Stack=[];const mode=$188('report188PeriodMode');if(mode)mode.value=cfg.periodMode||'calendar';if($188('report188AccountantEmail'))$188('report188AccountantEmail').value=cfg.emailSettings?.email||'';if($188('report188EmailName'))$188('report188EmailName').value=cfg.emailSettings?.name||'';if(!$188('reportFrom').value||!$188('reportTo').value){}if($188('reportPreset')){preset();if(typeof refreshReport==='function')refreshReport();}renderArchive();renderNotifications();renderCalendar();await checkDue(false)};
-window.report188Hydrate=async function(){try{const state=await window.HandymanSupportV264.loadReportWorkspace();reportCache={reports:state.archive||[],reportNotifications:state.notifications||[],reportSettings:state.settings||{periodMode:'calendar'},reportWorkflow:state.workflow||{}};cfg=load(CFG,{periodMode:'calendar'});archive=load(ARCH,[]);notifications=load(NOTIFS,[]);flow=load(FLOW,{});if(!Array.isArray(archive))archive=[];if(!Array.isArray(notifications))notifications=[];await window.report188Init?.();return true}catch(error){console.error('Report workspace IndexedDB load failed:',error);const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');if(status){status.textContent='Reports could not be loaded from IndexedDB. '+(error&&error.message||error);status.classList.add('storage-error')}return false}};
+window.report188Hydrate=async function(){window.__thaReportHydrated=false;window.__thaReportHydrateError='';try{const state=await window.HandymanSupportV264.loadReportWorkspace();reportCache={reports:state.archive||[],reportNotifications:state.notifications||[],reportSettings:state.settings||{periodMode:'calendar'},reportWorkflow:state.workflow||{}};cfg=load(CFG,{periodMode:'calendar'});archive=load(ARCH,[]);notifications=load(NOTIFS,[]);flow=load(FLOW,{});if(!Array.isArray(archive))archive=[];if(!Array.isArray(notifications))notifications=[];await window.report188Init?.();window.__thaReportHydrated=true;return true}catch(error){window.__thaReportHydrateError=String(error&&error.message||error);console.error('Report workspace IndexedDB load failed:',error);const status=$188('report188WorkflowStatus')||$188('report188StorageStatus');if(status){status.textContent='Reports could not be loaded from IndexedDB. '+window.__thaReportHydrateError;status.classList.add('storage-error')}return false}};
 // Language preference foundation (v195 test build). Does not alter accounting records.
 
 const APP_UI_TRANSLATION_VERSION=204;
