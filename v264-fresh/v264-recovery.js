@@ -165,6 +165,26 @@
    if(await digest(canonical(afterData))!==await digest(canonical(expectedData)))throw new Error("Scoped restore verification failed: restored records do not exactly match the selected backup.");
    return {ok:true,restored:result.restored??after.records.length,domains:allowed.length,verified:true,scope:scopeName};
   }
+  async function createFullBackup(){
+   const domains=["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","help_contact_drafts","media","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"].sort();
+   const snapshot=await engine.snapshot(domains);
+   if(!snapshot||snapshot.database!==DB||snapshot.domains.slice().sort().join("|")!==domains.join("|")||!Array.isArray(snapshot.records))throw new Error("Full database snapshot validation failed.");
+   const ids=new Set();
+   for(const row of snapshot.records){
+    if(!row||!domains.includes(row.domain)||typeof row.key!=="string")throw new Error("Full backup contains an invalid domain record.");
+    const id=row.domain+":"+encodeURIComponent(row.key);
+    if(row.id!==id||ids.has(id))throw new Error("Full backup contains an invalid or duplicate record identity.");
+    ids.add(id);
+   }
+   const payload={format:SNAPSHOT_FORMAT,database:DB,scope:"full-database",createdAt:snapshot.createdAt,domains,records:[]};
+   for(const row of snapshot.records)payload.records.push({id:row.id,domain:row.domain,key:row.key,value:await encode(row.value,new WeakSet())});
+   const body=canonical(payload),hash=await digest(body);
+   const pkg={format:FORMAT,algorithm:"SHA-256",digest:hash,payload};
+   const verify=await digest(canonical(pkg.payload));
+   if(verify!==pkg.digest||pkg.payload.records.length!==snapshot.records.length)throw new Error("Full backup integrity or record-count verification failed.");
+   const blob=new Blob([JSON.stringify(pkg)],{type:"application/vnd.thehandyman.v264-full-backup+json"});
+   return {ok:true,blob,verification:{ok:true,scope:"full-database",domains:domains.length,records:snapshot.records.length,digest:hash,createdAt:snapshot.createdAt},filename:"THA-v264-full-database-backup-"+new Date().toISOString().replace(/[:.]/g,"-")+".json"};
+  }
   async function downloadBackup(){
    const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
    a.href=url;a.download=result.filename;a.style.display="none";root.document.body.appendChild(a);a.click();a.remove();
@@ -172,96 +192,55 @@
    return {ok:true,scope:scopeName,filename:result.filename,verification:result.verification,instructions:"Save this domain-specific file in the iPhone Files app. Restore it only with the same domain selected."};
   }
   async function resetFromBackupFile(){throw new Error("Global Factory Reset is disabled. Domain backups can restore only their selected domain.");}
-  return Object.freeze({scope:scopeName,domains:allowed,createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
+  return Object.freeze({scope:scopeName,domains:allowed,createBackup,createFullBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
  }
-
  const FULL_DOMAINS=["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","help_contact_drafts","media","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"].sort();
- function createFull(engine){
-  if(!engine||typeof engine.snapshot!=="function"||typeof engine.restore!=="function"||typeof engine.beginResetLock!=="function"||typeof engine.clearWhileResetLocked!=="function"||typeof engine.completeRecovery!=="function")throw new Error("Full IndexedDB recovery engine is unavailable.");
-  const DB=engine.databaseName;
-  async function capture(){
-   const snap=await engine.snapshot(FULL_DOMAINS);
-   if(!snap||snap.format!==SNAPSHOT_FORMAT||snap.database!==DB||!Array.isArray(snap.records))throw new Error("Full database snapshot is invalid.");
-   const ids=new Set();
-   for(const row of snap.records){
-    if(!row||!FULL_DOMAINS.includes(row.domain)||typeof row.key!=="string"||row.id!==row.domain+":"+encodeURIComponent(row.key)||ids.has(row.id))throw new Error("Full snapshot contains an invalid or duplicate record.");
-    ids.add(row.id);
-   }
-   return snap;
+ async function createFullBackup(){
+  const engine=root.HandymanStorageV264;if(!engine)throw new Error("IndexedDB engine unavailable.");
+  await engine.ready();
+  const snapshot=await engine.snapshot(FULL_DOMAINS);
+  if(!snapshot||snapshot.database!==engine.databaseName||snapshot.domains.slice().sort().join("|")!==FULL_DOMAINS.join("|")||!Array.isArray(snapshot.records))throw new Error("Full database snapshot validation failed.");
+  const ids=new Set(),payload={format:SNAPSHOT_FORMAT,database:engine.databaseName,scope:"full-database",createdAt:snapshot.createdAt,domains:FULL_DOMAINS,records:[]};
+  for(const row of snapshot.records){
+   if(!row||!FULL_DOMAINS.includes(row.domain)||typeof row.key!=="string"||row.id!==row.domain+":"+encodeURIComponent(row.key)||ids.has(row.id))throw new Error("Invalid or duplicate database record.");
+   ids.add(row.id);payload.records.push({id:row.id,domain:row.domain,key:row.key,value:await encode(row.value,new WeakSet())});
   }
-  async function packageSnapshot(snap){
-   const payload={format:SNAPSHOT_FORMAT,database:DB,scope:"full",createdAt:snap.createdAt,domains:FULL_DOMAINS,records:[]};
-   for(const row of snap.records)payload.records.push({id:row.id,domain:row.domain,key:row.key,value:await encode(row.value,new WeakSet())});
-   const body=canonical(payload);
-   return {format:"tha-v264-full-backup-v1",algorithm:"SHA-256",digest:await digest(body),payload};
-  }
-  async function readFile(file){
-   if(!file||typeof file.text!=="function")throw new Error("Select the complete full-database backup file.");
-   let pkg;try{pkg=JSON.parse(await file.text())}catch(_){throw new Error("The selected file is not valid backup JSON.")};
-   if(!pkg||pkg.format!=="tha-v264-full-backup-v1"||pkg.algorithm!=="SHA-256"||!pkg.payload||typeof pkg.digest!=="string")throw new Error("This is not a supported full database backup.");
-   const p=pkg.payload;
-   if(await digest(canonical(p))!==pkg.digest)throw new Error("Full backup SHA-256 integrity check failed.");
-   if(p.format!==SNAPSHOT_FORMAT||p.database!==DB||p.scope!=="full"||!Array.isArray(p.domains)||p.domains.slice().sort().join("|")!==FULL_DOMAINS.join("|")||!Array.isArray(p.records))throw new Error("Backup database identity or full-domain coverage is invalid.");
-   const ids=new Set(),records=[];
-   for(const row of p.records){
-    if(!row||!FULL_DOMAINS.includes(row.domain)||typeof row.key!=="string"||row.id!==row.domain+":"+encodeURIComponent(row.key)||ids.has(row.id))throw new Error("Backup has an invalid, duplicate or out-of-scope record.");
-    ids.add(row.id);records.push({id:row.id,domain:row.domain,key:row.key,value:await decode(row.value)});
-   }
-   return {pkg,snapshot:{format:SNAPSHOT_FORMAT,database:DB,createdAt:p.createdAt,domains:FULL_DOMAINS,records},verification:{ok:true,scope:"full",database:DB,domains:FULL_DOMAINS.length,records:records.length,digest:pkg.digest,createdAt:p.createdAt}};
-  }
-  async function createBackup(){
-   const snap=await capture(),pkg=await packageSnapshot(snap),check=(await readFile({text:async()=>JSON.stringify(pkg)})).verification;
-   if(check.records!==snap.records.length)throw new Error("Full backup record-count verification failed.");
-   return {ok:true,blob:new Blob([JSON.stringify(pkg)],{type:"application/vnd.thehandyman.v264-full-backup+json"}),filename:"THA-v264-FULL-backup-"+new Date().toISOString().replace(/[:.]/g,"-")+".json",verification:check};
-  }
-  async function downloadBackup(){
-   const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
-   a.href=url;a.download=result.filename;a.style.display="none";root.document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
-   return {ok:true,filename:result.filename,verification:result.verification,instructions:"Save this complete backup in the iPhone Files app, then select that exact file in the reset confirmation."};
-  }
-  async function inspectFile(file){
-   const parsed=await readFile(file),current=await capture(),expected=parsed.snapshot.records.slice().sort((a,b)=>a.id.localeCompare(b.id));
-   if(current.records.length!==expected.length)throw new Error("Selected backup does not exactly match current database record count.");
-   for(let i=0;i<current.records.length;i++){
-    if(current.records[i].id!==expected[i].id||!(await engine.valuesEqual(current.records[i].value,expected[i].value)))throw new Error("Selected backup differs from current data at "+(expected[i]?.domain||"unknown")+"/"+(expected[i]?.key||"unknown")+".");
-   }
-   return {...parsed.verification,currentDatabaseMatch:true};
-  }
-  async function restoreFromFile(file){
-   const parsed=await readFile(file);
-   const result=await engine.restore(parsed.snapshot);
-   const after=await capture();
-   if(after.records.length!==parsed.snapshot.records.length)throw new Error("Full restore verification failed: record count differs.");
-   for(let i=0;i<after.records.length;i++){
-    const a=after.records[i],b=parsed.snapshot.records.slice().sort((x,y)=>x.id.localeCompare(y.id))[i];
-    if(a.id!==b.id||!(await engine.valuesEqual(a.value,b.value)))throw new Error("Full restore verification failed at "+b.domain+"/"+b.key);
-   }
-   return {ok:true,restored:result.restored??after.records.length,domains:FULL_DOMAINS.length,verified:true};
-  }
-  async function resetFromBackupFile(file){
-   const parsed=await readFile(file);
-   if(!parsed.verification.ok)throw new Error("Full backup verification failed; reset blocked.");
-   const before=await capture(),expected=parsed.snapshot.records.slice().sort((a,b)=>a.id.localeCompare(b.id));
-   if(before.records.length!==expected.length)throw new Error("The selected backup does not exactly match the current database; reset blocked.");
-   for(let i=0;i<before.records.length;i++){
-    if(before.records[i].id!==expected[i].id||!(await engine.valuesEqual(before.records[i].value,expected[i].value)))throw new Error("The selected backup differs from current data at "+(expected[i]?.domain||"unknown")+"/"+(expected[i]?.key||"unknown")+"; reset blocked.");
-   }
-   await engine.beginResetLock();
-   try{
-    const locked=await engine.health();
-    if(!locked||locked.resetLocked!==true)throw new Error("Persistent reset lock could not be verified.");
-    await engine.clearWhileResetLocked();
-    const empty={format:SNAPSHOT_FORMAT,database:DB,createdAt:new Date().toISOString(),domains:FULL_DOMAINS,records:[]};
-    const restored=await engine.restore(empty);
-    await engine.completeRecovery(empty);
-    const health=await engine.health(),after=await capture();
-    if(!health||health.resetLocked!==false||after.records.length!==0)throw new Error("Empty database verification failed; reset remains blocked.");
-    return {ok:true,reset:true,backupVerified:true,domains:FULL_DOMAINS.length,previousRecords:before.records.length,remainingRecords:0,unlocked:true};
-   }catch(error){throw new Error("Reset stopped safely. The database may remain locked and requires full-backup recovery: "+String(error&&error.message||error))}
-  }
-  return Object.freeze({domains:FULL_DOMAINS.slice(),createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile});
+  const hash=await digest(canonical(payload)),pkg={format:FORMAT,algorithm:"SHA-256",digest:hash,payload};
+  if(await digest(canonical(pkg.payload))!==pkg.digest)throw new Error("Full backup SHA-256 verification failed.");
+  const blob=new Blob([JSON.stringify(pkg)],{type:"application/vnd.thehandyman.v264-full-backup+json"});
+  return {ok:true,blob,filename:"The-Handyman-Full-Database-Backup.json",verification:{ok:true,scope:"full-database",domains:FULL_DOMAINS.length,records:payload.records.length,digest:hash,createdAt:snapshot.createdAt}};
  }
-
+ async function readFullBackup(file){
+  if(!file||typeof file.text!=="function")throw new Error("Choose a full database backup JSON file.");
+  let pkg;try{pkg=JSON.parse(await file.text())}catch(_){throw new Error("The selected file is not valid JSON.")};
+  if(!pkg||pkg.format!==FORMAT||pkg.algorithm!=="SHA-256"||!pkg.payload||typeof pkg.digest!=="string")throw new Error("Unsupported full backup format.");
+  if(await digest(canonical(pkg.payload))!==pkg.digest)throw new Error("Backup integrity check failed: SHA-256 mismatch.");
+  const p=pkg.payload,engine=root.HandymanStorageV264;
+  if(!engine||p.format!==SNAPSHOT_FORMAT||p.database!==engine.databaseName||p.scope!=="full-database"||!Array.isArray(p.domains)||p.domains.slice().sort().join("|")!==FULL_DOMAINS.join("|")||!Array.isArray(p.records))throw new Error("Backup is not a complete database backup for this app.");
+  const ids=new Set(),records=[];
+  for(const row of p.records){
+   if(!row||!FULL_DOMAINS.includes(row.domain)||typeof row.key!=="string"||row.id!==row.domain+":"+encodeURIComponent(row.key)||ids.has(row.id))throw new Error("Backup has an invalid or duplicate record.");
+   ids.add(row.id);records.push({domain:row.domain,key:row.key,value:await decode(row.value)});
+  }
+  return {pkg,snapshot:{format:SNAPSHOT_FORMAT,database:p.database,createdAt:p.createdAt,domains:FULL_DOMAINS,records},verification:{ok:true,domains:FULL_DOMAINS.length,records:records.length,digest:pkg.digest,createdAt:p.createdAt}};
+ }
+ async function restoreFullBackup(file){
+  const parsed=await readFullBackup(file),engine=root.HandymanStorageV264;
+  let health=await engine.health();
+  if(health.resetLocked){
+   if(health.resetLockPhase!=="recovery")throw new Error("Database has a pre-clear reset lock. Stop and inspect recovery state; no data was changed by this restore attempt.");
+  }else{
+   await engine.beginResetLock();
+   await engine.clearWhileResetLocked();
+  }
+  const restored=await engine.restore(parsed.snapshot);
+  if(!restored||restored.ok!==true||restored.fullRecovery!==true)throw new Error("Full database restore did not complete.");
+  const completed=await engine.completeRecovery(parsed.snapshot);
+  if(!completed||completed.ok!==true||completed.unlocked!==true)throw new Error("Restored data was written, but recovery verification did not unlock the database. Keep this backup file.");
+  const final=await engine.health();
+  if(!final.ok||final.resetLocked||final.totalRecords!==parsed.snapshot.records.length)throw new Error("Final database health or record count does not match the selected backup.");
+  return {ok:true,verified:true,domains:FULL_DOMAINS.length,records:final.totalRecords,counts:final.counts};
+ }
  const engine=()=>root.HandymanStorageV264,adapter=()=>root.HandymanAppStorageV264;
- root.HandymanRecoveryV264=Object.freeze({build:"THA-264-SCOPED-RECOVERY-2-FULL",create:scopeName=>create(engine(),adapter(),scopeName),createFull:()=>createFull(engine()),createWithDependencies:create});
+ root.HandymanRecoveryV264=Object.freeze({build:"THA-264-FULL-RECOVERY-2",create:scopeName=>create(engine(),adapter(),scopeName),createFullBackup,readFullBackup,restoreFullBackup,createWithDependencies:create});
 })(window);
