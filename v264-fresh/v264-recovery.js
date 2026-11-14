@@ -165,6 +165,26 @@
    if(await digest(canonical(afterData))!==await digest(canonical(expectedData)))throw new Error("Scoped restore verification failed: restored records do not exactly match the selected backup.");
    return {ok:true,restored:result.restored??after.records.length,domains:allowed.length,verified:true,scope:scopeName};
   }
+  async function createFullBackup(){
+   const domains=["accounting","business_profile","contracts","diagnostics","factory_reset_recovery","help_contact_drafts","media","notifications","preference_meta","preferences","projects","recovery","report_notifications","report_settings","report_workflow","reports","sequences"].sort();
+   const snapshot=await engine.snapshot(domains);
+   if(!snapshot||snapshot.database!==DB||snapshot.domains.slice().sort().join("|")!==domains.join("|")||!Array.isArray(snapshot.records))throw new Error("Full database snapshot validation failed.");
+   const ids=new Set();
+   for(const row of snapshot.records){
+    if(!row||!domains.includes(row.domain)||typeof row.key!=="string")throw new Error("Full backup contains an invalid domain record.");
+    const id=row.domain+":"+encodeURIComponent(row.key);
+    if(row.id!==id||ids.has(id))throw new Error("Full backup contains an invalid or duplicate record identity.");
+    ids.add(id);
+   }
+   const payload={format:SNAPSHOT_FORMAT,database:DB,scope:"full-database",createdAt:snapshot.createdAt,domains,records:[]};
+   for(const row of snapshot.records)payload.records.push({id:row.id,domain:row.domain,key:row.key,value:await encode(row.value,new WeakSet())});
+   const body=canonical(payload),hash=await digest(body);
+   const pkg={format:FORMAT,algorithm:"SHA-256",digest:hash,payload};
+   const verify=await digest(canonical(pkg.payload));
+   if(verify!==pkg.digest||pkg.payload.records.length!==snapshot.records.length)throw new Error("Full backup integrity or record-count verification failed.");
+   const blob=new Blob([JSON.stringify(pkg)],{type:"application/vnd.thehandyman.v264-full-backup+json"});
+   return {ok:true,blob,verification:{ok:true,scope:"full-database",domains:domains.length,records:snapshot.records.length,digest:hash,createdAt:snapshot.createdAt},filename:"THA-v264-full-database-backup-"+new Date().toISOString().replace(/[:.]/g,"-")+".json"};
+  }
   async function downloadBackup(){
    const result=await createBackup(),url=URL.createObjectURL(result.blob),a=root.document.createElement("a");
    a.href=url;a.download=result.filename;a.style.display="none";root.document.body.appendChild(a);a.click();a.remove();
@@ -172,7 +192,7 @@
    return {ok:true,scope:scopeName,filename:result.filename,verification:result.verification,instructions:"Save this domain-specific file in the iPhone Files app. Restore it only with the same domain selected."};
   }
   async function resetFromBackupFile(){throw new Error("Global Factory Reset is disabled. Domain backups can restore only their selected domain.");}
-  return Object.freeze({scope:scopeName,domains:allowed,createBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
+  return Object.freeze({scope:scopeName,domains:allowed,createBackup,createFullBackup,downloadBackup,inspectFile,restoreFromFile,resetFromBackupFile,verifyPackage});
  }
  const engine=()=>root.HandymanStorageV264,adapter=()=>root.HandymanAppStorageV264;
  root.HandymanRecoveryV264=Object.freeze({build:"THA-264-SCOPED-RECOVERY-1",create:scopeName=>create(engine(),adapter(),scopeName),createWithDependencies:create});
