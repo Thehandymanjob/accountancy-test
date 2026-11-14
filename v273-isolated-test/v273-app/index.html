@@ -1517,8 +1517,28 @@ async function fullDatabaseBackup(){
   const result=await recovery.createFullBackup();
   if(!result.ok||result.verification.domains!==17)throw new Error("Full backup verification failed.");
   const file=new File([result.blob],name,{type:"application/vnd.thehandyman.v264-full-backup+json",lastModified:Date.now()});
-  pendingFullBackupFile=file;button.textContent="Save to Files";
-  status.textContent="Backup verified: "+result.verification.records+" records across all 17 domains. Tap Save to Files to open the iPhone share panel, then choose Save to Files and select a folder.";
+  pendingFullBackupFile=file;
+  button.textContent="Opening Save to Files…";
+  status.textContent="Backup verified: "+result.verification.records+" records across all 17 domains. Opening the iPhone save panel…";
+  let autoShareAvailable=false;
+  try{autoShareAvailable=typeof navigator.share==="function"&&typeof navigator.canShare==="function"&&navigator.canShare({files:[file]})}catch(_){autoShareAvailable=false}
+  if(autoShareAvailable){
+   try{
+    await navigator.share({files:[file],title:file.name});
+    pendingFullBackupFile=null;button.textContent="Backup";
+    status.textContent="The verified backup was shared. Confirm that you selected Save to Files and chose the destination folder.";
+   }catch(shareError){
+    button.textContent="Save to Files";
+    if(shareError&&shareError.name==="AbortError"){
+     status.textContent="The save panel was cancelled. Your verified backup is still ready. Tap Save to Files to open it again.";
+    }else{
+     status.textContent="The backup is verified and ready, but iOS did not allow the save panel to open automatically. Tap Save to Files once to choose the destination folder. "+(shareError&&shareError.message||"");
+    }
+   }
+  }else{
+   button.textContent="Save to Files";
+   status.textContent="The backup is verified and ready. Tap Save to Files to choose the destination folder.";
+  }
  }catch(error){
   status.textContent="Backup not completed: "+(error&&error.message||error);
   if(error&&error.name!=="AbortError")console.error("Full database backup:",error);
