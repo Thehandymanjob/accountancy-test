@@ -69,9 +69,31 @@ async function resetWithImport(file){
  const health=await e.health();assert(health&&health.ok===true,"Database health check failed.");
  let cleared=false;
  if(health.resetLocked===true){
-  // Resume an interrupted reset: a pre-clear lock is advanced to recovery;
-  // an already-cleared recovery lock is left in place and used for restore.
-  try{
+  if(health.resetLockPhase==="recovery"){
+   // The database has already been cleared. Never clear it again;
+   // continue directly with the verified full-domain restore.
+   cleared=true;
+  }else if(health.resetLockPhase==="preclear"){
+   // The clear transaction has not started. Cancel the old lock,
+   // acquire a fresh lock, then perform exactly one verified clear.
+   const released=await e.releaseResetLock();
+   assert(released&&released.ok===true&&released.unlocked===true&&released.cancelledBeforeClear===true,"Could not safely cancel the pre-clear reset lock.");
+   const newLock=await e.beginResetLock();
+   assert(newLock&&newLock.ok===true&&newLock.locked===true,"Could not reacquire reset lock.");
+   const newClear=await e.clearWhileResetLocked();
+   assert(newClear&&newClear.ok===true&&newClear.remainingRecords===0,"Database clear was not verified.");
+   cleared=true;
+  }else{
+   throw new Error("Reset lock phase is unknown. Database was not modified; manual recovery review is required.");
+  }
+ }else{
+  const lock=await e.beginResetLock();
+  assert(lock&&lock.ok===true&&lock.locked===true,"Could not acquire reset lock.");
+  const clear=await e.clearWhileResetLocked();
+  assert(clear&&clear.ok===true&&clear.remainingRecords===0,"Database clear was not verified.");
+  cleared=true;
+ }
+ try{
    const resumedClear=await e.clearWhileResetLocked();
    assert(resumedClear&&resumedClear.ok===true&&resumedClear.remainingRecords===0,"Could not resume the locked database clear.");
   }catch(resumeError){
