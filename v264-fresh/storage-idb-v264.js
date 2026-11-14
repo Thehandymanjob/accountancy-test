@@ -559,7 +559,7 @@
       await done;
       const counts = {};
       for (const row of rows) counts[row.domain] = (counts[row.domain] || 0) + 1;
-      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION, build: meta ? meta.build : null, totalRecords: rows.length, counts, resetLocked: !!(resetLock && resetLock.active) };
+      return { ok: true, database: DB_NAME, schemaVersion: DB_VERSION, build: meta ? meta.build : null, totalRecords: rows.length, counts, resetLocked: !!(resetLock && resetLock.active), resetLockPhase: resetLock && resetLock.active ? resetLock.phase : null };
     } finally { db.close(); }
   }
 
