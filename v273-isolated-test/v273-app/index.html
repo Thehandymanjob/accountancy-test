@@ -1441,7 +1441,7 @@ async function openAccountancy(){accountingPageStack=[];currentAccountingPage=nu
 function openContractsApp(){document.body.classList.remove('accountancy-open','projects-open');document.body.classList.add('contracts-open');if(typeof window.ctShowSection==='function'){window.ctShowSection('contracts')}else{const app=document.getElementById('contractsApp');if(app)app.style.display='block';}}
 function closeContractsApp(){document.body.classList.remove('contracts-open');const app=document.getElementById('contractsApp');if(app)app.style.display='';syncLauncherBrand()}
 function returnToLauncher(){document.body.classList.remove('accountancy-open','accountancy-landing-active','projects-open','contracts-open');accountingPageStack=[];currentAccountingPage=null;syncLauncherBrand()}
-async function openSettingsHub(){try{const panel=document.getElementById('settings');const main=document.querySelector('body>main');if(!panel||!main||!main.contains(panel))throw new Error('Settings panel is missing from the main application.');document.body.classList.add('accountancy-open');if(window.__thaAccountingStartupPromise){const ready=await window.__thaAccountingStartupPromise;if(ready===false)throw new Error('Accountancy startup did not complete.')}else if(typeof initializeAccountingUI==='function'){const ready=await initializeAccountingUI();if(!ready)throw new Error('Accountancy could not initialize.')}panel.style.removeProperty('display');panel.style.removeProperty('visibility');panel.style.removeProperty('opacity');show('settings');panel.scrollIntoView({block:'start',behavior:'auto'});return true}catch(error){document.body.classList.remove('accountancy-open');console.error('Settings navigation failed:',error);const status=document.getElementById('status');if(status){status.textContent='Settings could not open: '+String(error&&error.message||error);status.className='status error'}return false}}
+async function openSettingsHub(){try{const panel=document.getElementById('settings');const main=document.querySelector('body>main');if(!panel||!main||!main.contains(panel))throw new Error('Settings panel is missing from the main application.');document.body.classList.add('accountancy-open');if(window.__thaV264StartupPromise)await window.__thaV264StartupPromise;else if(window.HandymanUIDomainGatewayV264)await window.HandymanUIDomainGatewayV264.initialize();panel.style.removeProperty('display');panel.style.removeProperty('visibility');panel.style.removeProperty('opacity');show('settings');panel.scrollIntoView({block:'start',behavior:'auto'});const failed=Object.entries(window.HandymanUIDomainGatewayV264?.domainStatus||{}).filter(([,v])=>!v.ok);if(failed.length){const status=document.getElementById('status');if(status){status.textContent='Settings opened. Some independent data areas are unavailable: '+failed.map(([n,v])=>n+': '+v.error).join(' | ');status.className='status warn'}}return true}catch(error){document.body.classList.remove('accountancy-open');console.error('Settings navigation failed:',error);const status=document.getElementById('status');if(status){status.textContent='Settings could not open: '+String(error&&error.message||error);status.className='status error'}return false}}
 function syncLauncherBrand(){const title=document.getElementById('launcherName');if(title)title.textContent='The Handyman Accountancy';const img=document.getElementById('launcherBusinessLogo');if(!img)return;const profile=window.HandymanUIDomainGatewayV264?.states?.businessProfile||{};const logo=typeof profile.logo==='string'?profile.logo:'';if(logo){img.src=logo;img.hidden=false;img.classList.add('has-logo')}else{img.removeAttribute('src');img.hidden=true;img.classList.remove('has-logo')}}
 
 function chooseBackup(){const input=$('restoreFile');input.value='';input.click()}
@@ -2464,14 +2464,16 @@ select.native-select-hidden{position:absolute!important;width:1px!important;heig
   window.__thaV264StartupPromise=window.HandymanUIDomainGatewayV264.initialize().then(async result=>{
    window.__thaV264StartupOk=true;
    window.__thaV264StartupError='';
-   window.__thaAccountingSaveOk=true;
-   window.__thaProjectSaveOk=true;
-   window.__thaContractSaveOk=true;
-   monitorLogCache=Array.isArray(result.states.support.diagnostics)?result.states.support.diagnostics:[];
-   if(typeof ctRenderSaved==='function')await ctRenderSaved();
-   if(typeof window.report188Hydrate==='function')await window.report188Hydrate();
-   if(typeof applyAppLanguage==='function')applyAppLanguage(window.HandymanUIDomainGatewayV264.states.support.preferences||'en');
+   window.__thaAccountingSaveOk=result.domainStatus.accounting?.ok===true;
+   window.__thaProjectSaveOk=result.domainStatus.projects?.ok===true;
+   window.__thaContractSaveOk=result.domainStatus.contracts?.ok===true;
+   monitorLogCache=Array.isArray(result.states.support?.diagnostics)?result.states.support.diagnostics:[];
+   if(result.domainStatus.contracts?.ok&&typeof ctRenderSaved==='function'){try{await ctRenderSaved()}catch(error){console.error('Contracts UI hydration failed:',error)}}
+   if(result.domainStatus.support?.ok&&typeof window.report188Hydrate==='function'){try{await window.report188Hydrate()}catch(error){console.error('Reports UI hydration failed:',error)}}
+   if(typeof applyAppLanguage==='function')applyAppLanguage(result.states.support?.preferences||'en');
    if(typeof syncLauncherBrand==='function')syncLauncherBrand();
+   const failed=Object.entries(result.domainStatus||{}).filter(([,v])=>!v.ok);
+   if(failed.length){const status=document.getElementById('status');if(status){status.textContent='Some independent IndexedDB areas failed to start: '+failed.map(([n,v])=>n+': '+v.error).join(' | ');status.className='status warn'}}
    return result;
   }).catch(error=>{
    window.__thaV264StartupOk=false;
