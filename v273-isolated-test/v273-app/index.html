@@ -1485,7 +1485,7 @@ async function fullDatabaseBackup(){
   try{canShareFile=typeof navigator.share==="function"&&typeof navigator.canShare==="function"&&navigator.canShare({files:[file]})}catch(_){canShareFile=false}
   if(canShareFile){
    let sharePromise;
-   try{sharePromise=navigator.share({files:[file],title:"The Handyman full database backup"})}
+   try{sharePromise=navigator.share({files:[file],title:file.name})}
    catch(error){status.textContent="The verified backup is ready, but the iPhone share panel could not open: "+(error&&error.message||error)+". Tap Save to Files to retry.";return}
    try{
     await sharePromise;
