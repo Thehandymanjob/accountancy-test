@@ -1483,7 +1483,7 @@ async function prepareFullDatabaseBackup(){
   const recovery=window.HandymanRecoveryV264&&window.HandymanRecoveryV264.create("accounting");
   if(!recovery||typeof recovery.createFullBackup!=="function")throw new Error("Full-database backup engine is unavailable. Refresh the app before retrying.");
   const result=await recovery.createFullBackup();
-  if(!result||result.ok!==true||!result.blob||result.verification.domains!==17||result.verification.records!==result.blob.size*0+result.verification.records)throw new Error("Full database backup verification failed.");
+  if(!result||result.ok!==true||!result.blob||result.verification.domains!==17||!Number.isInteger(result.verification.records)||result.verification.records<0)throw new Error("Full database backup verification failed.");
   window.__thaFullBackupFile=result.blob;
   window.__thaFullBackupDefaultName=result.filename;
   save.disabled=false;
