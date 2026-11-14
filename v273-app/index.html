@@ -935,7 +935,7 @@ body.pr-report-preview-open{overflow:hidden!important;position:relative!importan
 <script src="../v264-fresh/v264-business-profile-controller.js?v=264-independent-domains-9-20261110"></script>
 <script src="../v264-fresh/v264-support-controller-v2.js?v=264-independent-domains-9-20261110"></script>
 <script src="../v264-fresh/v264-media-controller.js?v=264-independent-domains-9-20261110"></script>
-<script src="../v264-fresh/v264-recovery.js?v=264-full-db-backup-20261114-r2"></script>
+<script src="../v264-fresh/v264-recovery.js?v=264-full-db-backup-20261114-r3"></script>
 <script src="../v264-fresh/v264-bootstrap.js?v=264-independent-domains-9-20261110"></script>
 <script src="v264-ui-domain-gateway.js?v=264-independent-domains-9-20261110"></script>
 <script src="accounting-ui-idb-bridge.js?v=264-independent-domains-9-20261110"></script>
@@ -1483,18 +1483,10 @@ async function prepareFullDatabaseBackup(){
   setStep("Step 1/3 — Waiting for the application database to finish loading…");
   if(window.__thaV264StartupPromise)await window.__thaV264StartupPromise;
   if(window.__thaV264StartupOk===false)throw new Error(window.__thaV264StartupError||"Application storage did not finish starting.");
-  setStep("Step 2/3 — Finishing pending saves…");
-  await flushAccountingWrites();
-  await prFlush();
-  await ctWriteTail;
-  await reportWriteTail;
-  await supportWriteTail;
-  await monitorWriteTail;
-  if(window.__thaAccountingSaveOk===false)throw new Error(window.__thaAccountingSaveError||"Accounting has an unverified pending save.");
-  if(window.__thaProjectSaveOk===false)throw new Error(window.__thaProjectSaveError||"Projects have an unverified pending save.");
-  if(window.__thaContractSaveOk===false)throw new Error("Contracts have an unverified pending save.");
-  if(window.__thaReportSaveOk===false)throw new Error("Reports have an unverified pending save.");
-  if(window.__thaSupportWriteOk===false)throw new Error("Support settings have an unverified pending save.");
+  setStep("Step 2/3 — Finishing pending saves in all application sections…");
+  for(const scope of ["accounting","projects","contracts","businessProfile","support","media"]){
+   await flushSelectedDomainWrites(scope);
+  }
   setStep("Step 3/3 — Reading and verifying every IndexedDB domain…");
   const recovery=window.HandymanRecoveryV264&&window.HandymanRecoveryV264.create("accounting");
   if(!recovery||typeof recovery.createFullBackup!=="function")throw new Error("Full-database backup engine is unavailable. Refresh the app and retry.");
